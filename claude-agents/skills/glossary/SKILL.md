@@ -1,6 +1,6 @@
 ---
 name: glossary
-description: The fleet's shared vocabulary - the agreed meaning of Initiative, Project, Milestone, Issue, Sub-issue, Task, Spec, Plan, Phase, Round, Session, Lead, Subagent, Teammate, Handoff, Gate, Board, Human queue, Eval and Sprite, and what each maps to in Notion, Claude Code and the repo. Preloaded into every fleet agent; use these words with these meanings and no others.
+description: The fleet's shared vocabulary - the agreed meaning of Initiative, Project, Milestone, Issue, Sub-issue, Task, Spec, Plan, Phase, Round, Session, Lead, Subagent, Teammate, Handoff, Run article, Gate, Board, Human queue, Eval and Sprite, and what each maps to in Notion, Claude Code and the repo. Preloaded into every fleet agent; use these words with these meanings and no others.
 ---
 
 Canonical copy. `templates/rules/glossary.md` and the Notion page are generated from this file - edit here, never there.
@@ -22,6 +22,7 @@ Canonical copy. `templates/rules/glossary.md` and the Notion page are generated 
 | Subagent | A role agent spawned by the lead with fresh context | `Agent` tool |
 | Teammate | A subagent running as a full session with a mailbox (Agent Teams) | Agent Teams teammate |
 | Handoff | The structured result a subagent returns. Always four headings: Done, Not done, Unverified, Decisions needed. Lines under the last are typed: `Blocker:`, `Propose item:`, `Propose memory:` | Agent tool result, `handoff` skill |
+| Run article | The readable account of one run - what was tried, abandoned and why - written only when the spawn prompt asks for one | `docs/runs/<date>-<agent>-<issue>.md`, `run-article` skill |
 | Gate | A point where a human must approve before the next phase | `TaskCompleted` hook or plan approval |
 | Board | The Tasks database as five columns: to do, doing, blocked, blocked by human, done | Notion board view |
 | Human queue | The "blocked by human" column. The one thing Alex monitors | Notion board column |

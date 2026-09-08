@@ -9,7 +9,30 @@ The version in `.claude-plugin/plugin.json` is load-bearing. Clients keep the
 cached copy of the plugin until that number changes, so every change that should
 reach a machine needs a version bump and an entry below.
 
-## [Unreleased]
+## [0.3.0] - 2026-09-08
+
+### Added
+
+- **Run articles.** A new discovered skill, `skills/run-article/`, and a home for
+  what it produces at `docs/runs/`. An article is the readable account of one
+  run - what was tried and abandoned, what the constraint turned out to be, what
+  to do differently - which is everything the handoff cannot carry and which
+  evaporates when the transcript scrolls. It is written only when the lead asks
+  for one in the spawn prompt, per `agents/lead.md` steps 5 and 6, and never on
+  the agent's own judgement. The skill is discovered rather than preloaded,
+  because preloading a rarely used procedure into nine agents is paid on every
+  spawn.
+- `coder` and `ui-designer` write their article to `docs/runs/` and name the path
+  in a Done bullet; `reviewer` and `researcher` create no files, so they return
+  it above the handoff, where preamble prose is already tolerated, and the lead
+  saves it. `scout`, `spec-writer`, `tech-writer` and `fleet-steward` are
+  untouched, for the reasons in `docs/runs/README.md`.
+- **Nothing was added to the handoff format and no hook changed.** The article
+  path reaches the board card because `SubagentStop` already comments the
+  `## Done` section verbatim on a clean run.
+- `Run article` in the `glossary` skill and the generated
+  `templates/rules/glossary.md`, and a short section in `compound` so the end of
+  a unit of work reads articles as well as state-directory archives.
 
 ## [0.2.0] - 2026-09-08
 

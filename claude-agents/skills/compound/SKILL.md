@@ -60,6 +60,12 @@ When a board comment was too long for Notion, the hook wrote the whole thing to 
 
 Nothing prunes that directory and nothing backs it up. A run worth keeping permanently gets promoted into the repo - as a rule, a skill, or a `Propose memory:` line - and moving the file itself is a human's call, not yours. A state directory is not storage.
 
+## Run articles
+
+A run article under `docs/runs/` is the other raw material and usually the better one: where an archive is a verbatim comment a hook had to cut, an article is an account of the run written for the next person, with the dead ends already named. Read the ones for the unit of work you are compounding before you list candidates, because half the learnings are often sitting in "what was tried and abandoned", still owing you the three tests.
+
+What happens next differs. An archive is promoted or forgotten. An article is in the repo, versioned, and pruned on the same quarterly pass as `.claude/rules/` - delete one whose code no longer exists, because anything in it worth keeping became a rule, a skill or a memory here first. The `run-article` skill is how one gets written.
+
 ## How you work
 
 1. Name the unit of work in one sentence and confirm it landed and was verified. If it did not, stop.
