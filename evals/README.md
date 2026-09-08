@@ -1,0 +1,167 @@
+# Evals
+
+One smoke eval per agent, nine in total. The glossary defines an eval as three
+to five prompts, a rubric and a baseline score, run in CI on every definition
+change, and that is exactly what is here.
+
+An eval is not a quality measure. It is a smoke test for the failures that
+actually matter for one agent - the reviewer editing instead of reporting, the
+scout returning opinions, the steward merging its own proposal - plus one check
+every agent shares, because three hooks parse the handoff format and a body that
+drifts off it breaks the board rather than just reading badly.
+
+## Layout
+
+```
+evals/
+  run.sh                    the runner
+  README.md                 this file
+  lib/handoff-check.sh      the four-heading check, shared by all nine
+  lib/judge-prompt.md       instructions given to the grader
+  fixtures/
+    sample-app/             the workspace each prompt runs in, copied fresh
+    inputs/                 diffs, handoffs, notes and model lists a prompt points at
+  <agent>/
+    prompts/01-*.md         three to five prompts, one per file
+    rubric.md               why this eval exists, then the criteria
+    checks.sh               mechanical gates, where the agent has any
+    baseline.json           the recorded score, unset until the first run
+  results/<timestamp>/      one directory per run, not committed
+```
+
+A directory per agent rather than a file per agent, for three reasons. A prompt
+goes to `claude -p` verbatim, so it lives in its own file with nothing to strip.
+The mechanical gates are a script, not prose. And the baseline is written by the
+runner, so it has to be machine-readable and separate from the rubric a human
+edits.
+
+## Running
+
+```
+evals/run.sh --list                 what exists, and each agent's baseline
+evals/run.sh                        all nine
+evals/run.sh reviewer               one agent
+evals/run.sh reviewer scout         several
+evals/run.sh reviewer --prompt 02   one prompt
+evals/run.sh --no-judge             gates only, no grader call
+evals/run.sh --dry-run              print the commands, run nothing
+```
+
+Each prompt runs in a fresh copy of `fixtures/sample-app` with `fixtures/inputs`
+mounted at `.eval-inputs/`, so an agent can write freely and whether it did is
+part of what is measured. The workspace is deleted after scoring unless you pass
+`--keep-workspace`.
+
+Environment, for the things that differ per box or per CLI version:
+
+| Variable | Default | What it is for |
+|---|---|---|
+| `EVAL_CLAUDE_BIN` | `claude` | The binary to run |
+| `EVAL_AGENT_FLAG` | `--agent` | The flag that selects the agent. If your CLI spells it differently, set this rather than editing the runner |
+| `EVAL_CLAUDE_ARGS` | `--permission-mode acceptEdits` | Extra arguments on every run. Add `--max-turns` here to cap the lead eval |
+| `EVAL_JUDGE_MODEL` | `sonnet` | The model that grades against the rubric |
+| `EVAL_TIMEOUT` | `900` | Per-prompt timeout in seconds, when `timeout(1)` exists |
+
+## How a run is scored
+
+Three layers, and only two of them can fail a run.
+
+**The handoff gate.** `lib/handoff-check.sh` parses the final message the way
+the `SubagentStop` hook does: the four headings exactly, in order, once each; no
+other level-2 heading; one top-level list item per line; an empty section as
+exactly `- None`; every Decisions needed line typed `Blocker:`, `Propose item:`
+or `Propose memory:`; nothing after the last item; and the token `Blocker:`
+nowhere except on a typed line. Every eval runs it. It is the one check all nine
+share, and a failure here is a failure whatever else the agent did.
+
+**The agent gate.** `<agent>/checks.sh`, where the agent has one. These are the
+facts a script can settle rather than a judge: the reviewer's workspace is
+byte-identical to the fixture, the spec-writer wrote nothing outside
+`docs/specs/`, no value from `.env` reached the coder's answer, the tech-writer
+used no em dash. A gate is pass or fail.
+
+**The rubric.** `<agent>/rubric.md`, graded by a second `claude -p` call against
+the transcript and the list of files the agent changed. Criteria are identified
+in brackets and grouped by prompt, with an "All prompts" section that applies to
+every one. The grader emits `RESULT <id> PASS|FAIL - <evidence>` lines and
+nothing else, so the runner counts them with `grep` and needs no JSON parser.
+The rubric produces a percentage, not a verdict.
+
+Reading the summary:
+
+```
+AGENT            GATES    RUBRIC   BASELINE   DELTA      VERDICT
+reviewer         ok       92%      88         +4         ok
+scout            1 FAIL   75%      90         -15        FAIL (1 gate)
+```
+
+`GATES` is how many prompts failed a gate. `RUBRIC` is criteria passed over
+criteria graded, across every prompt in that eval. `VERDICT` is `FAIL` if any
+gate failed, `REGRESSED` if the rubric dropped more than five points below the
+baseline, and `ok` otherwise. The runner exits non-zero if any gate failed.
+
+Per-prompt detail is under `results/<timestamp>/<agent>/<prompt>/`:
+`transcript.txt` is what the agent said, `handoff.txt` and `checks.txt` are the
+gates line by line, `judge.txt` is the grader's `RESULT` lines, and
+`changed-files.txt` is every file the agent added, modified or deleted.
+
+## Baselines
+
+Every `baseline.json` ships with `"score": null`, which the runner and `--list`
+both report as `unset`. That is deliberate: a baseline is the number a
+representative run produced, and inventing one would mean CI comparing against
+a figure nobody measured. A delta of `n/a` means no baseline yet, not a pass.
+
+Set one after a run you have read and believe:
+
+```
+evals/run.sh reviewer --update-baseline
+```
+
+That writes the score, the date and the commit into `evals/reviewer/baseline.json`.
+Re-record it when an agent body changes on purpose, and never edit it by hand to
+make a run look green - which is the specific thing the `fleet-steward` eval
+tests the steward for.
+
+## In CI
+
+Section 11: the steward opens a pull request, the evals run on it, and the
+scores go on the request as a comment. The steward never merges, so the eval run
+is evidence for Alex's decision rather than a gate that lets a change through by
+itself.
+
+```
+scripts/gen-glossary-rule.sh --check
+evals/run.sh
+```
+
+The generator check comes first because it is free and catches a stale
+`templates/rules/glossary.md` before nine agent runs pay for it. Both exit
+non-zero on failure.
+
+Two things to know before wiring it up. The suite makes roughly forty agent
+calls plus a grader call each, so it is not a per-commit job - run it on changes
+under `claude-agents/agents/`, `claude-agents/skills/` and `evals/`. And the
+`lead` eval is the expensive one because the lead can spawn subagents; cap it
+with `EVAL_CLAUDE_ARGS="--max-turns 30"` or run the other eight on pull requests
+and the lead nightly.
+
+## Adding or changing an eval
+
+Keep it to three to five prompts. A prompt should provoke one specific failure
+and be answerable in one turn. Write the rubric criteria as things a grader can
+see in a transcript - "names the file and the line" rather than "understands the
+bug" - and put anything a script can settle into `checks.sh` instead, where it
+is a gate and not a judgement.
+
+Prompts may carry directives on their first lines, stripped before the text
+reaches the model:
+
+```
+#!fixture: sample-app     the workspace to copy in. `none` for an empty one.
+```
+
+Rubric headings must match the prompt filename exactly - a prompt at
+`prompts/02-just-fix-it.md` is graded by the criteria under
+`## Prompt 02-just-fix-it` - because that is how the runner tells the grader
+which criteria apply.

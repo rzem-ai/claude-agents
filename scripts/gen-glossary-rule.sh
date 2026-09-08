@@ -1,0 +1,143 @@
+#!/usr/bin/env bash
+#
+# gen-glossary-rule.sh - generate templates/rules/glossary.md from the glossary skill.
+#
+# Plan section 8: the glossary has to exist in three places at once - preloaded
+# into every agent, loaded unconditionally at project scope, and published to
+# Notion. Only one of the three is edited. This script makes the second one.
+#
+#   source  claude-agents/skills/glossary/SKILL.md   (canonical, hand edited)
+#   target  templates/rules/glossary.md              (generated, never edited)
+#
+# The generated rule carries no `paths:` key on purpose. A project rule without
+# `paths:` loads unconditionally, which is what the glossary needs.
+#
+# Usage:
+#   scripts/gen-glossary-rule.sh            regenerate the rule
+#   scripts/gen-glossary-rule.sh --check    exit 1 if the rule is stale or missing
+#   scripts/gen-glossary-rule.sh --help
+#
+# Idempotent: identical input always renders byte-identical output, so a second
+# run changes nothing and --check is a reliable CI gate.
+
+set -euo pipefail
+
+SCRIPT_NAME=$(basename "$0")
+REPO_ROOT=$(cd "$(dirname "$0")/.." && pwd)
+
+SOURCE_REL="claude-agents/skills/glossary/SKILL.md"
+TARGET_REL="templates/rules/glossary.md"
+
+SOURCE="$REPO_ROOT/$SOURCE_REL"
+TARGET="$REPO_ROOT/$TARGET_REL"
+
+MODE="generate"
+
+die() { printf '%s: %s\n' "$SCRIPT_NAME" "$*" >&2; exit 1; }
+say() { printf '%s\n' "$*"; }
+
+usage() {
+    sed -n '3,22p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --check)   MODE="check" ;;
+        -h|--help) usage; exit 0 ;;
+        *)         die "unknown argument: $1 (try --help)" ;;
+    esac
+    shift
+done
+
+[ -f "$SOURCE" ] || die "source not found: $SOURCE_REL"
+
+# The skill's own description line, lifted verbatim so the rule and the skill
+# never drift. Taken from inside the frontmatter block, first match only.
+extract_description() {
+    awk '
+        NR == 1 && $0 == "---" { in_fm = 1; next }
+        in_fm && $0 == "---"   { exit }
+        in_fm && /^description:/ && !done { print; done = 1 }
+    ' "$SOURCE"
+}
+
+# Everything after the closing --- of the frontmatter, with leading blank lines
+# trimmed. Trailing blank lines are trimmed too so the output is stable.
+extract_body() {
+    awk '
+        NR == 1 && $0 == "---" { in_fm = 1; next }
+        in_fm && $0 == "---"   { in_fm = 0; started = 1; next }
+        started {
+            if (!seen && $0 ~ /^[[:space:]]*$/) next
+            seen = 1
+            print
+        }
+    ' "$SOURCE" | awk '
+        { lines[NR] = $0 }
+        END {
+            last = NR
+            while (last > 0 && lines[last] ~ /^[[:space:]]*$/) last--
+            for (i = 1; i <= last; i++) print lines[i]
+        }
+    '
+}
+
+render() {
+    local description
+    description=$(extract_description)
+    if [ -z "$description" ]; then
+        die "no description: line found in the frontmatter of $SOURCE_REL"
+    fi
+
+    # Rule frontmatter. No `paths:` key - see the header comment.
+    printf '%s\n' "---"
+    printf '%s\n' "$description"
+    printf '%s\n' "---"
+    printf '\n'
+    printf '%s\n' "<!-- GENERATED FILE - DO NOT EDIT -->"
+    printf '%s\n' "<!-- Source:     $SOURCE_REL -->"
+    printf '%s\n' "<!-- Generator:  scripts/$SCRIPT_NAME -->"
+    printf '%s\n' "<!-- Edit the skill and regenerate. Edits here are overwritten. -->"
+    printf '\n'
+    printf '%s\n' "Generated from \`$SOURCE_REL\` by \`scripts/$SCRIPT_NAME\`. Do not edit this"
+    printf '%s\n' "file. Change the skill, run the generator, and commit both."
+    printf '\n'
+    printf '%s\n' "This rule carries no \`paths:\` key, so it loads on every turn in any project"
+    printf '%s\n' "that installs it."
+    printf '\n'
+    extract_body
+}
+
+TMP=$(mktemp "${TMPDIR:-/tmp}/glossary-rule.XXXXXX")
+trap 'rm -f "$TMP"' EXIT
+
+render > "$TMP"
+
+if [ "$MODE" = "check" ]; then
+    if [ ! -f "$TARGET" ]; then
+        say "$SCRIPT_NAME: STALE - $TARGET_REL does not exist."
+        say "$SCRIPT_NAME: run scripts/$SCRIPT_NAME and commit the result."
+        exit 1
+    fi
+    if cmp -s "$TMP" "$TARGET"; then
+        say "$SCRIPT_NAME: up to date - $TARGET_REL matches $SOURCE_REL."
+        exit 0
+    fi
+    say "$SCRIPT_NAME: STALE - $TARGET_REL does not match $SOURCE_REL."
+    say ""
+    diff -u "$TARGET" "$TMP" | sed "s|$TMP|(regenerated)|" || true
+    say ""
+    say "$SCRIPT_NAME: run scripts/$SCRIPT_NAME and commit the result."
+    exit 1
+fi
+
+mkdir -p "$(dirname "$TARGET")"
+
+if [ -f "$TARGET" ] && cmp -s "$TMP" "$TARGET"; then
+    say "$SCRIPT_NAME: unchanged - $TARGET_REL is already current."
+    exit 0
+fi
+
+cp "$TMP" "$TARGET"
+chmod 0644 "$TARGET"
+say "$SCRIPT_NAME: wrote $TARGET_REL from $SOURCE_REL."

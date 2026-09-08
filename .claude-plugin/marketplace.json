@@ -1,0 +1,33 @@
+{
+  "$schema": "https://code.claude.com/schemas/marketplace.json",
+  "name": "rzem",
+  "owner": {
+    "name": "Alex",
+    "email": "alex@rzem.com",
+    "url": "https://github.com/rzem-ai"
+  },
+  "description": "Private marketplace for the rzem Claude Code subagent fleet.",
+  "version": "0.1.0",
+  "plugins": [
+    {
+      "name": "claude-agents",
+      "displayName": "Claude Agents",
+      "source": "./claude-agents",
+      "description": "The rzem subagent fleet: role-shaped agents, shared skills, board hooks and workflows.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Alex",
+        "email": "alex@rzem.com"
+      },
+      "repository": "https://github.com/rzem-ai/claude-agents",
+      "keywords": [
+        "agents",
+        "subagents",
+        "skills",
+        "workflows",
+        "fleet"
+      ],
+      "category": "productivity"
+    }
+  ]
+}

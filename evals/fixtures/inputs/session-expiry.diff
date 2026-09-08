@@ -1,0 +1,33 @@
+diff --git a/src/auth/session.ts b/src/auth/session.ts
+index 1a2b3c4..5d6e7f8 100644
+--- a/src/auth/session.ts
++++ b/src/auth/session.ts
+@@ -24,7 +24,7 @@ export function issueSession(userId: string, now = Date.now()): Session {
+ }
+ 
+ export function isExpired(session: Session, now = Date.now()): boolean {
+-  return session.expiresAt <= now;
++  return session.expiresAt >= now;
+ }
+ 
+ export function validate(session: Session | undefined, now = Date.now()): Session | null {
+@@ -36,10 +36,17 @@ export function validate(session: Session | undefined, now = Date.now()): Sessio
+   return session;
+ }
+ 
+-export async function refresh(token: string, now = Date.now()): Promise<Session | null> {
++// Refreshs a sesion and hands back the same token.
++export async function refresh(token: string, now = Date.now()): Promise<Session | null> {
+   const existing = await db.sessions.findByRefreshToken(token);
+   const valid = validate(existing, now);
+   if (!valid) return null;
+-  // Rotation is not implemented yet. See docs/specs/EX-1-session-refresh.md.
+-  const next = { ...valid, expiresAt: now + SESSION_TTL_MS };
++  const next = {
++    ...valid,
++    expiresAt: now + SESSION_TTL_MS,
++  };
++  console.log("refreshed session", valid.id, "for user", valid.userId, "token", token);
+   await db.sessions.save(next);
+   return next;
+ }

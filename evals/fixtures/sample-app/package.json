@@ -1,0 +1,11 @@
+{
+  "name": "ex-service",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "lint": "eslint src",
+    "build": "tsc -p tsconfig.json"
+  }
+}

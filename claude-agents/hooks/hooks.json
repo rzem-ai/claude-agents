@@ -1,0 +1,53 @@
+{
+  "description": "Board writes and per-agent tool scoping for the rzem fleet. SubagentStart moves the item to Doing, SubagentStop writes Blocked or Blocked by human and enforces the handoff format, TaskCompleted gates on tests and writes Done or Blocked, and PreToolUse enforces the per-agent invariants that session-scoped permissions.deny cannot express.",
+  "hooks": {
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'${CLAUDE_PLUGIN_ROOT}/hooks/board-subagent-start.sh'",
+            "timeout": 20,
+            "statusMessage": "Moving the board item to Doing"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'${CLAUDE_PLUGIN_ROOT}/hooks/board-subagent-stop.sh'",
+            "timeout": 30,
+            "statusMessage": "Checking the handoff and updating the board"
+          }
+        ]
+      }
+    ],
+    "TaskCompleted": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'${CLAUDE_PLUGIN_ROOT}/hooks/board-task-completed.sh'",
+            "timeout": 600,
+            "statusMessage": "Running the test gate"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'${CLAUDE_PLUGIN_ROOT}/hooks/enforce-agent-scope.sh'",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

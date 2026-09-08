@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "claude-agents",
+  "displayName": "Claude Agents",
+  "version": "0.1.0",
+  "description": "The rzem subagent fleet: role-shaped agents, the skills they preload, the hooks that write the board, and the workflows that organise multi-phase work.",
+  "author": {
+    "name": "Alex",
+    "email": "alex@rzem.com",
+    "url": "https://github.com/rzem-ai"
+  },
+  "homepage": "https://github.com/rzem-ai/claude-agents",
+  "repository": "https://github.com/rzem-ai/claude-agents",
+  "keywords": [
+    "agents",
+    "subagents",
+    "skills",
+    "workflows",
+    "fleet"
+  ]
+}

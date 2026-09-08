@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "extraKnownMarketplaces": {
+    "rzem": {
+      "source": {
+        "source": "github",
+        "repo": "rzem-ai/claude-agents"
+      },
+      "autoUpdate": false
+    }
+  },
+  "enabledPlugins": {
+    "claude-agents@rzem": true
+  }
+}

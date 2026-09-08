@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "deny": [
+      "Read(~/.ssh/**)",
+      "Edit(~/.ssh/**)",
+      "Read(//**/id_rsa)",
+      "Read(//**/id_ed25519)",
+      "Read(~/.aws/**)",
+      "Edit(~/.aws/**)",
+      "Read(//**/.env)",
+      "Read(//**/.env.*)",
+      "Edit(//**/.env)",
+      "Edit(//**/.env.*)",
+      "Read(~/.vault-token)",
+      "Edit(~/.vault-token)",
+      "Read(//**/.vault-token)",
+      "Read(~/.vault/**)",
+      "Edit(~/.vault/**)",
+      "Read(~/.config/claude-agents/**)",
+      "Edit(~/.config/claude-agents/**)",
+      "Read(~/.config/op/**)",
+      "Read(~/.claude/.credentials.json)",
+      "Read(~/.netrc)",
+      "Read(~/.npmrc)",
+      "Read(~/.gnupg/**)",
+      "Edit(~/.claude/settings.json)",
+      "Edit(~/.claude/settings.local.json)",
+      "Bash(op *)",
+      "Bash(curl *)",
+      "Bash(wget *)",
+      "Bash(sudo *)",
+      "Bash(git push --force*)",
+      "Bash(git push * --force*)",
+      "Bash(git push -f *)",
+      "Bash(git push --delete *)",
+      "Bash(git push * --delete *)",
+      "Bash(git reset --hard*)",
+      "Bash(git clean -f*)",
+      "Bash(git clean * -f*)",
+      "Bash(git filter-branch *)"
+    ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true,
+    "filesystem": {
+      "denyRead": [
+        "~/.ssh",
+        "~/.aws",
+        "~/.gnupg",
+        "~/.config/op",
+        "~/.config/claude-agents",
+        "~/.vault-token",
+        "~/.vault",
+        "~/.netrc",
+        "~/.npmrc",
+        "~/.claude/.credentials.json"
+      ],
+      "denyWrite": [
+        "~/.ssh",
+        "~/.aws",
+        "~/.gnupg",
+        "~/.config/op",
+        "~/.config/claude-agents",
+        "~/.claude"
+      ]
+    },
+    "credentials": {
+      "files": [
+        { "path": "~/.ssh", "mode": "deny" },
+        { "path": "~/.aws/credentials", "mode": "deny" },
+        { "path": "~/.config/claude-agents", "mode": "deny" },
+        { "path": "~/.config/op", "mode": "deny" },
+        { "path": "~/.vault-token", "mode": "deny" },
+        { "path": "~/.netrc", "mode": "deny" },
+        { "path": "~/.npmrc", "mode": "deny" },
+        { "path": "~/.gnupg", "mode": "deny" },
+        { "path": "~/.claude/.credentials.json", "mode": "deny" }
+      ],
+      "envVars": [
+        { "name": "VAULT_TOKEN", "mode": "deny" },
+        { "name": "VAULT_ADDR", "mode": "deny" },
+        { "name": "OP_SERVICE_ACCOUNT_TOKEN", "mode": "deny" },
+        { "name": "NOTION_TOKEN", "mode": "deny" },
+        { "name": "NOTION_API_KEY", "mode": "deny" },
+        { "name": "ANTHROPIC_API_KEY", "mode": "deny" },
+        { "name": "ANTHROPIC_AUTH_TOKEN", "mode": "deny" },
+        { "name": "GITHUB_TOKEN", "mode": "deny" },
+        { "name": "GH_TOKEN", "mode": "deny" },
+        { "name": "NPM_TOKEN", "mode": "deny" },
+        { "name": "AWS_ACCESS_KEY_ID", "mode": "deny" },
+        { "name": "AWS_SECRET_ACCESS_KEY", "mode": "deny" },
+        { "name": "AWS_SESSION_TOKEN", "mode": "deny" }
+      ]
+    },
+    "network": {
+      "allowedDomains": [
+        "github.com",
+        "*.github.com",
+        "*.githubusercontent.com",
+        "registry.npmjs.org",
+        "*.npmjs.org",
+        "pypi.org",
+        "files.pythonhosted.org",
+        "api.anthropic.com",
+        "api.notion.com"
+      ]
+    }
+  }
+}
