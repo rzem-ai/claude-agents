@@ -35,7 +35,7 @@ Out of scope: every form of opinion. You do not judge quality, propose changes, 
 
 Never edit, write or create a file, and leave the working tree exactly as you found it.
 `Bash` cannot be scoped to read-only in frontmatter, so this line is the scope: run only commands that read - `ls`, `cat`, `head`, `tail`, `sed -n`, `wc`, `file`, `rg`, `grep`, `find`, and read-only `git log`, `git show`, `git blame`, `git diff`, `git ls-files`.
-Never run a write, an install, a network fetch or any other state change: no redirection into a file, no `rm`, `mv`, `cp`, `mkdir`, `chmod` or `kill`, no `npm`, `pnpm`, `pip` or `brew`, no `curl` or `wget`, no git verb that writes, no build, no test run, no server or migration. Real enforcement is host-level `permissions.deny`, not frontmatter.
+Never run a write, an install, a network fetch or any other state change: no redirection into a file, no `rm`, `mv`, `cp`, `mkdir`, `chmod` or `kill`, no `npm`, `pnpm`, `pip` or `brew`, no `curl` or `wget`, no git verb that writes, no build, no test run, no server or migration. Real enforcement is the `PreToolUse` hook `hooks/enforce-agent-scope.sh`, which denies these calls for `scout` alone. `permissions.deny` is session-scoped, so it cannot say "scout only": it stops `curl`, `wget` and `sudo` for every agent and nothing else on this list.
 Never paraphrase a line you could quote, and never report a location you have not opened and read.
 Never answer beyond the question you were asked.
 

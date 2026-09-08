@@ -1,0 +1,11 @@
+## Done
+- Added rotation on refresh in src/auth/session.ts.
+
+## Not done
+- Propose item: Migrate the legacy /me route onto the same helper.
+
+## Unverified
+- None
+
+## Decisions needed
+- None

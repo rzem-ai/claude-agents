@@ -1,5 +1,5 @@
 {
-  "description": "Board writes and per-agent tool scoping for the rzem fleet. SubagentStart moves the item to Doing, SubagentStop writes Blocked or Blocked by human and enforces the handoff format, TaskCompleted gates on tests and writes Done or Blocked, and PreToolUse enforces the per-agent invariants that session-scoped permissions.deny cannot express.",
+  "description": "Board writes and per-agent tool scoping for the rzem fleet. SubagentStart moves the item to Doing, SubagentStop writes Blocked or Blocked by human and enforces the handoff format, matched to the nine fleet agents so the gate never fires on a Plan, general-purpose or workflow lane that returns structured JSON rather than a handoff, TaskCompleted gates on tests and writes Done or Blocked, and PreToolUse enforces the per-agent invariants that session-scoped permissions.deny cannot express.",
   "hooks": {
     "SubagentStart": [
       {
@@ -15,6 +15,7 @@
     ],
     "SubagentStop": [
       {
+        "matcher": "^(claude-agents:)?(lead|scout|spec-writer|coder|reviewer|ui-designer|tech-writer|researcher|fleet-steward)$",
         "hooks": [
           {
             "type": "command",

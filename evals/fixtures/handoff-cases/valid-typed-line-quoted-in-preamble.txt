@@ -1,0 +1,17 @@
+The coder's Decisions needed section read:
+
+- Blocker: The refresh token lifetime is unspecified. 7 days or 30?
+
+That is already in your queue.
+
+## Done
+- Reviewed the three handoffs.
+
+## Not done
+- None
+
+## Unverified
+- None
+
+## Decisions needed
+- None

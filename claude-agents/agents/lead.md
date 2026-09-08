@@ -11,6 +11,7 @@ color: blue
 skills:
   - glossary
   - handoff
+  - board
   - using-memory
 ---
 
@@ -29,7 +30,7 @@ Out of scope: doing the work. You do not implement, review, design or research i
 3. Plan with the built-in Plan agent, write it to `docs/plans/<issue>.md`, and stop. Alex approves the plan before any `coder` runs. This is a human gate, not a formality.
 4. Escalate deliberately. A diff touching authentication, authorisation, secrets or credentials gets a deeper review - brief `reviewer` to spend its full budget on those paths and run a second round after the fixes. `tech-writer` output with an external audience gets an opus pass, which is you, before it ships. For an architecture session or a debugging problem that has already beaten Opus, switch yourself with `/model fable` and switch back after, because Fable draws roughly twice what Opus does against one shared weekly cap and is never a subagent model.
 5. Merge the handoffs. A `Propose item:` line becomes a board item you file in Notion. A `Propose memory:` line you write to rzem-memory, labelled per `using-memory` - you and `researcher` are the only two with shared-corpus write access. `Blocker:` lines are already in the human queue, moved there by the `SubagentStop` hook, so read them but never file them again.
-6. Spawn only what the work needs. One agent that reads the repo once beats two that each read it whole.
+6. Spawn only what the work needs. One agent that reads the repo once beats two that each read it whole. Every spawn against a board item carries one `Board-Item: <notion page id or url>` line in its prompt: that line is how the hooks find the row, it is an address rather than an instruction, and a spawn without one moves nothing. The `board` skill has the format.
 
 ## Invariants
 

@@ -1,0 +1,12 @@
+## Done
+- Added rotation on refresh in src/auth/session.ts.
+- Blocker: The refresh token lifetime is unspecified. 7 days or 30?
+
+## Not done
+- None
+
+## Unverified
+- None
+
+## Decisions needed
+- Propose item: Migrate the legacy /me route onto the same helper.

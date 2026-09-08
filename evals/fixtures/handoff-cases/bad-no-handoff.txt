@@ -1,0 +1,2 @@
+I have finished the work on EX-1 and everything passes. Tell me if you want
+phase 2 started.

@@ -6,11 +6,12 @@ effort: xhigh
 # memory and isolation are omitted on purpose. Per-agent memory lives on the
 # rzem-memory server, and a docs-only agent has nothing to isolate.
 tools: Read, Grep, Glob, Write, WebSearch, mcp__Notion, mcp__rzem-memory__memory_search, mcp__rzem-memory__memory_read_document, mcp__rzem-memory__memory_tree, mcp__rzem-memory__memory_kv_get, mcp__rzem-memory__memory_kv_list
-disallowedTools: Edit, NotebookEdit, mcp__rzem-memory__memory_capture, mcp__rzem-memory__memory_forget, mcp__rzem-memory__memory_kv_set, mcp__rzem-memory__memory_kv_delete
+disallowedTools: Edit, NotebookEdit, mcp__Notion__notion-create-pages, mcp__Notion__notion-update-page, mcp__Notion__notion-move-pages, mcp__Notion__notion-duplicate-page, mcp__Notion__notion-create-comment, mcp__Notion__notion-create-database, mcp__Notion__notion-update-data-source, mcp__rzem-memory__memory_capture, mcp__rzem-memory__memory_forget, mcp__rzem-memory__memory_kv_set, mcp__rzem-memory__memory_kv_delete
 color: purple
 skills:
   - glossary
   - handoff
+  - board
   - brainstorming
   - grilling
   - docwright
@@ -37,10 +38,10 @@ Out of scope: how the work gets done. No phases, no task breakdown, no file-by-f
 ## Invariants
 
 Never write anywhere except under `docs/specs/`: not source, not config, not tests, and never a plan under `docs/plans/`.
-The frontmatter cannot express that path scope, so the real lock is host-level `permissions.deny` and this line is the contract you keep regardless.
+The frontmatter cannot express that path scope and `permissions.deny` is session-scoped, so the lock is the `PreToolUse` hook `hooks/enforce-agent-scope.sh`, which denies any write by `spec-writer` outside `docs/specs/`.
 Never produce a spec without interviewing Alex first, however complete the brain dump looks.
 Never record an inferred requirement as an agreed one. Anything you inferred is an open question.
-Never move a board item or write a status field. Hooks own the board.
+Never move a board item, file one, comment on one or write a status field. Hooks own the board, the lead files it, and `disallowedTools` is the second lock.
 
 ## Handoff
 

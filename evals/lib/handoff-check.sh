@@ -7,7 +7,17 @@
 # reading of `claude-agents/skills/handoff/SKILL.md`, applied to the final
 # message of an eval run.
 #
-# Usage:  evals/lib/handoff-check.sh <transcript-file>
+# It applies the same rules as the production validator in
+# `claude-agents/hooks/board-subagent-stop.sh`, which is what decides whether a
+# real subagent is sent back to re-emit. The two are held identical by
+# `evals/lib/handoff-parity.sh`, which runs both over
+# `evals/fixtures/handoff-cases/` and fails if their verdicts ever differ.
+#
+# Usage:  evals/lib/handoff-check.sh <final-message-file>
+#
+# Give it the final assistant message, not a whole session log: the hook only
+# ever sees `last_assistant_message`, so anything wider would fail runs
+# production accepts. `run.sh` isolates it before calling this.
 #
 # Prints one line per check - PASS, FAIL or WARN, then the check id, then what
 # it looked at. Exits 0 if every check passed, 1 if any FAILed. WARN never
@@ -22,14 +32,15 @@
 #   H5  no section is empty; an empty section is exactly "- None"
 #   H6  every Decisions needed line is Blocker:, Propose item: or Propose memory:
 #   H7  nothing follows the last item of Decisions needed
-#   H8  the token "Blocker:" appears nowhere except on a typed line
+#   H8  no typed line - Blocker:, Propose item:, Propose memory: - under any
+#       heading other than Decisions needed
 #   H9  (warn) no item much over 200 characters
 
 set -euo pipefail
 
 FILE="${1:-}"
 if [ -z "$FILE" ] || [ ! -f "$FILE" ]; then
-    printf 'FAIL H0 no transcript to check (%s)\n' "${FILE:-none given}"
+    printf 'FAIL H0 no final message to check (%s)\n' "${FILE:-none given}"
     exit 1
 fi
 
@@ -47,7 +58,7 @@ BEGIN {
     h[4] = "## Decisions needed"
 }
 
-{ line[NR] = $0 }
+{ sub(/\r$/, ""); line[NR] = $0 }
 
 END {
     total = NR
@@ -104,8 +115,9 @@ END {
     if (seq_ok) pass("H2", "headings in order, block starts at line " start)
     else { fail("H2", "headings out of order or not one contiguous block"); finish() }
 
-    # H4 to H6 - the body of each section. Blank lines separating a section from
-    # the next heading are normal markdown; blank lines between items are not.
+    # H4 to H6 and H8 - the body of each section. A blank line before the next
+    # heading is normal markdown and is trimmed off first; a blank line anywhere
+    # else inside a section is not, and the hook rejects it too.
     for (k = 1; k <= 4; k++) {
         from = pos[k] + 1
         to = (k < 4) ? pos[k + 1] - 1 : total
@@ -130,6 +142,9 @@ END {
                 if (s != "- None" && s !~ /^- (Blocker|Propose item|Propose memory): /) {
                     fail("H6", "untyped Decisions needed line at " i ": " substr(s, 1, 60))
                 }
+            } else if (s ~ /^- (Blocker|Propose item|Propose memory): /) {
+                fail("H8", "typed line under " h[k] " at line " i ": " substr(s, 1, 60) \
+                     " - typed lines belong under " h[4] " and nowhere else")
             }
         }
         if (items == 0) fail("H5", h[k] " is empty; an empty section is exactly \"- None\"")
@@ -138,24 +153,13 @@ END {
     if (!("H4" in bad)) pass("H4", "every line is one top-level item")
     if (!("H5" in bad)) pass("H5", "every section has content, and empty means \"- None\"")
     if (!("H6" in bad)) pass("H6", "every Decisions needed line is typed or None")
+    if (!("H8" in bad)) pass("H8", "no typed line outside " h[4])
 
     # H7 - nothing follows the last item.
     last = total
     while (last > 0 && line[last] ~ /^[[:space:]]*$/) last--
     if (last > pos[4] && line[last] ~ /^- /) pass("H7", "the handoff is the last thing in the message")
     else fail("H7", "content follows the last Decisions needed item, at line " last)
-
-    # H8 - the Blocker token only ever on a typed line.
-    stray = 0
-    stray_line = ""
-    for (i = 1; i <= total; i++) {
-        if (line[i] ~ /Blocker:/ && line[i] !~ /^- Blocker: /) {
-            stray++
-            if (stray_line == "") stray_line = "line " i ": " substr(line[i], 1, 60)
-        }
-    }
-    if (stray > 0) fail("H8", "the Blocker token appears off a typed line, " stray_line)
-    else pass("H8", "the Blocker token appears only on typed lines")
 
     finish()
 }

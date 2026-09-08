@@ -6,8 +6,10 @@
 # (glossary, "Eval"). Each prompt runs through `claude -p` in a throwaway copy
 # of a fixture repo, and the result is scored three ways:
 #
-#   handoff gate  the four-heading format, checked by evals/lib/handoff-check.sh.
-#                 Every eval shares it, because three hooks parse that format.
+#   handoff gate  the four-heading format, checked by evals/lib/handoff-check.sh
+#                 against the run's FINAL ASSISTANT MESSAGE, which is the one
+#                 string the SubagentStop hook sees. Every eval shares it,
+#                 because three hooks parse that format.
 #   agent gate    evals/<agent>/checks.sh, when the agent has one. These are the
 #                 mechanical facts - did the reviewer edit a file, did the
 #                 spec-writer write outside docs/specs, did anything reach .env.
@@ -34,6 +36,10 @@
 #   EVAL_CLAUDE_ARGS    extra args for every run (default: --permission-mode acceptEdits)
 #   EVAL_JUDGE_MODEL    model for the grader (default: sonnet)
 #   EVAL_TIMEOUT        per-prompt timeout in seconds (default: 900, needs timeout(1))
+#   EVAL_OUTPUT_FORMAT  json, text, or auto (default). auto picks json when jq
+#                       is installed, because json carries the final assistant
+#                       message in its own field and text does not label it.
+#                       Ignored if EVAL_CLAUDE_ARGS already sets --output-format.
 
 set -uo pipefail
 
@@ -46,6 +52,7 @@ AGENT_FLAG="${EVAL_AGENT_FLAG:---agent}"
 CLAUDE_ARGS="${EVAL_CLAUDE_ARGS:---permission-mode acceptEdits}"
 JUDGE_MODEL="${EVAL_JUDGE_MODEL:-sonnet}"
 TIMEOUT_SECS="${EVAL_TIMEOUT:-900}"
+OUTPUT_FORMAT="${EVAL_OUTPUT_FORMAT:-auto}"
 
 ALL_AGENTS="lead scout spec-writer coder reviewer ui-designer tech-writer researcher fleet-steward"
 
@@ -65,7 +72,7 @@ info() { printf '  %s\n' "$*"; }
 warn() { printf '%s: warning: %s\n' "$SCRIPT_NAME" "$*" >&2; }
 die()  { printf '%s: error: %s\n' "$SCRIPT_NAME" "$*" >&2; exit 2; }
 
-usage() { sed -n '3,40p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '3,42p' "$0" | sed 's/^# \{0,1\}//'; }
 
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -122,6 +129,26 @@ fi
 if [ "$DRY_RUN" -eq 0 ] && ! command -v "$CLAUDE_BIN" >/dev/null 2>&1; then
     die "$CLAUDE_BIN not found on PATH. Set EVAL_CLAUDE_BIN or use --dry-run."
 fi
+
+# The gate must read the final assistant message and nothing else, because
+# that is all `SubagentStop` reads. The json output format names it in a field
+# of its own; the text format leaves the runner guessing, which is the
+# difference documented in README.md under "What the gate reads".
+case "$CLAUDE_ARGS" in
+    *--output-format*) OUTPUT_FORMAT=preset ;;
+esac
+if [ "$OUTPUT_FORMAT" = "auto" ]; then
+    if command -v jq >/dev/null 2>&1; then
+        OUTPUT_FORMAT=json
+    else
+        OUTPUT_FORMAT=text
+        warn "no jq, so the run falls back to text output and the gate reads the whole capture. See README.md, \"What the gate reads\"."
+    fi
+fi
+case "$OUTPUT_FORMAT" in
+    preset) FORMAT_ARGS="" ;;
+    *)      FORMAT_ARGS="--output-format $OUTPUT_FORMAT" ;;
+esac
 
 TIMEOUT_CMD=""
 if command -v timeout >/dev/null 2>&1; then
@@ -190,7 +217,7 @@ run_prompt() {
     printf '%s\n' "$text" > "$pdir/prompt.txt"
 
     if [ "$DRY_RUN" -eq 1 ]; then
-        info "$(basename "$pfile" .md): $CLAUDE_BIN -p $AGENT_FLAG $agent $CLAUDE_ARGS  (fixture: $fixture)"
+        info "$(basename "$pfile" .md): $CLAUDE_BIN -p $AGENT_FLAG $agent $CLAUDE_ARGS $FORMAT_ARGS  (fixture: $fixture)"
         return 0
     fi
 
@@ -198,13 +225,19 @@ run_prompt() {
     manifest "$ws" > "$pdir/before.manifest"
 
     # shellcheck disable=SC2086
-    ( cd "$ws" && $TIMEOUT_CMD "$CLAUDE_BIN" -p "$text" $AGENT_FLAG "$agent" $CLAUDE_ARGS ) \
-        > "$pdir/transcript.txt" 2> "$pdir/stderr.txt"
+    ( cd "$ws" && $TIMEOUT_CMD "$CLAUDE_BIN" -p "$text" $AGENT_FLAG "$agent" $CLAUDE_ARGS $FORMAT_ARGS ) \
+        > "$pdir/raw-output.txt" 2> "$pdir/stderr.txt"
     rc=$?
     printf '%s\n' "$rc" > "$pdir/exit-code.txt"
     if [ "$rc" -ne 0 ]; then
         warn "$agent / $(basename "$pfile"): claude exited $rc (see $pdir/stderr.txt)"
     fi
+
+    # transcript.txt is the final assistant message alone, because that is the
+    # only thing the SubagentStop hook is given. Everything the CLI printed is
+    # kept beside it in raw-output.txt.
+    "$EVAL_ROOT/lib/final-message.sh" "$pdir/raw-output.txt" \
+        > "$pdir/transcript.txt" 2> "$pdir/final-message.method" || true
 
     manifest "$ws" > "$pdir/after.manifest"
     diff "$pdir/before.manifest" "$pdir/after.manifest" > "$pdir/manifest.diff" 2>&1 || true
@@ -283,7 +316,7 @@ build_judge_prompt() {
     else
         printf '(none)\n'
     fi
-    printf '\n## The agent transcript\n\n'
+    printf '\n## The agent transcript - its final message, which is all the board ever sees\n\n'
     cat "$pdir/transcript.txt"
     printf '\n## End of transcript\n\n'
     printf 'Grade the criteria under the rubric heading "Prompt %s", and every\n' "$pname"

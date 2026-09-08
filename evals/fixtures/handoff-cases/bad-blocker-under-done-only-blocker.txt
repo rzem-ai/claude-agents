@@ -1,0 +1,11 @@
+## Done
+- Blocker: I cannot proceed without the token lifetime.
+
+## Not done
+- None
+
+## Unverified
+- None
+
+## Decisions needed
+- None

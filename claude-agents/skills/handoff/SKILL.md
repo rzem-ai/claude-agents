@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Handoff format
 
-End every final message with a handoff. It is a machine contract, not a style guide: a `SubagentStop` hook greps `last_assistant_message` for it. Deviate and either a blocker is missed, so Alex never learns he is needed, or a routine suggestion parks a false alarm in his queue.
+End every final message with a handoff. It is a machine contract, not a style guide: a `SubagentStop` hook parses `last_assistant_message` and, on a successful run, refuses to let you stop until it parses. Deviate and you are sent back to write it again. Get it subtly wrong and either a blocker is missed, so Alex never learns he is needed, or a routine suggestion parks a false alarm in his queue. The eval gate in CI applies exactly the same rules, so a handoff that fails one fails the other.
 
 ## Structure
 
@@ -23,7 +23,8 @@ Rules a `grep`/`sed` parser depends on:
 
 - Heading lines are exactly `## ` plus the wording above. Level 2, one space, that capitalisation, no trailing punctuation, no numbering, no bold. Anchor: `^## (Done|Not done|Unverified|Decisions needed)$`.
 - Use no other level-2 heading anywhere in the final message.
-- Every item is one markdown list item starting `- ` at column 0. No nesting, no sub-bullets, no blank lines inside a section, no code fences, no tables.
+- Every item is one markdown list item starting `- ` at column 0. No nesting, no sub-bullets, no code fences, no tables.
+- No blank line inside a section. The only blank line the parser allows is the one before the next heading, as in the example below.
 - One item is one line. Items never wrap - the newline ends the item. Keep each under roughly 200 characters; split a long one into two items.
 - An empty section contains exactly one line: `- None`. Never omit a section and never leave one blank, so a parser never has to distinguish "no blockers" from "the agent forgot the section".
 - The handoff is the last thing in the message. Nothing follows the last item of Decisions needed.
@@ -45,7 +46,11 @@ Every line under Decisions needed carries one of exactly three prefixes. Case-se
 
 Anchor: `^- (Blocker|Propose item|Propose memory): `.
 
-There is no fourth prefix and an untyped line is invalid. Never write the token `Blocker:` anywhere else in the message - not in prose, quotes, examples or file contents - because the hook greps the whole message. If you must name it, drop the colon.
+There is no fourth prefix and an untyped line is invalid.
+
+A typed line belongs under `## Decisions needed` and nowhere else. Start a line with one of those three prefixes under `## Done`, `## Not done` or `## Unverified` and the whole handoff is malformed: the hook rejects it and asks you to send it again. It is not read from there and it is not quietly moved for you, because a blocker in the wrong section means the agent has the format wrong, and rescuing it silently would hide that from Alex.
+
+Both parsers anchor on the start of a line, so naming a prefix mid-sentence in prose costs nothing. What matters is where a line that *starts* with one appears.
 
 ## Do not signal status in the text
 

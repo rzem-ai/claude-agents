@@ -7,10 +7,11 @@
 # calls the agent's own Invariants section forbids, quoting the invariant back
 # so the agent knows which line it hit.
 #
-# It fails open. A bug here must not stop the fleet working, and this is a
-# second lock on invariants that are also stated in the agent bodies and backed
-# by host-level permissions.deny - not the only thing standing between an agent
-# and the filesystem.
+# It fails open. A bug here must not stop the fleet working. Be clear about what
+# that costs: for the per-agent half there is no second lock, because that is the
+# half permissions.deny cannot express. The session-wide half - credentials,
+# curl, sudo, destructive git - is denied in settings and by the sandbox whatever
+# this hook does, and the sandbox is the thing that actually contains an agent.
 set -euo pipefail
 
 HOOK=PreToolUse
@@ -120,6 +121,23 @@ strip_quoted() {
   printf '%s' "$1" | sed -e "s/'[^']*'/''/g" -e 's/"[^"]*"/""/g'
 }
 
+# The command a segment actually runs: leading VAR=value assignments dropped,
+# then the basename of the first word. Empty if the segment is only assignments.
+leading_token() {
+  local seg="$1" tok next
+  while :; do
+    tok="$(printf '%s' "$seg" | awk '{print $1}')"
+    case "$tok" in
+      *=*) ;;
+      *) break ;;
+    esac
+    next="$(printf '%s' "$seg" | sed -E 's/^[^[:space:]]+[[:space:]]+//')"
+    if [ "$next" = "$seg" ]; then tok=""; break; fi
+    seg="$next"
+  done
+  printf '%s\n' "${tok##*/}"
+}
+
 enforce_scout() {
   if is_write_tool "$tool_name"; then
     deny "scout invariant: \"Never edit, write or create a file, and leave the working tree exactly as you found it.\" scout answers in paths, line numbers and quoted excerpts only. Hand the change to coder."
@@ -127,7 +145,7 @@ enforce_scout() {
   [ "$tool_name" = "Bash" ] || return 0
   [ -n "$command_str" ] || return 0
 
-  local scan seg first tok verb
+  local scan seg first next tok verb
   scan="$(strip_quoted "$command_str")"
   # Discarding output is not a state change, so let 2>/dev/null through before
   # looking for redirections.
@@ -147,19 +165,24 @@ enforce_scout() {
   while IFS= read -r seg; do
     seg="$(printf '%s' "$seg" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
     [ -n "$seg" ] || continue
-    # Skip leading VAR=value assignments.
+    # Strip leading VAR=value assignments, keeping both the command token
+    # and the remaining segment - the sed and git checks below inspect the
+    # arguments in $first. leading_token() carries the progress check the
+    # old inline loop lacked: a segment that is only an assignment
+    # (FOO=bar with nothing after it) made the sed a no-op and spun until
+    # the hook timeout.
+    tok="$(leading_token "$seg")"
+    [ -n "$tok" ] || continue
     first="$seg"
     while :; do
-      tok="$(printf '%s' "$first" | awk '{print $1}')"
-      case "$tok" in
-        *=*) first="$(printf '%s' "$first" | sed -E 's/^[^[:space:]]+[[:space:]]+//')" ;;
+      case "$(printf '%s' "$first" | awk '{print $1}')" in
+        *=*) ;;
         *) break ;;
       esac
-      [ -n "$first" ] || break
+      next="$(printf '%s' "$first" | sed -E 's/^[^[:space:]]+[[:space:]]+//')"
+      [ "$next" = "$first" ] && { first=""; break; }
+      first="$next"
     done
-    tok="$(printf '%s' "$first" | awk '{print $1}')"
-    tok="${tok##*/}"
-    [ -n "$tok" ] || continue
 
     case "$SCOUT_ALLOWED_CMDS" in
       *" $tok "*) ;;
@@ -270,10 +293,106 @@ enforce_fleet_steward() {
   return 0
 }
 
+# -------------------------------------------------------------------- reviewer
+# Invariants: "Never edit, write or create a file. Not a fix, not a test, not a
+# note.", "Never run a git command that writes: no commit, push, force-push,
+# checkout, stash, reset or rebase. Read-only git only." and "Never run tests,
+# builds or installs. If something needs running, that is a finding, not a
+# task."
+#
+# git is an allowlist because "read-only git only" is wider than the seven verbs
+# the invariant names, and a denylist would miss the eighth. Everything else is
+# a denylist: the reviewer reads the tree freely, it just never runs the suite.
+REVIEWER_ALLOWED_GIT=" log show blame diff ls-files status shortlog describe rev-parse rev-list cat-file grep whatchanged "
+REVIEWER_DENIED_CMDS=" npm pnpm yarn bun npx pnpx bunx pip pip3 pipx poetry uv gem bundle composer cargo rustc go make cmake ninja gradle mvn dotnet swift xcodebuild tsc vite webpack esbuild rollup jest vitest mocha ava karma pytest tox nox playwright cypress rspec phpunit ctest bazel docker docker-compose podman brew apt apt-get "
+
+enforce_reviewer() {
+  if is_write_tool "$tool_name"; then
+    deny "reviewer invariant: \"Never edit, write or create a file. Not a fix, not a test, not a note.\" The report is the whole output: a reviewer that edits makes the diff Alex approves a different diff from the one he read. Raise it as a finding and let coder make the change."
+  fi
+  [ "$tool_name" = "Bash" ] || return 0
+  [ -n "$command_str" ] || return 0
+
+  local scan seg tok verb
+  scan="$(strip_quoted "$command_str")"
+  scan="$(printf '%s' "$scan" | sed -E 's/(\|\||&&|;|\||&)/\n/g')"
+  while IFS= read -r seg; do
+    seg="$(printf '%s' "$seg" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+    [ -n "$seg" ] || continue
+    tok="$(leading_token "$seg")"
+    [ -n "$tok" ] || continue
+
+    case "$tok" in
+      git)
+        verb="$(printf '%s' "$seg" | awk '{print $2}')"
+        case "$REVIEWER_ALLOWED_GIT" in
+          *" $verb "*) ;;
+          *) deny "reviewer invariant: \"Never run a git command that writes: no commit, push, force-push, checkout, stash, reset or rebase. Read-only git only.\" \"git $verb\" is not a read-only verb. Read the history with git log, show, blame, diff or ls-files; anything that changes a ref belongs to coder." ;;
+        esac
+        ;;
+    esac
+
+    case "$REVIEWER_DENIED_CMDS" in
+      *" $tok "*)
+        deny "reviewer invariant: \"Never run tests, builds or installs. If something needs running, that is a finding, not a task.\" \"$tok\" is one of those. Say in a finding what needs running and what you expect it to show, and let coder run it." ;;
+    esac
+  done <<< "$scan"
+  return 0
+}
+
+# ----------------------------------------------------------------- ui-designer
+# Invariant: "Never run a git command that writes, and never install anything
+# into the product repo."
+#
+# Bash stays open otherwise, because "use Bash only to build, serve or
+# screenshot a prototype" is the job. So the package managers are matched on
+# their install verbs rather than denied outright: `npx serve` and a prototype
+# build are allowed, `npm install` is not.
+UI_DESIGNER_ALLOWED_GIT=" log show blame diff ls-files status shortlog describe rev-parse rev-list cat-file grep whatchanged "
+UI_DESIGNER_INSTALLERS=" npm pnpm yarn bun pip pip3 pipx poetry uv gem bundle composer cargo go brew apt apt-get "
+UI_DESIGNER_INSTALL_VERBS=" install i ci add require get remove uninstall update upgrade link "
+
+enforce_ui_designer() {
+  [ "$tool_name" = "Bash" ] || return 0
+  [ -n "$command_str" ] || return 0
+
+  local scan seg tok verb
+  scan="$(strip_quoted "$command_str")"
+  scan="$(printf '%s' "$scan" | sed -E 's/(\|\||&&|;|\||&)/\n/g')"
+  while IFS= read -r seg; do
+    seg="$(printf '%s' "$seg" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+    [ -n "$seg" ] || continue
+    tok="$(leading_token "$seg")"
+    [ -n "$tok" ] || continue
+    verb="$(printf '%s' "$seg" | awk '{print $2}')"
+
+    case "$tok" in
+      git)
+        case "$UI_DESIGNER_ALLOWED_GIT" in
+          *" $verb "*) ;;
+          *) deny "ui-designer invariant: \"Never run a git command that writes, and never install anything into the product repo.\" \"git $verb\" is not a read-only verb. Your prototypes are the deliverable; a coder builds and commits the real thing." ;;
+        esac
+        ;;
+    esac
+
+    case "$UI_DESIGNER_INSTALLERS" in
+      *" $tok "*)
+        case "$UI_DESIGNER_INSTALL_VERBS" in
+          *" $verb "*)
+            deny "ui-designer invariant: \"Never run a git command that writes, and never install anything into the product repo.\" \"$tok $verb\" installs into the repo. A prototype is self-contained: build it from what is already there, and name any dependency the real thing would need in the handoff." ;;
+        esac
+        ;;
+    esac
+  done <<< "$scan"
+  return 0
+}
+
 case "$agent" in
   spec-writer)   enforce_spec_writer ;;
   scout)         enforce_scout ;;
   fleet-steward) enforce_fleet_steward ;;
+  reviewer)      enforce_reviewer ;;
+  ui-designer)   enforce_ui_designer ;;
   *)             ;;
 esac
 

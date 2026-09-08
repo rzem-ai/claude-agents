@@ -1,0 +1,31 @@
+# case	expected	what it covers
+# Read by evals/lib/handoff-parity.sh. "expected" is what both the
+# production validator and the eval gate must say about the case.
+valid-minimal	valid	one item per section, all four headings in order
+valid-all-none	valid	every section empty, each exactly "- None"
+valid-preamble-prose	valid	prose before the handoff, which both sides tolerate
+valid-token-named-in-prose	valid	the reserved token named in preamble prose, the lead eval case
+valid-typed-line-quoted-in-preamble	valid	a typed line quoted at column 0 above the handoff, outside every section
+valid-crlf	valid	CRLF line endings
+valid-no-trailing-newline	valid	no newline at end of message
+valid-trailing-blank-lines	valid	blank lines after the last item, which end the message
+bad-blocker-under-done	invalid	"- Blocker: " under Done, the divergence this change closes
+bad-blocker-under-done-only-blocker	invalid	a misplaced Blocker with Decisions needed reading "- None"
+bad-propose-item-under-not-done	invalid	"- Propose item: " under Not done
+bad-propose-memory-under-unverified	invalid	"- Propose memory: " under Unverified
+bad-blank-between-items	invalid	a blank line between two items in a section
+bad-blank-after-heading	invalid	a blank line between a heading and its first item
+bad-blank-in-decisions	invalid	a blank line between two typed lines
+bad-missing-unverified	invalid	a missing heading
+bad-wrong-order	invalid	the four headings in the wrong order
+bad-duplicate-heading	invalid	a heading used twice
+bad-stray-h2	invalid	a level-2 heading that is not one of the four
+bad-empty-section	invalid	a section with no items at all
+bad-none-mixed-with-items	invalid	"- None" alongside a real item
+bad-untyped-decision	invalid	an untyped line under Decisions needed
+bad-nested-item	invalid	an indented sub-bullet
+bad-code-fence	invalid	a code fence inside a section
+bad-trailing-prose	invalid	prose after the last Decisions needed item
+bad-no-handoff	invalid	a final message with no handoff in it
+bad-empty-message	invalid	an empty final message
+bad-whitespace-only	invalid	a final message that is only whitespace

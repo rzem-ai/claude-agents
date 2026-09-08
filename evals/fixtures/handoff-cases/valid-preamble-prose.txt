@@ -1,0 +1,14 @@
+Here is the merge you asked for. Both proposals are filed and the memory note
+is written; the token lifetime is the only thing left for you.
+
+## Done
+- Merged three handoffs for EX-1.
+
+## Not done
+- None
+
+## Unverified
+- None
+
+## Decisions needed
+- Blocker: The refresh token lifetime is still unanswered. 7 days or 30?

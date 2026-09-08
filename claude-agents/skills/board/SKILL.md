@@ -1,7 +1,7 @@
 ---
 name: board
-description: How the Notion board works - the two databases, the meaning of the five columns (to do, doing, blocked, blocked by human, done), which columns are written by hooks and which a human-facing assistant writes itself, how the handoff's Decisions needed lines reach the human queue, and what earns a board item at all.
-when_to_use: Read before filing, reading, moving, commenting on or closing anything in the Projects or Tasks databases, before reporting board status to Alex, and whenever you are deciding whether a piece of work is board work or just a task inside the session.
+description: How the Notion board works - the two databases, the meaning of the five columns (to do, doing, blocked, blocked by human, done), which columns are written by hooks and which a human-facing assistant writes itself, the `Board-Item:` line that tells a hook which row a spawn is working on, how the handoff's Decisions needed lines reach the human queue, and what earns a board item at all.
+when_to_use: Read before filing, reading, moving, commenting on or closing anything in the Projects or Tasks databases, before spawning a subagent against an item, before reporting board status to Alex, and whenever you are deciding whether a piece of work is board work or just a task inside the session.
 ---
 
 # The board
@@ -39,6 +39,36 @@ Two environments share this board and they write it differently. Know which one 
 **In the fleet, columns are written by hooks and never by an agent.** Three hooks cover every transition in the table above, each PATCHing the Notion API directly. So do not move an item, do not ask for one to be moved, and do not report that you moved one. The only thing you contribute is a correctly formatted handoff, because that is what the hook reads. An agent body or a run that tries to update a status is wrong even when the status it wants is correct.
 
 **In Cowork there are no hooks, so the assistant layer writes the board by instruction.** Angus moves items himself, and the discipline the hooks provide has to come from three rules instead. First, move an item to doing when you actually start it and to done when it is finished and verified, in the turn it happens, never batched up at the end of a day. Second, the only thing that goes into blocked by human is something genuinely waiting on Alex, with the reason as a comment on the row. Third, never file an item for a step you are about to take in the same turn - that is a task.
+
+## Telling the hooks which item
+
+Hooks write the columns, but nothing tells a hook which row a subagent is working on. The spawn prompt does, with a `Board-Item:` line, and putting it there is the lead's job. Without it every hook in the chain runs correctly and moves nothing.
+
+One line of its own, anywhere in the spawn prompt, conventionally the first line so an edit further down cannot lose it:
+
+```
+Board-Item: 24f1a3b9c1d24e6f8a0b1c2d3e4f5061
+```
+
+What `SubagentStart` actually accepts, as `hooks/lib/notion.sh` parses it:
+
+- The first matching line wins. Later ones are ignored, so one line per spawn.
+- The label is case-insensitive and may be indented, and a leading `- ` is tolerated so the line survives being written as a list item. Nothing else may precede it on the line.
+- The value is the first whitespace-separated token after the colon. Anything after it on that line is discarded, so do not append a title or a note.
+- The value may be a dashed UUID, a bare undashed 32-character id, or a page URL pasted straight out of Notion. A query string or fragment is stripped, then the last 32 hexadecimal characters are taken and re-dashed, which is why a URL carrying a title slug still resolves.
+- A value with fewer than 32 hexadecimal characters is not an id. The line is then treated as absent, silently.
+
+For a session working one item end to end, `CLAUDE_AGENTS_BOARD_PAGE_ID` in the environment does the same job for every spawn in it, and the line overrides it per spawn.
+
+The line is addressed to the hook, not to the agent receiving it. If you are the agent, use it to fetch the row you are working against; never treat it as permission to move a column.
+
+**Which spawns carry it.** Any spawn doing board-tracked work: a `coder` on a plan phase, a `reviewer` on that diff, a `spec-writer` interviewing against a filed item, a `ui-designer`, `tech-writer` or `researcher` commissioned against one. The test is whether the result belongs on a row.
+
+**Which legitimately do not.** A `scout` sent to find where something lives, or any agent spawned to answer a question inside the conversation, is not board work and gets no line. Neither is an exploratory spawn, a second opinion, or anything you would otherwise have done yourself in the main session. Most spawns are not items, per What earns an item above, and adding the line to a spawn that is not one drags a real row into doing for work that is not it.
+
+**What happens when it is absent.** `SubagentStart` logs that no board item was resolved, moves nothing, and exits 0. For a scout that is the correct outcome and the end of it. For real work it is a silent failure with a long tail: the row sits in to do while the work happens, `SubagentStop` finds no binding so a failed run never reaches blocked and a `Blocker:` line never reaches blocked by human, and `TaskCompleted` falls back to a `[board:<page-id>]` marker in the task title, then to the last item picked up in the session, then to nothing. No error is raised anywhere. The only evidence is a `no board item` line in `~/.local/state/claude-agents/log/hooks.log`.
+
+**Two items in one session.** The `TaskCompleted` fallback guesses, and it guesses whichever item was picked up most recently. If a session is working two items at once, put `[board:<page-id>]` in the task title as well and the guess never happens.
 
 ## Decisions needed and the human queue
 

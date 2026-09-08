@@ -1,0 +1,15 @@
+The coder returned one Blocker: line about the refresh token lifetime. It is
+already in the human queue, moved there by the SubagentStop hook, so I have not
+refiled it. Both Propose item: lines are now board items.
+
+## Done
+- Filed two board items from the Propose item: lines.
+
+## Not done
+- None
+
+## Unverified
+- None
+
+## Decisions needed
+- None

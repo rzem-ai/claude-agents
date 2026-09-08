@@ -6,7 +6,7 @@ Four hooks, one shared library, no agent ever asked to remember anything.
 | File | Event | What it does |
 |---|---|---|
 | `board-subagent-start.sh` | `SubagentStart` | Binds the subagent to a board item and moves it to **Doing** |
-| `board-subagent-stop.sh` | `SubagentStop` | **Blocked** on failure or cancellation, **Blocked by human** on a `Blocker:` line, and the handoff-format check |
+| `board-subagent-stop.sh` | `SubagentStop` | **Blocked** on failure or cancellation, **Blocked by human** on a `Blocker:` line, and the handoff-format check. Matched to the fleet agents only |
 | `board-task-completed.sh` | `TaskCompleted` | Tests pass, **Done**. Tests fail, **Blocked** and exit 2 |
 | `enforce-agent-scope.sh` | `PreToolUse` | Denies tool calls that violate an agent's own Invariants |
 | `lib/notion.sh` | - | Token handling, the Notion calls, state files, page-id parsing |
@@ -19,8 +19,9 @@ is an addition to the plan, approved separately.
 ## Which board item
 
 This is the part the plan left open. It says the hook "is expected to know the
-item from the spawn context" and never says how, so here is the convention.
-**It does not work until the lead is wired up to follow it.**
+item from the spawn context" and never says how, so here is the convention. The
+lead is wired up to follow it: `agents/lead.md` step 6 and the `board` skill,
+which both agents preload.
 
 ### The convention
 
@@ -43,11 +44,16 @@ question: most spawns are not board items and should not touch the board.
 
 ### What must be wired up
 
-1. **The lead's body, or the `board` skill, must tell the lead to emit that
-   line.** Neither is a file this layer owns. Until one of them says it, every
-   board write is a no-op and the log fills with "no board item" lines.
-2. `scripts/install-home.sh` must render `~/.config/claude-agents/notion.token`
-   at mode 600 (plan section 12).
+1. ~~The lead's body, or the `board` skill, must tell the lead to emit that
+   line.~~ Done, in both: `agents/lead.md` step 6 carries the rule and
+   `skills/board/SKILL.md`, "Telling the hooks which item", carries the full
+   convention. Neither is a file this layer owns, so if either is rewritten
+   without that content, every board write goes back to being a no-op and the
+   log fills with "no board item" lines.
+2. ~~`scripts/install-home.sh` must render `~/.config/claude-agents/notion.token`
+   at mode 600 (plan section 12).~~ Done. It rendered `notion-token` with a
+   hyphen until 8 September 2026, which meant a correctly installed machine
+   never had a token where `lib/notion.sh` looks for one.
 3. The Tasks database needs a status property whose options are named exactly
    `To do`, `Doing`, `Blocked`, `Blocked by human`, `Done`. If they are spelled
    differently, override the names in `board.env` (below).
@@ -130,6 +136,32 @@ Two escape hatches:
 
 ## The handoff-format check
 
+### Who it applies to
+
+`SubagentStop` takes a matcher and the matcher is the agent type, so `hooks.json`
+registers this hook against the nine fleet agents and nothing else:
+
+```
+^(claude-agents:)?(lead|scout|spec-writer|coder|reviewer|ui-designer|tech-writer|researcher|fleet-steward)$
+```
+
+The optional prefix is there because a plugin agent arrives as `scout` or as
+`claude-agents:scout` depending on how it was named.
+
+Without the matcher the gate fired on every subagent, including the built-in
+`Plan` and `general-purpose` lanes the workflows spawn. Those lanes never preload
+the `handoff` skill and are asked for structured JSON, so every one of them
+failed the check, hit exit 2 and was told to re-emit a handoff it was never asked
+for. Scoping the registration is the fix rather than a special case inside the
+validator, because a lane that returns JSON is not a malformed handoff - it is
+not a handoff at all.
+
+The cost is that a non-fleet subagent no longer moves a bound board item to
+Blocked when it fails. That only matters for a spawn carrying a `Board-Item:`
+line, and the lead only binds those to fleet agents.
+
+### What it checks
+
 `board-subagent-stop.sh` validates `last_assistant_message` against
 `skills/handoff/SKILL.md` and exits 2 if it does not parse, which stops the
 subagent stopping and hands it the list of problems. The anchors come from the
@@ -142,28 +174,51 @@ skill, quoted rather than reinvented:
 | An item | `^- ` | "Every item is one markdown list item starting `- ` at column 0." |
 | A typed line | `^- (Blocker\|Propose item\|Propose memory): ` | "Anchor: `^- (Blocker\|Propose item\|Propose memory): `" |
 | An empty section | `^- None$` | "An empty section contains exactly one line: `- None`." |
+| Where a typed line may appear | `^- (Blocker\|Propose item\|Propose memory): ` under `## Decisions needed` only | "A typed line belongs under `## Decisions needed` and nowhere else." |
+| A blank line inside a section | a blank line with another item after it, before the next heading | "No blank line inside a section." |
 
 What it rejects: a missing, duplicated or out-of-order heading; any other H2; an
 empty section; a line under a section that does not start with `- ` at column 0,
 which is also how "the handoff is the last thing in the message" is enforced;
-an untyped line under Decisions needed; and `- None` mixed with real items.
+an untyped line under Decisions needed; a typed line under any heading other
+than Decisions needed; a blank line between two items in the same section; and
+`- None` mixed with real items.
 
 What it tolerates on purpose:
 
 - **Prose before `## Done`.** The skill says the handoff is the last thing in
-  the message, not the only thing.
-- **Blank lines inside a section.** The skill forbids them, but they change
-  nothing a parser sees, and exit 2 over a blank line is a bad trade.
+  the message, not the only thing. Nothing above the first heading is parsed at
+  all, which is why an agent may name a prefix in prose while explaining what it
+  did with someone else's handoff.
+- **A blank line before the next heading.** That one is ordinary markdown and is
+  what the skill's own example does. A blank line with another item after it is
+  not, and is rejected.
 - **A failed or cancelled run.** The check only runs when `status` is `success`.
   Exit 2 on a cancellation would refuse to let a cancelled subagent stop, which
   is the opposite of what a cancellation means. A failed run goes to Blocked and
   is not asked to reformat itself.
 
 Blockers are extracted from the Decisions needed section only, not from the whole
-message. The skill warns agents never to write the token `Blocker:` anywhere else
-because "the hook greps the whole message"; this one does not, so a stray one
-under Done is caught by the validator instead of quietly parking a false alarm in
-the human queue.
+message, and the validator rejects a typed line found under any other heading, so
+a stray one under Done is caught by the validator instead of quietly parking a
+false alarm in the human queue. Rescuing it silently would be worse than
+refusing it: a misplaced blocker means the agent has the format wrong, and Alex
+only learns that if the run is sent back.
+
+### One rule set, two implementations
+
+`evals/lib/handoff-check.sh` is the CI gate and applies the same rules to the
+final assistant message of an eval run. The two are held identical by
+`evals/lib/handoff-parity.sh`, which runs both over every case in
+`evals/fixtures/handoff-cases/` and fails if a verdict ever differs:
+
+```sh
+evals/lib/handoff-parity.sh        # verdicts only
+evals/lib/handoff-parity.sh -v     # and each side's reasons
+```
+
+Change one side and run it. They differ only in wording and in how many
+complaints each lists for the same message; the verdict is the contract.
 
 ## The test gate
 
@@ -190,7 +245,7 @@ completion never costs the board its update.
 ## Per-agent tool scoping
 
 `enforce-agent-scope.sh` switches on `agent_type` and denies with
-`permissionDecision: "deny"`, quoting the invariant that was violated. Three
+`permissionDecision: "deny"`, quoting the invariant that was violated. Five
 agents have rules; every other agent, and the main session, is untouched.
 
 **`spec-writer`** - "Never write anywhere except under `docs/specs/`". Any
@@ -234,12 +289,34 @@ plugin's own location: if the plugin sits at `<root>/claude-agents` and
 works, the check degrades to "the path contains a `claude-agents` directory" and
 the deny message says to set `CLAUDE_AGENTS_REPO`.
 
+**`reviewer`** - "Never edit, write or create a file", "Never run a git command
+that writes ... Read-only git only" and "Never run tests, builds or installs".
+Write tools are denied outright, which is the one that matters: section 4 of the
+plan singles the reviewer out because a review agent that edits makes the diff
+Alex approves a different diff from the one he read. `git` is an allowlist -
+`log`, `show`, `blame`, `diff`, `ls-files`, `status`, `shortlog`, `describe`,
+`rev-parse`, `rev-list`, `cat-file`, `grep`, `whatchanged` - because "read-only
+git only" is wider than the seven verbs the invariant names and a denylist would
+miss the eighth. Test runners, build tools and package managers are a denylist,
+so the reviewer still reads the tree with `rg`, `cat` and `find`.
+
+**`ui-designer`** - "Never run a git command that writes, and never install
+anything into the product repo". The same read-only `git` allowlist. Installs are
+matched on the verb rather than the command, because "use Bash only to build,
+serve or screenshot a prototype" is the job: `npx serve` and `npm run build` are
+allowed, `npm install`, `pnpm add`, `pip install`, `cargo add`, `go get` and
+`brew install` are not. Write tools are left alone - `Write` is how a prototype
+gets made, and `Edit` is already off its frontmatter.
+
 This hook **fails open**. Bad input, a missing `jq`, an unexpected error: it logs
-and allows. It is a second lock on invariants that are also written in the agent
-bodies and backed by host-level `permissions.deny`, not the only thing between an
-agent and the filesystem. A shell-command allowlist parsed with `sed` and `awk`
-is a speed bump for an agent that has misread its brief, not a sandbox for one
-that is trying to get out. `/sandbox` is the sandbox.
+and allows. Be clear about what that costs. For the per-agent half there is no
+second lock, because that is precisely the half `permissions.deny` cannot express:
+a deny rule strong enough to stop `scout` writing stops `coder` writing too. The
+session-wide half - credentials, `curl`, `sudo`, destructive git verbs - is denied
+in `home/settings.json` and by the sandbox whatever this hook does. A
+shell-command allowlist parsed with `sed` and `awk` is a speed bump for an agent
+that has misread its brief, not a sandbox for one that is trying to get out.
+`/sandbox` is the sandbox.
 
 ## Security
 
@@ -305,6 +382,12 @@ jq -n '{session_id:"s1",agent_id:"a1",agent_type:"coder",status:"success",
         last_assistant_message:"## Done\n- x\n\n## Decisions needed\n- maybe?\n"}' \
   | ./board-subagent-stop.sh; echo "exit $?"
 
+# 3b. stop, a Blocker line in the wrong section: also exit 2, and the message
+#     names the line and the section it turned up under
+jq -n '{session_id:"s1",agent_id:"a1",agent_type:"coder",status:"success",
+        last_assistant_message:"## Done\n- Blocker: 7 days or 30?\n\n## Not done\n- None\n\n## Unverified\n- None\n\n## Decisions needed\n- None\n"}' \
+  | ./board-subagent-stop.sh; echo "exit $?"
+
 # 4. the test gate, failing: Blocked, then exit 2
 CLAUDE_AGENTS_TEST_COMMAND='exit 1' jq -n '{session_id:"s1",cwd:"/tmp",task_id:"t1",
         task_title:"Wire it [board:24f1a3b9c1d24e6f8a0b1c2d3e4f5061]"}' > /tmp/ca/in.json
@@ -319,8 +402,14 @@ Watch for the env-prefix trap in step 4: `VAR=x jq ... | ./hook.sh` sets the
 variable for `jq`, not for the hook. Export it, or write the JSON to a file
 first as above.
 
-Expected exit codes: 0 everywhere except step 3 and step 4, which are 2. Every
+Expected exit codes: 0 everywhere except steps 3, 3b and 4, which are 2. Every
 run appends to `$CLAUDE_AGENTS_STATE_DIR/log/hooks.log`.
+
+For the format check specifically, `evals/lib/handoff-parity.sh` drives this same
+script over a fixture set that covers valid handoffs, typed lines in each of the
+three wrong sections, blank lines, missing and out-of-order headings, a stray H2,
+untyped lines and trailing prose. It is faster than writing the JSON by hand and
+it checks the CI gate at the same time.
 
 To watch the real thing, run Claude Code with `--debug` - hook stderr goes to
 the debug log - and `tail -f ~/.local/state/claude-agents/log/hooks.log`.
@@ -366,14 +455,22 @@ layer had to make on its own:
    column move only, matching the plan's table exactly.
 6. **A successful run with no blockers changes no column.** The plan gives Done
    to `TaskCompleted`, so `SubagentStop` leaves the item in Doing.
-7. **The handoff check runs on success only**, and tolerates preamble prose and
-   blank lines inside sections. See above for why.
+7. **The handoff check runs on success only**, and tolerates preamble prose,
+   which is unparsed. Everything else in the skill is enforced strictly,
+   including the blank-line rule and where a typed line may appear. See above
+   for why.
 8. **`cd`, `pwd`, `echo` and `true`** added to scout's Bash allowlist, and the
    quote-stripping and `2>/dev/null` softenings.
 9. **`fleet-steward`'s repo-root resolution** by walking up from the plugin
    directory, and the git verb list, which is read off its Invariants prose.
 10. **`Notion-Version: 2022-06-28`.** No version is named anywhere in the plan.
-11. **Field-name defensiveness.** The brief for this work gives `SubagentStop` a
+11. **The `SubagentStop` matcher.** The plan gives the hook to every subagent.
+    Scoping it to the nine fleet agents is this layer's decision, made because
+    the workflows spawn `Plan` and `general-purpose` lanes that return JSON.
+12. **`reviewer` and `ui-designer` scoping rules**, including the read-only git
+    allowlist both share and the install-verb matching that keeps
+    `ui-designer` able to build and serve a prototype.
+13. **Field-name defensiveness.** The brief for this work gives `SubagentStop` a
     `status` field of `success`, `failure` or `cancelled` and `TaskCompleted` a
     `task_title`. The published example blocks on
     `https://code.claude.com/docs/en/hooks` spell these `completion_reason`

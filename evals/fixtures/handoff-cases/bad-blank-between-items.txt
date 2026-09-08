@@ -1,0 +1,13 @@
+## Done
+- Added rotation on refresh in src/auth/session.ts.
+
+- Unit tests pass: npm test src/auth/session.test.ts.
+
+## Not done
+- None
+
+## Unverified
+- None
+
+## Decisions needed
+- None

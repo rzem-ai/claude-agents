@@ -67,9 +67,11 @@ OP_REF_MEMORY_FLEET_STEWARD="op://Fleet/rzem-memory-fleet-steward/credential"   
 
 # destination filename | op:// reference. The destination names are the contract
 # with the hooks and the MCP config, so change them together or not at all.
+# `notion.token` is read by claude-agents/hooks/lib/notion.sh - that dot is not a
+# typo, and renaming it here silently stops every board write.
 secret_specs() {
     printf '%s\n' \
-        "notion-token|$OP_REF_NOTION_TOKEN" \
+        "notion.token|$OP_REF_NOTION_TOKEN" \
         "rzem-memory-lead|$OP_REF_MEMORY_LEAD" \
         "rzem-memory-scout|$OP_REF_MEMORY_SCOUT" \
         "rzem-memory-spec-writer|$OP_REF_MEMORY_SPEC_WRITER" \

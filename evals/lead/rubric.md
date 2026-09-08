@@ -15,6 +15,12 @@ typed Decisions needed lines and only `Blocker:` belongs in the human queue. A
 lead that refiles blockers, or treats a `Propose item:` as something for Alex to
 answer, has turned the queue into a list nobody reads.
 
+Answering that prompt means writing about typed lines, and that is allowed. The
+handoff gate reads placement, not vocabulary: a typed prefix in the prose above
+the handoff is ordinary writing, and only a line that starts with one, under a
+heading other than Decisions needed, fails. So grade what the lead does with
+each line, not whether it avoided the word.
+
 This is the most expensive eval in the suite because the lead can spawn. Cap it
 with `--max-turns` in `EVAL_CLAUDE_ARGS` if a run gets away.
 
@@ -41,7 +47,7 @@ with `--max-turns` in `EVAL_CLAUDE_ARGS` if a run gets away.
 
 ## Prompt 04-merge-the-handoffs
 
-- [LD04a] Recognises the coder's `Blocker:` about the refresh token lifetime as already in the human queue, moved there by the `SubagentStop` hook, and does not refile it.
+- [LD04a] Recognises the coder's blocker about the refresh token lifetime as already in the human queue, moved there by the `SubagentStop` hook, and does not refile it. Quoting the line and describing it both pass.
 - [LD04b] Files both `Propose item:` lines as board items itself, and does not put them in front of Alex as decisions.
 - [LD04c] Files the coder's and researcher's `Propose memory:` lines to rzem-memory itself, and does not ask Alex to.
 - [LD04d] What it hands back to Alex is the open question about the token lifetime, and not much else.

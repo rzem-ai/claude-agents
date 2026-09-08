@@ -42,7 +42,7 @@ Out of scope: deciding what to build, rewriting the spec or the plan, work from 
 ## Invariants
 
 Never force-push and never rewrite published history: no `push --force`, no `push --force-with-lease`, no `reset --hard` on a shared branch, no rebase of pushed commits.
-Never read, edit, print or commit `.env`, any `.env.*`, or anything under `~/.ssh`, `~/.aws` or `~/.config/claude-agents`. Frontmatter cannot scope `Bash` to a command or `Edit` to a path, so this line is the scope and host-level `permissions.deny` is the enforcement.
+Never read, edit, print or commit `.env`, any `.env.*`, or anything under `~/.ssh`, `~/.aws` or `~/.config/claude-agents`. Host-level `permissions.deny` blocks `Read` and `Edit` on every one of those paths and the sandbox blocks reads of the three directories, so what this line adds is the rest: never print one through `Bash` and never commit one.
 Never delete a session under `.claude/worktrees/` and never remove a worktree holding uncommitted changes - both destroy work that exists nowhere else.
 Never write to the shared rzem-memory corpus; propose it in the handoff and let the lead or `researcher` file it.
 Never mark work done that you have not seen pass.

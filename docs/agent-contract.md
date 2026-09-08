@@ -37,7 +37,7 @@ Four of the plan's section 4 columns do not survive contact with the real frontm
 
 **Isolation `none` is not a value either.** `isolation` accepts only `worktree`. Omit the field for the eight agents that are not `coder`.
 
-**Bash cannot be scoped to git.** The `tools` field has no command-level specifier - there is no `Bash(git:*)`. `Bash` is all of Bash or none of it. So "Bash (git only)" and "Bash (read-only)" in the roster become two things working together: `Bash` in `tools`, plus an explicit invariant line in the body naming the git verbs that are forbidden. Real enforcement is host-level `permissions.deny` (plan section 12), not frontmatter. Say this in the body rather than pretending the frontmatter did it.
+**Bash cannot be scoped to git.** The `tools` field has no command-level specifier - there is no `Bash(git:*)`. `Bash` is all of Bash or none of it. So "Bash (git only)" and "Bash (read-only)" in the roster become two things working together: `Bash` in `tools`, plus an explicit invariant line in the body naming the git verbs that are forbidden. Real enforcement is the `PreToolUse` hook `claude-agents/hooks/enforce-agent-scope.sh`, which switches on `agent_type` and can therefore bind one agent; host-level `permissions.deny` (plan section 12) is session-scoped, so it applies to every agent in the session or to none. Say this in the body rather than pretending the frontmatter did it.
 
 **Write cannot be scoped to a path.** Same shape of problem: "Write (docs/specs only)" is `Write` in `tools` plus a body invariant naming the directory. The same applies to `Edit` scoped to one repo.
 

@@ -1,0 +1,16 @@
+## Done
+- Added rotation on refresh in src/auth/session.ts.
+- Unit tests pass: npm test src/auth/session.test.ts.
+
+## Not done
+- Phase 2 reuse detection. Out of scope for this phase.
+
+## Unverified
+- Never run against a real database.
+
+## Decisions needed
+- Blocker: The refresh token lifetime is unspecified. 7 days or 30?
+- Propose item: Migrate the legacy /me route onto the same helper.
+- Propose memory: We chose rotation on reuse over sliding expiry.
+
+

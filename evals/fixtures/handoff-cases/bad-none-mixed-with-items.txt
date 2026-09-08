@@ -1,0 +1,12 @@
+## Done
+- Added rotation on refresh in src/auth/session.ts.
+
+## Not done
+- None
+- Phase 2 reuse detection.
+
+## Unverified
+- None
+
+## Decisions needed
+- None

@@ -7,7 +7,9 @@
 #      A clean success changes no column - TaskCompleted owns Done.
 #   2. The handoff-format check. On a successful run the final message must be
 #      a valid handoff per skills/handoff/SKILL.md. If it is not, exit 2, which
-#      stops the subagent stopping and hands the reason back to it.
+#      stops the subagent stopping and hands the reason back to it. The rules
+#      are strict on purpose and are the same rules evals/lib/handoff-check.sh
+#      applies in CI: see hooks/README.md, "The handoff-format check".
 #
 # Every Notion failure is soft. The only thing that exits 2 here is a malformed
 # handoff, and it exits 2 for that reason alone - never because Notion was
@@ -46,7 +48,7 @@ handoff_error() {
 # validate_handoff MESSAGE -> 0 valid, 1 malformed (reasons in HANDOFF_ERRORS)
 validate_handoff() {
   local msg="$1"
-  local line sec="" order="" trunc
+  local line sec="" order="" trunc blank=0
   local n_done=0 n_notdone=0 n_unver=0 n_dec=0
   local none_done=0 none_notdone=0 none_unver=0 none_dec=0
   HANDOFF_ERRORS=""
@@ -59,6 +61,7 @@ validate_handoff() {
   while IFS= read -r line; do
     line="${line%$'\r'}"
     if [[ $line =~ $RE_ANY_H2 ]]; then
+      blank=0
       if [[ $line =~ $RE_HANDOFF_HEADING ]]; then
         sec="${line#\#\# }"
         order="$order|$sec"
@@ -70,12 +73,29 @@ validate_handoff() {
       continue
     fi
     [ -n "$sec" ] || continue
-    if [ -z "$(printf '%s' "$line" | tr -d '[:space:]')" ]; then continue; fi
+    if [ -z "$(printf '%s' "$line" | tr -d '[:space:]')" ]; then blank=1; continue; fi
+
+    # A blank line with another item after it is a blank line between items,
+    # which the skill forbids. A blank line before the next heading never gets
+    # here, because the heading clears the flag first.
+    if [ "$blank" -eq 1 ]; then
+      handoff_error "blank line inside \"## $sec\". A section is a solid block of \"- \" lines; the only blank line allowed is the one before the next heading."
+      blank=0
+    fi
 
     if ! [[ $line =~ $RE_ITEM ]]; then
       trunc="$(printf '%s' "$line" | cut -c1-60)"
       handoff_error "line under \"## $sec\" does not start with \"- \" at column 0: \"$trunc\""
       continue
+    fi
+
+    # A typed line is legal under Decisions needed and nowhere else. Rejecting
+    # it is what lets the extractor stay scoped to that one section: a Blocker
+    # that drifted into Done is an agent getting the format wrong, and rescuing
+    # it silently would hide the bug and file a false alarm in the human queue.
+    if [ "$sec" != "Decisions needed" ] && [[ $line =~ $RE_TYPED ]]; then
+      trunc="$(printf '%s' "$line" | cut -c1-60)"
+      handoff_error "typed line under \"## $sec\": \"$trunc\". \"- Blocker: \", \"- Propose item: \" and \"- Propose memory: \" lines belong under \"## Decisions needed\" and nowhere else."
     fi
 
     case "$sec" in
@@ -122,9 +142,10 @@ validate_handoff() {
 }
 
 # extract_blockers MESSAGE -> the text of each "- Blocker: " line, one per line.
-# Scoped to the Decisions needed section rather than the whole message, so a
-# Blocker line that drifted into Done is caught by the validator instead of
-# quietly parking a false alarm in the human queue.
+# Scoped to the Decisions needed section rather than the whole message. It can
+# be, because validate_handoff rejects a typed line under any other heading:
+# a Blocker that drifted into Done is caught and sent back to be re-emitted,
+# instead of quietly parking a false alarm in the human queue.
 extract_blockers() {
   printf '%s\n' "$1" \
     | tr -d '\r' \
