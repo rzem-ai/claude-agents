@@ -89,7 +89,13 @@ if [ -n "$CLAUDE_AGENTS_TEST_COMMAND" ]; then
   # Run it as the condition of an if, not after `set +e`: the ERR trap fires on
   # any failing command regardless of errexit, and a failing test suite is the
   # expected case here, not an unexpected error.
-  if out="$(cd "$work_dir" && eval "$runner $CLAUDE_AGENTS_TEST_COMMAND" 2>&1)"; then
+  # bash -c, not eval of "$runner $CMD": prefixing timeout as text onto the
+  # command breaks anything compound. "cd app && npm test" became
+  # "timeout 300 cd app && npm test", which fails on `timeout cd` and never
+  # runs the suite - and the gate then blocks the task for tests that were
+  # never executed. Running the command as one shell string keeps pipelines,
+  # && chains and loops working, with or without timeout present.
+  if out="$(cd "$work_dir" && $runner bash -c "$CLAUDE_AGENTS_TEST_COMMAND" 2>&1)"; then
     rc=0
   else
     rc=$?
@@ -126,6 +132,14 @@ fi
 if [ -z "$verdict" ]; then
   verdict=unknown
 fi
+
+# Which run this was, for the archive a cut comment points at. This hook's own
+# comment is bounded well under the cap - the test detail is at most fifteen
+# lines cut to 200 characters each - so it should never be the one that cuts.
+# It can be if board.env lowers NOTION_COMMENT_MAX_CHARS, and the archiving
+# lives in notion_comment either way, so all this hook owes it is a label.
+BOARD_RUN_SESSION="$session_id"
+BOARD_RUN_STATUS="test gate: $verdict"
 
 # ---------------------------------------------------------------- the outcome
 case "$verdict" in

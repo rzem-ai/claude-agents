@@ -89,13 +89,17 @@ guess never happens.
 ${XDG_STATE_HOME:-~/.local/state}/claude-agents/
   sessions/<session_id>/agents/<agent_id>   page_id, agent_type, bound_at
   sessions/<session_id>/last-item           the most recent page id
+  archives/<session_id>/<stamp>-<agent>.md  the whole text of a comment that had
+                                            to be cut, written only when one is
   log/hooks.log                             every line the hooks log
   disabled                                  if this file exists, no board writes
 ```
 
 Directories are 0700 and files 0600. Nothing here is secret, but nothing here is
 anyone else's business either. Nothing prunes old sessions yet; they are a few
-hundred bytes each.
+hundred bytes each. An archive is tens of kilobytes and rare - see Comment
+length below for when one is written and why it is here rather than in the
+agent's working directory.
 
 ## Configuration
 
@@ -133,8 +137,11 @@ Two escape hatches:
 - `CLAUDE_AGENTS_BOARD=off`, or `touch ~/.local/state/claude-agents/disabled`,
   turns every board write into a log line. The test gate and the handoff check
   still run.
-- `BOARD_DRY_RUN=1` logs what would have been written without calling Notion.
-  This is how the tests below work.
+- `BOARD_DRY_RUN=1` logs what would have been written without calling Notion,
+  and prints the comment it would have posted to stderr in full rather than
+  first line only, so a cut comment can be read as well as counted. This is how
+  the tests below work. A dry run still writes an archive when a comment is cut,
+  because a note naming a file that was never written is the bug this fixed.
 
 ## What the card says
 
@@ -192,9 +199,65 @@ cuts to `NOTION_COMMENT_MAX_CHARS` (default 8000) first and chunks at 1900 after
 five objects at the default, never near the array cap, with `NOTION_COMMENT_HARD_MAX`
 clamping an over-generous `board.env` value back to 95 chunks. The cut happens
 inside `jq`, which counts Unicode codepoints the way Notion's limit does, so a
-multi-byte character is never split in half. A cut comment ends with a line
-saying how many characters were left off and that the rest is in the run
-transcript, and the hook logs the same. No comment is ever posted empty.
+multi-byte character is never split in half. No comment is ever posted empty.
+
+### Where the overflow goes
+
+A cut comment used to end with a line saying the rest was "in the run
+transcript". Nothing writes a run transcript. `SubagentStop` holds the whole
+handoff in a shell variable and drops whatever does not fit, so the one line
+telling Alex there was more to read pointed at nothing - and it fired on exactly
+the runs with the most to say.
+
+So a comment that has to be cut is archived whole first, and the note names the
+file it was archived in:
+
+```
+[Cut to fit a Notion comment. The other 11750 characters, and this text in full,
+are in /Users/alex/.local/state/claude-agents/archives/sess-91/20260908T140020Z-coder.md]
+```
+
+```
+${XDG_STATE_HOME:-~/.local/state}/claude-agents/archives/<session_id>/<UTC stamp>-<agent>.md
+```
+
+Session first, because the session id is what a person has in hand when they
+come back to a run. Agent and timestamp in the name, because that is what tells
+two cut comments in one session apart without opening either; a hook with no
+agent to name, which means `TaskCompleted`, uses its own name instead. The file
+carries a header - when, which hook, which agent, what status, which session,
+which board item and its URL - and then the whole comment under
+`## Full comment text`. Directory 0700 and file 0600, the same umask discipline
+as the session state files. It holds the comment and the run context; it never
+holds the token.
+
+Four things it does deliberately:
+
+- **Only when a comment is actually cut.** A comment that fits writes no file.
+  A file per run would be a landfill nobody reads.
+- **Never in the hook's `cwd`.** `coder` runs with `isolation: worktree`, so its
+  cwd is a git worktree under `.claude/worktrees/` that is deleted when the
+  session is cleaned up, uncommitted work and all. An archive written there
+  would vanish with the very thing it exists to outlive. The state directory is
+  outside every worktree and outlives all of them.
+- **Fails soft, like every other board write.** If the directory cannot be made
+  or the file cannot be written, the reason is logged, the note says the
+  overflow was dropped and could not be archived, the cut comment still goes on
+  the card, and the hook still exits 0. Archiving is not a new way to break a
+  session and it is not a third exit 2.
+- **Writes nothing when the board is off.** `CLAUDE_AGENTS_BOARD=off` posts no
+  comment, so there is no note for an archive to be the rest of.
+
+`TaskCompleted` is covered by the same code, because the archiving lives in
+`notion_comment` and every comment goes through it. Its own comment cannot reach
+the default cap - the test detail is at most fifteen lines cut to 200 characters
+each, so about 3KB with the headline - and it will only ever cut if `board.env`
+lowers `NOTION_COMMENT_MAX_CHARS`. It labels its run anyway, so if that day comes
+the archive says which session and which verdict rather than nothing.
+
+Nothing prunes the archives and nothing backs them up. A run worth keeping
+permanently gets promoted into the repo by a human; the `compound` skill says
+where.
 
 ## The handoff-format check
 
@@ -518,6 +581,12 @@ layer had to make on its own:
 4. **A comment on the card at every transition**, and where each one's text
    comes from. The plan specifies a comment only for the `Blocker:` path. A card
    that says nothing but which column it is in is a status light, not a board.
+5. **Where the overflow of a cut comment goes.** The plan says nothing about
+   comment length, let alone about the part that does not fit. This layer's
+   answer is one file per cut comment under the state directory, at
+   `archives/<session_id>/<stamp>-<agent>.md`, and the state directory rather
+   than the working directory because a worktree agent's cwd does not survive
+   its own session.
    See "What the card says" above; the handoff format was not touched to get it.
 5. **The `## Done` comment posted from `SubagentStop` rather than
    `TaskCompleted`.** The plan gives Done to `TaskCompleted`, which never

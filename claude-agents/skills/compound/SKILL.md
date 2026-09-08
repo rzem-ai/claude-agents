@@ -54,6 +54,12 @@ Every addition carries one line of provenance - the date and the unit of work it
 
 Nothing here writes to the board, and nothing here is a substitute for the handoff. If a learning is important enough to act on now, it is a line under Decisions needed, not a file somebody might read.
 
+## Archived runs
+
+When a board comment was too long for Notion, the hook wrote the whole thing to `~/.local/state/claude-agents/archives/<session-id>/<timestamp>-<agent>.md` and the card names the file. Those archives are the fullest record of what a run actually said, and a run only produces one because it had more to say than a card holds, so read the ones for the unit of work you are compounding before concluding there was nothing to keep.
+
+Nothing prunes that directory and nothing backs it up. A run worth keeping permanently gets promoted into the repo - as a rule, a skill, or a `Propose memory:` line - and moving the file itself is a human's call, not yours. A state directory is not storage.
+
 ## How you work
 
 1. Name the unit of work in one sentence and confirm it landed and was verified. If it did not, stop.

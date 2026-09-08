@@ -30,6 +30,16 @@ BOARD_COL_DONE="${BOARD_COL_DONE:-Done}"
 # cap at all and why this number is nowhere near Notion's own ceiling.
 NOTION_COMMENT_MAX_CHARS="${NOTION_COMMENT_MAX_CHARS:-8000}"
 
+# Which run a comment belongs to. A hook sets these before it calls board_write
+# or board_comment, and the only thing that reads them is the archive a cut
+# comment points at, so a hook that sets none of them still works and just gets
+# an archive labelled "not recorded". Nothing here is secret and nothing here is
+# ever the token.
+BOARD_RUN_SESSION="${BOARD_RUN_SESSION:-}"
+BOARD_RUN_AGENT="${BOARD_RUN_AGENT:-}"
+BOARD_RUN_AGENT_ID="${BOARD_RUN_AGENT_ID:-}"
+BOARD_RUN_STATUS="${BOARD_RUN_STATUS:-}"
+
 # board.env is optional. It lives in the 0700 config directory that
 # permissions.deny already hides from every agent, so sourcing it is no wider a
 # hole than the token file sitting next to it.
@@ -123,6 +133,90 @@ state_session_page_id() {
   local v; v="$(head -1 "$dir/last-item")"
   [ -n "$v" ] || return 1
   printf '%s\n' "$v"
+}
+
+# ---------------------------------------------------------------- run archives
+#
+# Where the overflow of a cut comment goes. A comment too long for a card is cut,
+# and the note on the end of it names a file written here. Before this existed
+# the note pointed at a "run transcript" that nothing anywhere writes, so the one
+# message telling Alex there was more to read pointed at nothing, on exactly the
+# runs with the most to say.
+#
+# The archive goes in the state directory and never in the hook's cwd. The coder
+# runs with isolation: worktree, so its cwd is a git worktree under
+# .claude/worktrees/ that goes away with the session - an archive written there
+# would vanish with the thing it exists to outlive.
+#
+# Layout, one file per cut comment:
+#
+#   archives/<session_id>/<UTC timestamp>-<agent, or the hook if there is none>.md
+#
+# Session first, because a session id is what a person has in hand when they come
+# back to a run; agent and timestamp in the name, because that is what tells two
+# cut comments in one session apart without opening either. Nothing prunes them.
+
+board_archive_dir() {
+  local sid
+  sid="$(printf '%s' "${BOARD_RUN_SESSION:-}" | tr -c 'A-Za-z0-9._-' '_')"
+  [ -n "$sid" ] || sid="unknown-session"
+  printf '%s/archives/%s' "$CLAUDE_AGENTS_STATE_DIR" "$sid"
+}
+
+# board_archive_comment HOOK PAGE_ID TEXT
+# Writes the full comment text with a header saying which run it came from, and
+# echoes the path it wrote. Returns 1, having logged why, if anything failed:
+# an archive that could not be written is not a reason to lose the card comment
+# as well, so the caller carries on and posts the cut text.
+board_archive_comment() {
+  local hook="$1" page="$2" text="$3"
+  local dir file stamp name hex url n old_umask
+
+  dir="$(board_archive_dir)"
+  stamp="$(date -u '+%Y%m%dT%H%M%SZ')"
+  name="$(printf '%s' "${BOARD_RUN_AGENT:-}" | tr -c 'A-Za-z0-9._-' '_')"
+  [ -n "$name" ] || name="$hook"
+  file="$dir/$stamp-$name.md"
+  n=2
+  while [ -e "$file" ] && [ "$n" -lt 100 ]; do
+    file="$dir/$stamp-$name-$n.md"
+    n=$((n + 1))
+  done
+
+  hex="$(printf '%s' "$page" | tr -cd '0-9a-fA-F')"
+  url=""
+  if [ -n "$hex" ]; then url="https://www.notion.so/$hex"; fi
+
+  # Same discipline as the session state files: 0700 on the directory, 0600 on
+  # the file. Nothing in here is secret, and nothing in here is anyone else's
+  # business either.
+  old_umask="$(umask)"
+  umask 077
+  if ! mkdir -p "$dir" 2>/dev/null; then
+    umask "$old_umask"
+    board_log "$hook" "could not create the archive directory $dir; the full text of this comment is saved nowhere"
+    return 1
+  fi
+  {
+    printf '# Board comment archive\n\n'
+    printf -- '- Written: %s\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    printf -- '- Hook: %s\n' "$hook"
+    printf -- '- Agent: %s%s\n' "${BOARD_RUN_AGENT:-not recorded}" "${BOARD_RUN_AGENT_ID:+ ($BOARD_RUN_AGENT_ID)}"
+    printf -- '- Status: %s\n' "${BOARD_RUN_STATUS:-not recorded}"
+    printf -- '- Session: %s\n' "${BOARD_RUN_SESSION:-not recorded}"
+    printf -- '- Board item: %s%s\n' "${page:-not resolved}" "${url:+ ($url)}"
+    printf '\n'
+    printf 'The comment on the card was cut to fit Notion. This is the whole of it.\n\n'
+    printf '## Full comment text\n\n'
+    printf '%s\n' "$text"
+  } > "$file" 2>/dev/null || {
+    umask "$old_umask"
+    board_log "$hook" "could not write the archive $file; the full text of this comment is saved nowhere"
+    return 1
+  }
+  umask "$old_umask"
+  printf '%s\n' "$file"
+  return 0
 }
 
 # ------------------------------------------------------------- page id parsing
@@ -317,13 +411,15 @@ notion_set_status() {
 # 100-object cap even if board.env sets something silly.
 #
 # Cutting happens inside jq, which counts Unicode codepoints the way Notion's
-# limit does, so a multi-byte character is never split in half. A cut comment
-# says on its last line how much was left off and where the rest is.
+# limit does, so a multi-byte character is never split in half. A comment that
+# has to be cut is archived whole first, by board_archive_comment above, and the
+# note on the end of the cut text names that file - so the one comment that says
+# there is more to read is also the one that says where it is.
 NOTION_COMMENT_HARD_MAX=180000   # 95 chunks of 1900, still inside the array cap
 
 notion_comment() {
   local hook="$1" page="$2" text="$3"
-  local body="$NOTION_TMP/comment.json" code len max
+  local body="$NOTION_TMP/comment.json" code len max out over note archive
 
   # Never post an empty comment. A caller with nothing to say says nothing.
   if [ -z "$(printf '%s' "$text" | tr -d '[:space:]')" ]; then
@@ -342,27 +438,46 @@ notion_comment() {
 
   len="$(printf '%s' "$text" | jq -Rs 'length' 2>/dev/null || printf '')"
   case "$len" in ''|*[!0-9]*) len=0 ;; esac
-  if [ "$len" -gt "$max" ]; then
-    board_log "$hook" "comment for $page is $len characters; cutting to $max (Notion allows 2000 per rich text object and 100 objects per array)"
-  fi
 
+  # Nothing is posted when the board is off, so there is nothing for an archive
+  # to be the rest of. Archiving here would file a run nobody was ever told about.
   if board_disabled; then
     board_log "$hook" "board writes disabled; would comment on $page"
     return 0
   fi
+
+  # $out is the text that actually gets posted. Under the cap that is the text
+  # itself, untouched. Over it, the whole text is archived first and the note
+  # names the archive, because a note pointing at nothing is worse than no note.
+  out="$text"
+  if [ "$len" -gt "$max" ]; then
+    over=$((len - max))
+    if archive="$(board_archive_comment "$hook" "$page" "$text")"; then
+      note="[Cut to fit a Notion comment. The other $over characters, and this text in full, are in $archive]"
+      board_log "$hook" "comment for $page is $len characters; cutting to $max (Notion allows 2000 per rich text object and 100 objects per array) and archiving the full text at $archive"
+    else
+      note="[Cut to fit a Notion comment. $over more characters were dropped and could not be archived; see the hook log.]"
+      board_log "$hook" "comment for $page is $len characters; cutting to $max with no archive, so $over characters are lost"
+    fi
+    out="$(printf '%s' "$text" | jq -Rs --argjson max "$max" --arg note "$note" -r \
+      '.[0:$max] + "\n\n" + $note' 2>/dev/null)"
+    if [ -z "$out" ]; then
+      board_log "$hook" "could not cut the comment for $page; nothing posted"
+      return 1
+    fi
+  fi
+
   if [ -n "${BOARD_DRY_RUN:-}" ]; then
-    board_log "$hook" "dry run: comment on $page: $(printf '%s' "$text" | head -1)"
+    board_log "$hook" "dry run: comment on $page: $(printf '%s' "$out" | head -1)"
+    # The whole thing on stderr, not just its first line: a dry run that only
+    # counts characters is no way to check what a cut comment ends up saying.
+    printf '%s\n' "$out" >&2
     return 0
   fi
 
-  jq -n --arg p "$page" --arg t "$text" --argjson max "$max" '
+  jq -n --arg p "$page" --arg t "$out" '
     def chunks: if (. | length) <= 1900 then [.] else [.[0:1900]] + (.[1900:] | chunks) end;
-    ($t | if (length > $max)
-            then .[0:$max] + "\n\n[Cut to fit a Notion comment. "
-                 + ((length - $max) | tostring)
-                 + " more characters are in the run transcript.]"
-            else . end)
-    | {parent: {page_id: $p}, rich_text: (chunks | map({text: {content: .}}))}
+    {parent: {page_id: $p}, rich_text: ($t | chunks | map({text: {content: .}}))}
   ' > "$body" 2>/dev/null || { board_log "$hook" "could not build the comment body"; return 1; }
 
   code="$(notion_api POST "$NOTION_API/v1/comments" "$body")"

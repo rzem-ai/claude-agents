@@ -40,6 +40,8 @@ Two environments share this board and they write it differently. Know which one 
 
 **In the fleet, columns are written by hooks and never by an agent.** Three hooks cover every transition in the table above, each PATCHing the Notion API directly. So do not move an item, do not ask for one to be moved, and do not report that you moved one. The only thing you contribute is a correctly formatted handoff, because that is what the hook reads. An agent body or a run that tries to update a status is wrong even when the status it wants is correct. Filing a new row is a different act from writing a column: a new item arrives in to do because that is where new items start. Moving one that already exists is the thing nobody but a hook does.
 
+A comment ending in a `[Cut to fit a Notion comment ...]` line names a file under `~/.local/state/claude-agents/archives/<session-id>/` on Alex's machine: that is the whole comment, written by the hook at the moment it cut it, and it is the only copy of the part the card is missing.
+
 **In Cowork there are no hooks, so the assistant layer writes the board by instruction.** Angus moves items himself, and the discipline the hooks provide has to come from three rules instead. First, move an item to doing when you actually start it and to done when it is finished and verified, in the turn it happens, never batched up at the end of a day. Second, the only thing that goes into blocked by human is something genuinely waiting on Alex, with the reason as a comment on the row. Third, never file an item for a step you are about to take in the same turn - that is a task.
 
 ## Telling the hooks which item

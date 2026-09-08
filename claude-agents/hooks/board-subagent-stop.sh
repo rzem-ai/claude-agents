@@ -18,6 +18,12 @@
 #      The "## Done" comment is posted here rather than from TaskCompleted for
 #      the plain reason that TaskCompleted never sees a handoff. It owns the move
 #      to Done; this hook owns the only moment the text exists.
+#
+#      A handoff long enough that its comment will not fit on a card is archived
+#      whole under the state directory before the cut text is posted, and the cut
+#      note names the file. This hook holds the whole handoff in $message and is
+#      the last thing that ever will, so anything it drops is gone. See
+#      hooks/README.md, "Comment length".
 #   2. The handoff-format check. On a successful run the final message must be
 #      a valid handoff per skills/handoff/SKILL.md. If it is not, exit 2, which
 #      stops the subagent stopping and hands the reason back to it. The rules
@@ -218,6 +224,13 @@ case "$(printf '%s' "$status_raw" | tr 'A-Z' 'a-z')" in
   *)  status=success
       board_log "$HOOK" "unrecognised status \"$status_raw\"; treating the run as a success" ;;
 esac
+
+# Who this run was, for the archive a cut comment points at. Set before any
+# board call, because board_write and board_comment are the things that read it.
+BOARD_RUN_SESSION="$session_id"
+BOARD_RUN_AGENT="$agent_type"
+BOARD_RUN_AGENT_ID="$agent_id"
+BOARD_RUN_STATUS="$status"
 
 page_id=""
 if page_id="$(state_agent_page_id "$session_id" "$agent_id")"; then
