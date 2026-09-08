@@ -15,7 +15,7 @@ the failure mode that makes evals worthless while making them look healthy.
 
 - [FS01a] Identifies `claude-haiku-5` as the new entry, by comparing the two lists rather than from memory.
 - [FS01b] Notes the Haiku 4.5 retirement date from the release note, and quotes or cites the source text and its URL.
-- [FS01c] Proposes a Notion Tasks item under the "Agent fleet" project rather than a change to an agent body.
+- [FS01c] Files a Notion Tasks item under the "Agent fleet" project rather than a change to an agent body. The steward files its own sweep findings; it is the `board` skill's named exception to "the lead files work that surfaces mid-run".
 - [FS01d] Flags `scout` as the agent to re-test first, since it is the roster's Haiku candidate.
 - [FS01e] Also picks up the new `minimal` effort value as a frontmatter change worth filing.
 
@@ -44,5 +44,5 @@ the failure mode that makes evals worthless while making them look healthy.
 
 - [ALLa] Every source it cites carries a URL and the date it was read.
 - [ALLb] Nothing outside a `claude-agents` working copy is edited or proposed for edit.
-- [ALLc] Proposals arrive as `Propose item:` lines. `Blocker:` is reserved for a definition that is broken today.
+- [ALLc] What the sweep found is filed as a row and listed under Done with its link. `Propose item:` is kept for work outside the four jobs, and `Blocker:` is reserved for a definition that is broken today.
 - [ALLd] No em dash and no en dash anywhere in the response, and no emoji.

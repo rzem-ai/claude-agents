@@ -26,6 +26,10 @@ BOARD_COL_BLOCKED="${BOARD_COL_BLOCKED:-Blocked}"
 BOARD_COL_BLOCKED_HUMAN="${BOARD_COL_BLOCKED_HUMAN:-Blocked by human}"
 BOARD_COL_DONE="${BOARD_COL_DONE:-Done}"
 
+# How much of a comment reaches the card. See notion_comment for why there is a
+# cap at all and why this number is nowhere near Notion's own ceiling.
+NOTION_COMMENT_MAX_CHARS="${NOTION_COMMENT_MAX_CHARS:-8000}"
+
 # board.env is optional. It lives in the 0700 config directory that
 # permissions.deny already hides from every agent, so sourcing it is no wider a
 # hole than the token file sitting next to it.
@@ -301,10 +305,46 @@ notion_set_status() {
 }
 
 # notion_comment HOOK PAGE_ID TEXT
+#
+# The limits are Notion's, from https://developers.notion.com/reference/request-limits:
+# one rich text object holds at most 2000 characters, any rich text array at most
+# 100 elements, and the whole request at most 500KB. There is no separate comment
+# limit, so the real ceiling on one comment is 100 x 2000 characters. Nothing that
+# belongs on a board card is anywhere near that, and a request over either cap is
+# rejected whole with a 400 - losing the entire comment rather than its tail - so
+# the text is cut to NOTION_COMMENT_MAX_CHARS first and chunked at 1900 after.
+# At the 8000 default that is five objects; the clamp below keeps it under the
+# 100-object cap even if board.env sets something silly.
+#
+# Cutting happens inside jq, which counts Unicode codepoints the way Notion's
+# limit does, so a multi-byte character is never split in half. A cut comment
+# says on its last line how much was left off and where the rest is.
+NOTION_COMMENT_HARD_MAX=180000   # 95 chunks of 1900, still inside the array cap
+
 notion_comment() {
   local hook="$1" page="$2" text="$3"
-  if [ -z "$text" ]; then return 0; fi
-  local body="$NOTION_TMP/comment.json" code
+  local body="$NOTION_TMP/comment.json" code len max
+
+  # Never post an empty comment. A caller with nothing to say says nothing.
+  if [ -z "$(printf '%s' "$text" | tr -d '[:space:]')" ]; then
+    board_log "$hook" "no comment text for $page; nothing posted"
+    return 0
+  fi
+
+  max="${NOTION_COMMENT_MAX_CHARS:-8000}"
+  case "$max" in
+    ''|*[!0-9]*|0) board_log "$hook" "NOTION_COMMENT_MAX_CHARS is not a positive integer; using 8000"; max=8000 ;;
+  esac
+  if [ "$max" -gt "$NOTION_COMMENT_HARD_MAX" ]; then
+    board_log "$hook" "NOTION_COMMENT_MAX_CHARS is $max, above what Notion's 100-object array cap allows; using $NOTION_COMMENT_HARD_MAX"
+    max="$NOTION_COMMENT_HARD_MAX"
+  fi
+
+  len="$(printf '%s' "$text" | jq -Rs 'length' 2>/dev/null || printf '')"
+  case "$len" in ''|*[!0-9]*) len=0 ;; esac
+  if [ "$len" -gt "$max" ]; then
+    board_log "$hook" "comment for $page is $len characters; cutting to $max (Notion allows 2000 per rich text object and 100 objects per array)"
+  fi
 
   if board_disabled; then
     board_log "$hook" "board writes disabled; would comment on $page"
@@ -315,10 +355,14 @@ notion_comment() {
     return 0
   fi
 
-  # Notion caps one rich text object at 2000 characters, so split at 1900.
-  jq -n --arg p "$page" --arg t "$text" '
+  jq -n --arg p "$page" --arg t "$text" --argjson max "$max" '
     def chunks: if (. | length) <= 1900 then [.] else [.[0:1900]] + (.[1900:] | chunks) end;
-    {parent: {page_id: $p}, rich_text: ($t | chunks | map({text: {content: .}}))}
+    ($t | if (length > $max)
+            then .[0:$max] + "\n\n[Cut to fit a Notion comment. "
+                 + ((length - $max) | tostring)
+                 + " more characters are in the run transcript.]"
+            else . end)
+    | {parent: {page_id: $p}, rich_text: (chunks | map({text: {content: .}}))}
   ' > "$body" 2>/dev/null || { board_log "$hook" "could not build the comment body"; return 1; }
 
   code="$(notion_api POST "$NOTION_API/v1/comments" "$body")"
@@ -344,6 +388,32 @@ board_write() {
   if notion_load_token "$hook"; then
     notion_set_status "$hook" "$page" "$col" || true
     if [ -n "$comment" ]; then notion_comment "$hook" "$page" "$comment" || true; fi
+  fi
+  NOTION_TOKEN=""
+  notion_tmp_cleanup
+  return 0
+}
+
+# board_comment HOOK PAGE_ID TEXT
+# Say something on a row without moving it. Same envelope and same promise as
+# board_write: every failure is logged and swallowed, and it always returns 0,
+# because nothing about Notion decides whether a session continues. Used where a
+# transition has something worth reading but no column of its own - a clean
+# subagent finish, where TaskCompleted still owns the move to Done.
+board_comment() {
+  local hook="$1" page="$2" text="$3"
+  if [ -z "$page" ]; then
+    board_log "$hook" "no board item resolved, nothing to comment on (see README, Which board item)"
+    return 0
+  fi
+  if [ -z "$(printf '%s' "$text" | tr -d '[:space:]')" ]; then
+    board_log "$hook" "no comment text; nothing posted on $page"
+    return 0
+  fi
+  require_tools "$hook" || return 0
+  notion_tmp_init "$hook" || { board_log "$hook" "could not create a temp directory"; return 0; }
+  if notion_load_token "$hook"; then
+    notion_comment "$hook" "$page" "$text" || true
   fi
   NOTION_TOKEN=""
   notion_tmp_cleanup

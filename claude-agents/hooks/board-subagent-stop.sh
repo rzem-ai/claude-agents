@@ -3,8 +3,21 @@
 #
 #   1. The board write. status failure or cancelled moves the item to Blocked.
 #      status success with one or more "Blocker:" lines under Decisions needed
-#      moves it to Blocked by human and attaches the blocker text as a comment.
-#      A clean success changes no column - TaskCompleted owns Done.
+#      moves it to Blocked by human. A clean success changes no column -
+#      TaskCompleted owns Done.
+#
+#      Every one of those three outcomes also puts a comment on the card, so a
+#      row says what happened instead of only which column it is in. The text is
+#      lifted from the handoff the agent already emits and from the status the
+#      harness already sends: "## Done" on a clean finish, "## Not done" plus the
+#      status on a failure or cancellation, the Blocker lines on the human queue.
+#      Nothing new is asked of the handoff format - no fifth heading, no fourth
+#      prefix - because a field agents have to remember is a field that decays,
+#      and only the mandatory sections are worth building on.
+#
+#      The "## Done" comment is posted here rather than from TaskCompleted for
+#      the plain reason that TaskCompleted never sees a handoff. It owns the move
+#      to Done; this hook owns the only moment the text exists.
 #   2. The handoff-format check. On a successful run the final message must be
 #      a valid handoff per skills/handoff/SKILL.md. If it is not, exit 2, which
 #      stops the subagent stopping and hands the reason back to it. The rules
@@ -155,6 +168,30 @@ extract_blockers() {
     || true
 }
 
+# extract_section SECTION MESSAGE -> the "- " lines under "## <SECTION>", verbatim.
+# Deliberately tolerant, because it also runs on the failure and cancellation
+# path where the handoff was never validated and is allowed to be malformed: it
+# reads what is there and returns nothing if there is nothing to read. A section
+# whose whole content is "- None" comes back empty, so a caller never posts a
+# comment that says nothing.
+extract_section() {
+  printf '%s\n' "$2" \
+    | tr -d '\r' \
+    | awk -v want="## $1" '$0 == want {inside=1; next} /^## / {inside=0} inside' \
+    | grep -E '^- ' \
+    | grep -vE '^- None[[:space:]]*$' \
+    || true
+}
+
+# board_comment_text HEADLINE BODY -> the one shape every card comment takes:
+# a headline naming the transition and where the detail came from, a blank line,
+# then the handoff lines themselves. An empty body leaves the headline alone,
+# which is what a failed run with no usable handoff gets.
+board_comment_text() {
+  if [ -z "$2" ]; then printf '%s\n' "$1"; return 0; fi
+  printf '%s\n\n%s\n' "$1" "$2"
+}
+
 # ------------------------------------------------------------------- the hook
 
 input="$(cat)"
@@ -197,7 +234,18 @@ fi
 #    cancelled subagent stop, which is the opposite of what a cancellation means.
 if [ "$status" = "failure" ] || [ "$status" = "cancelled" ]; then
   board_log "$HOOK" "${agent_type:-agent} finished with status $status"
-  board_write "$HOOK" "$page_id" "$BOARD_COL_BLOCKED"
+  # The handoff is not validated on this path and may be absent or malformed,
+  # which is allowed. Take what parses; fall back to the two things always known.
+  notdone="$(extract_section 'Not done' "$message")"
+  if [ -n "$notdone" ]; then
+    comment="$(board_comment_text \
+      "Blocked. ${agent_type:-A subagent} finished with status $status. From \"## Not done\" in its handoff:" \
+      "$notdone")"
+  else
+    comment="Blocked. ${agent_type:-A subagent} finished with status $status. Its handoff carried no readable \"## Not done\" detail, so the status is all this card can say."
+    board_log "$HOOK" "no readable \"## Not done\" in the handoff; commenting the agent type and status only"
+  fi
+  board_write "$HOOK" "$page_id" "$BOARD_COL_BLOCKED" "$comment"
   exit 0
 fi
 
@@ -220,14 +268,26 @@ blockers="$(extract_blockers "$message")"
 
 if [ -n "$blockers" ]; then
   count="$(printf '%s\n' "$blockers" | grep -c . || true)"
-  comment="$(printf '%s\n' \
-    "Blocked by human. ${agent_type:-A subagent} raised ${count} blocker(s) in its handoff:" \
-    "" \
+  comment="$(board_comment_text \
+    "Blocked by human. ${agent_type:-A subagent} raised ${count} blocker(s). From \"## Decisions needed\" in its handoff:" \
     "$(printf '%s\n' "$blockers" | sed 's/^/- /')")"
   board_log "$HOOK" "${count} blocker(s) from ${agent_type:-agent}; moving to \"$BOARD_COL_BLOCKED_HUMAN\""
   board_write "$HOOK" "$page_id" "$BOARD_COL_BLOCKED_HUMAN" "$comment"
 else
-  board_log "$HOOK" "${agent_type:-agent} succeeded with no blockers; leaving the column alone for TaskCompleted"
+  # No column moves here; TaskCompleted owns Done. The comment still goes on,
+  # because this is the only place the finished agent's own account of the work
+  # exists. A "## Done" of nothing but "- None" earns no comment at all.
+  done_items="$(extract_section 'Done' "$message")"
+  if [ -n "$done_items" ]; then
+    count="$(printf '%s\n' "$done_items" | grep -c . || true)"
+    comment="$(board_comment_text \
+      "Done. ${agent_type:-A subagent} finished with no blockers. From \"## Done\" in its handoff:" \
+      "$done_items")"
+    board_log "$HOOK" "${agent_type:-agent} succeeded with no blockers; commenting ${count} \"## Done\" item(s), leaving the column alone for TaskCompleted"
+    board_comment "$HOOK" "$page_id" "$comment"
+  else
+    board_log "$HOOK" "${agent_type:-agent} succeeded with no blockers and an empty \"## Done\"; nothing worth commenting, leaving the column alone for TaskCompleted"
+  fi
 fi
 
 exit 0

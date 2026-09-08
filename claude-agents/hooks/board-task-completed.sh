@@ -2,8 +2,14 @@
 # TaskCompleted: one hook, two outcomes.
 #
 #   tests pass -> move the board item to Done, exit 0.
-#   tests fail -> move the board item to Blocked, then exit 2 so the task
-#                 cannot be marked complete.
+#   tests fail -> move the board item to Blocked with a comment saying the test
+#                 gate failed and how, then exit 2 so the task cannot be marked
+#                 complete.
+#
+# The comment takes the same shape as the ones board-subagent-stop.sh posts: a
+# headline naming the transition and its source, then the detail underneath. This
+# hook never sees a handoff - it has the task title, the test command or the
+# marker file, and the output - so the comment says only those things.
 #
 # The board write happens on both paths, and it happens before the exit, so the
 # gate firing never costs the board its update. Notion being unreachable never
@@ -110,7 +116,7 @@ if [ -z "$verdict" ] && [ -f "$status_file" ]; then
         verdict=pass; detail="$status_file reports a pass." ;;
       fail|failed|red)
         verdict=fail
-        detail="$(printf 'Test gate: %s reports a failure.\n\n%s' "$status_file" "$(sed -n '2,16p' "$status_file" | cut -c1-200)")" ;;
+        detail="$(printf '%s reports a failure.\n\n%s' "$status_file" "$(sed -n '2,16p' "$status_file" | cut -c1-200)")" ;;
       *)
         board_log "$HOOK" "$status_file does not start with pass or fail (found \"$word\"); ignoring it" ;;
     esac
@@ -130,8 +136,13 @@ case "$verdict" in
     ;;
   fail)
     board_log "$HOOK" "tests failed; moving to \"$BOARD_COL_BLOCKED\" and blocking completion"
+    headline="Blocked. The test gate failed, so the task could not be marked complete."
+    if [ -n "$task_title" ]; then
+      headline="Blocked. The test gate failed on \"$(printf '%s' "$task_title" | cut -c1-120)\", so the task could not be marked complete."
+    fi
+    comment="$(printf '%s\n\n%s\n' "$headline" "$detail")"
     # The write happens first, so the exit below cannot skip it.
-    board_write "$HOOK" "$page_id" "$BOARD_COL_BLOCKED" "$detail"
+    board_write "$HOOK" "$page_id" "$BOARD_COL_BLOCKED" "$comment"
     trap - ERR
     {
       printf 'Tests are not passing, so this task cannot be marked complete.\n\n'
@@ -143,7 +154,9 @@ case "$verdict" in
   *)
     if [ "$CLAUDE_AGENTS_TEST_GATE" = "strict" ]; then
       board_log "$HOOK" "no test result available and the gate is strict; blocking completion"
-      board_write "$HOOK" "$page_id" "$BOARD_COL_BLOCKED" "Test gate: no test result was available, and the gate is set to strict."
+      board_write "$HOOK" "$page_id" "$BOARD_COL_BLOCKED" "$(printf '%s\n\n%s\n' \
+        "Blocked. The test gate failed, so the task could not be marked complete." \
+        "No test result was available and CLAUDE_AGENTS_TEST_GATE is strict. Set CLAUDE_AGENTS_TEST_COMMAND, or write the result to $status_file with pass or fail on the first line.")"
       trap - ERR
       {
         printf 'No test result was available and CLAUDE_AGENTS_TEST_GATE is strict, so this task\n'

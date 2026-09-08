@@ -6,8 +6,8 @@ Four hooks, one shared library, no agent ever asked to remember anything.
 | File | Event | What it does |
 |---|---|---|
 | `board-subagent-start.sh` | `SubagentStart` | Binds the subagent to a board item and moves it to **Doing** |
-| `board-subagent-stop.sh` | `SubagentStop` | **Blocked** on failure or cancellation, **Blocked by human** on a `Blocker:` line, and the handoff-format check. Matched to the fleet agents only |
-| `board-task-completed.sh` | `TaskCompleted` | Tests pass, **Done**. Tests fail, **Blocked** and exit 2 |
+| `board-subagent-stop.sh` | `SubagentStop` | **Blocked** on failure or cancellation, **Blocked by human** on a `Blocker:` line, a comment lifted from the handoff on every outcome, and the handoff-format check. Matched to the fleet agents only |
+| `board-task-completed.sh` | `TaskCompleted` | Tests pass, **Done**. Tests fail, **Blocked** with the failure as a comment, and exit 2 |
 | `enforce-agent-scope.sh` | `PreToolUse` | Denies tool calls that violate an agent's own Invariants |
 | `lib/notion.sh` | - | Token handling, the Notion calls, state files, page-id parsing |
 | `hooks.json` | - | Registers the four above with Claude Code |
@@ -114,6 +114,8 @@ BOARD_COL_BLOCKED=Blocked
 BOARD_COL_BLOCKED_HUMAN="Blocked by human"
 BOARD_COL_DONE=Done
 
+NOTION_COMMENT_MAX_CHARS=8000       # how much of a card comment survives; see below
+
 CLAUDE_AGENTS_TEST_COMMAND=""       # empty means fall through to the marker file
 CLAUDE_AGENTS_TEST_GATE=lenient     # or "strict"
 CLAUDE_AGENTS_TEST_TIMEOUT=300
@@ -133,6 +135,66 @@ Two escape hatches:
   still run.
 - `BOARD_DRY_RUN=1` logs what would have been written without calling Notion.
   This is how the tests below work.
+
+## What the card says
+
+A column on its own is a status light. Every transition also puts a comment on
+the row, so a card answers what happened without anyone opening a transcript.
+
+The text is lifted from things that already exist and are already mandatory: the
+four handoff sections, the `status` field the harness sends, and, for the test
+gate, the command it ran and the output it got. **Nothing was added to the
+handoff format for this and nothing should be.** The format was made strict and
+four implementations were brought into agreement over a 28-case fixture; an
+optional fifth heading or a fourth typed prefix would decay the first time an
+agent forgot it, which is the whole reason the board is machinery rather than
+manners.
+
+| Transition | Hook | The comment |
+|---|---|---|
+| Done | `SubagentStop`, clean success | `Done. <agent> finished with no blockers. From "## Done" in its handoff:` then the `## Done` items |
+| Blocked, run failed or cancelled | `SubagentStop` | `Blocked. <agent> finished with status <status>. From "## Not done" in its handoff:` then the `## Not done` items |
+| Blocked, no readable handoff | `SubagentStop` | `Blocked. <agent> finished with status <status>. Its handoff carried no readable "## Not done" detail, so the status is all this card can say.` |
+| Blocked by human | `SubagentStop` | `Blocked by human. <agent> raised N blocker(s). From "## Decisions needed" in its handoff:` then the blocker lines |
+| Blocked, tests failed | `TaskCompleted` | `Blocked. The test gate failed on "<task title>", so the task could not be marked complete.` then the command, its exit code and the tail of its output |
+
+One shape throughout: a headline naming the transition and where the detail came
+from, a blank line, then the lines themselves.
+
+Three things worth knowing:
+
+- **The Done comment is posted by `SubagentStop`, which still moves no column.**
+  `TaskCompleted` owns the move to Done exactly as before, and it never sees a
+  handoff. The only moment the agent's own account of the work exists is when
+  the subagent stops, so that is where it is read and put on the card. Stashing
+  the section for `TaskCompleted` to read later was the alternative and was
+  rejected: its item resolution falls back to guessing, so a stale summary would
+  land on whichever row was picked up last.
+- **A section of nothing but `- None` earns no comment.** The extractor drops
+  `- None`, and a caller with an empty body posts nothing at all. The failure
+  path is the exception - it always comments, because the status itself is the
+  news even when the handoff says nothing.
+- **The failure path reads a handoff nobody validated.** The format check runs
+  on success only, and still does. `extract_section` is deliberately tolerant:
+  it returns the `- ` lines it can find and nothing if it finds none, which is
+  what puts the agent-type-and-status fallback on the card.
+
+### Comment length
+
+Notion's [request limits](https://developers.notion.com/reference/request-limits)
+cap one rich text object at **2000 characters** and any rich text array at
+**100 elements**, inside a 500KB request. No limit is documented for comments
+specifically, so the real ceiling on one comment is 100 x 2000 characters.
+
+Nothing that belongs on a card is near that, and a request over either cap comes
+back 400, which loses the whole comment rather than its tail. So `notion_comment`
+cuts to `NOTION_COMMENT_MAX_CHARS` (default 8000) first and chunks at 1900 after:
+five objects at the default, never near the array cap, with `NOTION_COMMENT_HARD_MAX`
+clamping an over-generous `board.env` value back to 95 chunks. The cut happens
+inside `jq`, which counts Unicode codepoints the way Notion's limit does, so a
+multi-byte character is never split in half. A cut comment ends with a line
+saying how many characters were left off and that the rest is in the run
+transcript, and the hook logs the same. No comment is ever posted empty.
 
 ## The handoff-format check
 
@@ -377,6 +439,11 @@ jq -n '{session_id:"s1",agent_id:"a1",agent_type:"coder",status:"success",
         last_assistant_message:"## Done\n- x\n\n## Not done\n- None\n\n## Unverified\n- None\n\n## Decisions needed\n- Blocker: 7 days or 30?\n"}' \
   | ./board-subagent-stop.sh; echo "exit $?"
 
+# 2b. stop, clean success: no column moves, the "## Done" section is commented
+jq -n '{session_id:"s1",agent_id:"a1",agent_type:"coder",status:"success",
+        last_assistant_message:"## Done\n- Added rotation in src/api/auth.ts.\n\n## Not done\n- None\n\n## Unverified\n- None\n\n## Decisions needed\n- None\n"}' \
+  | ./board-subagent-stop.sh; echo "exit $?"
+
 # 3. stop, malformed handoff: exit 2 and the reasons on stderr
 jq -n '{session_id:"s1",agent_id:"a1",agent_type:"coder",status:"success",
         last_assistant_message:"## Done\n- x\n\n## Decisions needed\n- maybe?\n"}' \
@@ -448,13 +515,17 @@ layer had to make on its own:
    property, its type, or how the column labels are spelled in Notion.
 3. **How "tests pass" is decided**, the lenient default, the marker file and its
    staleness window. The plan asserts the gate and never says what it reads.
-4. **A comment on the Blocked item when the test gate fires**, carrying the
-   failing command and the tail of its output. The plan only specifies a comment
-   for the `Blocker:` path. A Blocked card with no reason on it is not usable.
-5. **No comment on the failure or cancellation path.** Deliberately left as a
-   column move only, matching the plan's table exactly.
+4. **A comment on the card at every transition**, and where each one's text
+   comes from. The plan specifies a comment only for the `Blocker:` path. A card
+   that says nothing but which column it is in is a status light, not a board.
+   See "What the card says" above; the handoff format was not touched to get it.
+5. **The `## Done` comment posted from `SubagentStop` rather than
+   `TaskCompleted`.** The plan gives Done to `TaskCompleted`, which never
+   receives a handoff, so the text is read where it exists and the column move
+   is left where the plan put it.
 6. **A successful run with no blockers changes no column.** The plan gives Done
-   to `TaskCompleted`, so `SubagentStop` leaves the item in Doing.
+   to `TaskCompleted`, so `SubagentStop` leaves the item in Doing. It comments
+   there; it does not move it.
 7. **The handoff check runs on success only**, and tolerates preamble prose,
    which is unparsed. Everything else in the skill is enforced strictly,
    including the blank-line rule and where a typed line may appear. See above
@@ -470,7 +541,11 @@ layer had to make on its own:
 12. **`reviewer` and `ui-designer` scoping rules**, including the read-only git
     allowlist both share and the install-verb matching that keeps
     `ui-designer` able to build and serve a prototype.
-13. **Field-name defensiveness.** The brief for this work gives `SubagentStop` a
+13. **The comment length cap.** `NOTION_COMMENT_MAX_CHARS`, its default of 8000
+    and the `NOTION_COMMENT_HARD_MAX` clamp. Notion documents a per-object and a
+    per-array limit but nothing specific to comments, so where to cut is this
+    layer's choice; see "Comment length" above.
+14. **Field-name defensiveness.** The brief for this work gives `SubagentStop` a
     `status` field of `success`, `failure` or `cancelled` and `TaskCompleted` a
     `task_title`. The published example blocks on
     `https://code.claude.com/docs/en/hooks` spell these `completion_reason`
