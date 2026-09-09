@@ -3,7 +3,7 @@ name: glossary
 description: The fleet's shared vocabulary - the agreed meaning of Initiative, Project, Milestone, Issue, Sub-issue, Task, Spec, Plan, Phase, Round, Session, Lead, Subagent, Teammate, Handoff, Run article, Gate, Board, Human queue, Eval and Sprite, and what each maps to in Notion, Claude Code and the repo. Preloaded into every fleet agent; use these words with these meanings and no others.
 ---
 
-Canonical copy. `templates/rules/glossary.md` and the Notion page are generated from this file - edit here, never there.
+Canonical copy. `templates/rules/glossary.md` is generated from this file - edit here, never there.
 
 | Term | Meaning | Maps to |
 |---|---|---|

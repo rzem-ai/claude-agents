@@ -13,7 +13,7 @@ file. Change the skill, run the generator, and commit both.
 This rule carries no `paths:` key, so it loads on every turn in any project
 that installs it.
 
-Canonical copy. `templates/rules/glossary.md` and the Notion page are generated from this file - edit here, never there.
+Canonical copy. `templates/rules/glossary.md` is generated from this file - edit here, never there.
 
 | Term | Meaning | Maps to |
 |---|---|---|

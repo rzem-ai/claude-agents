@@ -23,7 +23,7 @@ for p in sys.argv[1:]:
     assert isinstance(fm.get('skills', []), list), p + ': skills is not a list'
 PY
 
-python3 -c "import glob;[print(p,i+1,l.rstrip()) for p in glob.glob('claude-agents/**/*.md',recursive=True)+glob.glob('docs/*.md') for i,l in enumerate(open(p)) if '\u2013' in l or '\u2014' in l]"
+python3 -c "import glob;[print(p,i+1,l.rstrip()) for p in glob.glob('claude-agents/**/*.md',recursive=True)+glob.glob('docs/**/*.md',recursive=True) for i,l in enumerate(open(p)) if '\u2013' in l or '\u2014' in l]"
 ```
 
 ## Frontmatter that parses
@@ -32,9 +32,9 @@ python3 -c "import glob;[print(p,i+1,l.rstrip()) for p in glob.glob('claude-agen
 
 2. **No bare colon-space inside an unquoted string.** Grep every value for `: ` and quote the whole string or reword it. This is the check that nearly shipped a broken agent: YAML reads `description: Reviews a diff: correctness and design` as a nested mapping, the frontmatter still parses, the agent silently loses its description or fails to load, and nothing anywhere says why. The printed key list is how you catch it - an unexpected key means a value split.
 
-3. **`tools` is a comma-separated string on one line and `skills` is a YAML list.** Getting either type wrong fails silently. A `tools` written as a list is ignored, so the agent inherits every tool it was meant to be denied; a `skills` written as a comma-separated string preloads nothing and the agent works on without `glossary`, `handoff` or `using-memory` and never mentions it.
+3. **`tools` is a comma-separated string on one line and `skills` is a YAML list.** The `tools` shape is fleet convention - the sub-agents reference accepts a YAML list too, so a list there is a style finding, not a lost allowlist. The `skills` shape is the one that bites: a `skills` written as a comma-separated string preloads nothing and the agent works on without `glossary`, `handoff` or `using-memory` and never mentions it.
 
-4. **Every `mcp__<server>__<tool>` entry names a server that is actually registered.** Diff the server segment of every MCP entry against the servers in `~/.claude/settings.json`, the project `.mcp.json` and the enabled connectors. A wrong or renamed server name is a silent no-op - the agent simply has no such tool, does not error, and works around the absence without telling anyone. This is the single most expensive silent failure in the fleet.
+4. **Every `mcp__<server>__<tool>` entry names a server that is actually registered.** Diff the server segment of every MCP entry against the servers in `~/.claude/settings.json`, the project `.mcp.json` and the enabled connectors; `claude mcp list` shows all three at once. A claude.ai connector registers as `claude_ai_<Name>` and a plugin-shipped server as `plugin_<plugin>_<server>`, so a bare display name such as `Notion` is never the identifier. A wrong or renamed server name is a silent no-op - the agent simply has no such tool, does not error, and works around the absence without telling anyone. This is the single most expensive silent failure in the fleet.
 
 5. **`memory` and `isolation` carry only real values.** `memory` accepts `user`, `project` or `local`; `isolation` accepts only `worktree`. "None" for either means omit the field, never write the word none. Only `coder` sets `isolation`, and no fleet agent sets `memory` at all, because per-agent memory lives on the rzem-memory server. A `memory: none` line is a failure even though it looks tidy.
 
@@ -42,7 +42,7 @@ python3 -c "import glob;[print(p,i+1,l.rstrip()) for p in glob.glob('claude-agen
 
 7. **`name` equals the filename without `.md` and equals the roster row.** A mismatch makes the agent undelegatable by the name the lead was told to use.
 
-8. **`tools` is present and is an allowlist.** No fleet subagent inherits every tool. Any "MCP read" intent is expanded into individually named read tools, because `mcp__rzem-memory__*` grants the write tools too, and any invariant worth stating is repeated in `disallowedTools` as a second lock.
+8. **`tools` is present and is an allowlist.** No fleet subagent inherits every tool. Any "MCP read" intent is expanded into individually named read tools, because `mcp__claude_ai_Memory__*` grants the write tools too, and any invariant worth stating is repeated in `disallowedTools` as a second lock.
 
 ## The model migration itself
 

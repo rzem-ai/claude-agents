@@ -9,6 +9,40 @@ The version in `.claude-plugin/plugin.json` is load-bearing. Clients keep the
 cached copy of the plugin until that number changes, so every change that should
 reach a machine needs a version bump and an entry below.
 
+## [0.4.0] - 2026-09-09
+
+### Changed
+
+- **MCP server identifiers now match what `claude mcp list` registers.** The
+  memory server, Notion and Hugging Face reach the fleet as claude.ai
+  connectors, so every body's `tools` and `disallowedTools` entry uses the
+  `mcp__claude_ai_Memory__`, `mcp__claude_ai_Notion` and
+  `mcp__claude_ai_Hugging_Face` spellings. The previous `mcp__rzem-memory__`,
+  `mcp__Notion` and `mcp__Hugging_Face` entries named servers that were not
+  registered and granted nothing, silently. `docs/agent-contract.md` section 6
+  records the confirmed names and the date.
+- `coder` no longer lists Context7. The server is not installed on any machine
+  yet; the contract says how to add it back once `claude mcp list` shows it.
+- The contract drops the "never reuse a colour" rule: the field accepts eight
+  values and the fleet has nine agents.
+- The plan moved from an untracked `tmp/` file into `README.md`, where plan
+  section 10 always said it lived, with its roster, tree and settings examples
+  corrected to match the repo.
+- The contract now says which preloaded skills resolve today and which are
+  forward references, since fourteen of the twenty-one names the bodies carry
+  are not installed anywhere yet.
+- **The glossary has two copies, not three.** The Notion copy was never built,
+  and the one agent named to republish it, `fleet-steward`, blocks
+  `notion-update-page` in its own `disallowedTools`. The `glossary` skill, the
+  CLAUDE.md template and plan section 8 no longer mention it.
+- **The quarterly pass over a project's `.claude/rules/` and `docs/runs/` is
+  the lead's**, run when Alex asks for it, and the `compound` skill now
+  describes it. It had been assigned to `fleet-steward`, which may not touch
+  anything outside the claude-agents working copy.
+- `fleet-steward`'s editing list names everything its four jobs already touch:
+  agent bodies, the contract, skill frontmatter, the plugin manifest, the
+  changelog, the plan in README.md and the generated glossary rule.
+
 ## [0.3.0] - 2026-09-08
 
 ### Added
@@ -27,12 +61,36 @@ reach a machine needs a version bump and an entry below.
   it above the handoff, where preamble prose is already tolerated, and the lead
   saves it. `scout`, `spec-writer`, `tech-writer` and `fleet-steward` are
   untouched, for the reasons in `docs/runs/README.md`.
-- **Nothing was added to the handoff format and no hook changed.** The article
-  path reaches the board card because `SubagentStop` already comments the
-  `## Done` section verbatim on a clean run.
+- **Nothing was added to the handoff format for this, and the run-article
+  change touched no hook.** The article path reaches the board card because
+  `SubagentStop` already comments the `## Done` section verbatim on a clean run.
 - `Run article` in the `glossary` skill and the generated
   `templates/rules/glossary.md`, and a short section in `compound` so the end of
   a unit of work reads articles as well as state-directory archives.
+
+### Changed
+
+- **Every board transition now puts a comment on the card**, lifted from the
+  handoff and from the status the harness sends: the `## Done` items on a clean
+  finish, the `## Not done` items plus the status on a failure or cancellation,
+  the `Blocker:` lines on the human queue, and the test command with the tail of
+  its output when the `TaskCompleted` gate fails. `SubagentStop` posts the Done
+  comment because it is the only hook that ever sees a handoff; the move to Done
+  stays with `TaskCompleted`. `hooks/lib/notion.sh` gained `board_comment`, and
+  a comment is cut to `NOTION_COMMENT_MAX_CHARS` (default 8000, set in
+  `board.env`) and sent in 1900-character chunks, so a long handoff never loses
+  the whole comment to a Notion 400.
+- **A cut comment is archived whole before it is cut**, at
+  `~/.local/state/claude-agents/archives/<session>/<stamp>-<agent>.md`, and the
+  note on the card names that file. The note used to point at a "run
+  transcript" that nothing wrote. `BOARD_DRY_RUN=1` now prints the whole comment
+  to stderr and still writes the archive. The `board` and `compound` skills say
+  where the archives are and what to do with them.
+- `fleet-steward` files what its scheduled sweep finds as board items itself,
+  the one named exception to "the lead files proposals", because there is no
+  lead in the loop on an unattended run. Its `disallowedTools` still block every
+  Notion write except creating a row and commenting on one, and `agents/lead.md`
+  step 5 no longer re-files what the steward lists under Done.
 
 ## [0.2.0] - 2026-09-08
 
@@ -112,6 +170,8 @@ Initial scaffolding. The repo became a plugin marketplace with one plugin in it.
   `templates/rules/` and `home/` in the repo.
 - This changelog.
 
-[Unreleased]: https://github.com/rzem-ai/claude-agents/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/rzem-ai/claude-agents/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/rzem-ai/claude-agents/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/rzem-ai/claude-agents/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/rzem-ai/claude-agents/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/rzem-ai/claude-agents/releases/tag/v0.1.0

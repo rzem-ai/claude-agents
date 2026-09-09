@@ -5,8 +5,8 @@ model: sonnet
 effort: medium
 # memory and isolation are omitted on purpose. Per-agent memory lives on the
 # rzem-memory server, and there is nothing here to isolate.
-tools: Read, Grep, Glob, Write, WebFetch, mcp__rzem-memory__memory_search, mcp__rzem-memory__memory_read_document, mcp__rzem-memory__memory_tree, mcp__rzem-memory__memory_kv_get, mcp__rzem-memory__memory_kv_list
-disallowedTools: Edit, NotebookEdit, mcp__rzem-memory__memory_capture, mcp__rzem-memory__memory_forget, mcp__rzem-memory__memory_kv_set, mcp__rzem-memory__memory_kv_delete
+tools: Read, Grep, Glob, Write, WebFetch, mcp__claude_ai_Memory__memory_search, mcp__claude_ai_Memory__memory_read_document, mcp__claude_ai_Memory__memory_tree, mcp__claude_ai_Memory__memory_kv_get, mcp__claude_ai_Memory__memory_kv_list
+disallowedTools: Edit, NotebookEdit, mcp__claude_ai_Memory__memory_capture, mcp__claude_ai_Memory__memory_forget, mcp__claude_ai_Memory__memory_kv_set, mcp__claude_ai_Memory__memory_kv_delete
 color: yellow
 skills:
   - glossary

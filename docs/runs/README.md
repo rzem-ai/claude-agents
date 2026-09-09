@@ -18,7 +18,7 @@ One article per run, written because the run was substantial or hard, because so
 
 ## Who writes them
 
-`coder`, `reviewer`, `researcher` and `ui-designer`. Those four spend a run's effort on reasoning that leaves no trace: the approaches a coder abandoned, the defect a reviewer suspected and cleared, the sources a researcher rejected, the two directions a designer dropped. `coder` and `ui-designer` write the file themselves. `reviewer` and `researcher` never create a file, by their own invariants and by hook enforcement, so they return the article above the handoff and the lead saves it here.
+`coder`, `reviewer`, `researcher` and `ui-designer`. Those four spend a run's effort on reasoning that leaves no trace: the approaches a coder abandoned, the defect a reviewer suspected and cleared, the sources a researcher rejected, the two directions a designer dropped. `coder` and `ui-designer` write the file themselves. `reviewer` and `researcher` never create a file - both by their own invariants and their frontmatter, and `reviewer` by hook enforcement as well - so they return the article above the handoff and the lead saves it here.
 
 `scout` does not: it returns paths, lines and quotes, and an essay from it would be the opposite of its job. `spec-writer` does not: it is confined to `docs/specs/` by `hooks/enforce-agent-scope.sh`, and a spec's non-goals and open questions already hold the reasoning an article would repeat. `tech-writer` does not: its output is the writing, so a narrative account of a run is a commission for it rather than a by-product. `fleet-steward` does not: its sweep is scheduled and unattended, its findings already land on a pull request and on board items, and it holds no `Write` tool.
 
@@ -41,6 +41,6 @@ head -n 5 docs/runs/*.md
 
 ## Pruning
 
-Articles are read at the same quarterly pass that re-reads `.claude/rules/`. An article whose subject no longer exists in the code is deleted; anything in it worth keeping was promoted into a rule, a skill or a memory long before, and git holds the text either way.
+Articles are read at the quarterly pass the lead runs over `.claude/rules/` when Alex asks for it; the `compound` skill describes it. An article whose subject no longer exists in the code is deleted; anything in it worth keeping was promoted into a rule, a skill or a memory long before, and git holds the text either way.
 
 If this directory ever passes about fifty files between passes, the problem is upstream: articles are being asked for on routine work, and the fix is in the lead's delegation policy rather than here.

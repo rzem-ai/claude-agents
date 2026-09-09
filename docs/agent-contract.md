@@ -2,7 +2,7 @@
 
 Every agent body in `claude-agents/agents/` conforms to this file. `claude-agents/agents/reviewer.md` is the worked exemplar - read it alongside this.
 
-`docs/` is not in the plan's section 10 tree. It is added deliberately: section 11 has the `fleet-steward` running the `migration-checklist` skill over every agent body each time a model ships, and a checklist needs something to check against. This is that thing. When a frontmatter field is added or renamed upstream, the steward's PR updates this file first and the nine bodies second.
+`docs/` was added to the plan's section 10 tree after the fact, deliberately: section 11 has the `fleet-steward` running the `migration-checklist` skill over every agent body each time a model ships, and a checklist needs something to check against. This is that thing. When a frontmatter field is added or renamed upstream, the steward's PR updates this file first and the nine bodies second.
 
 Verified against `https://code.claude.com/docs/en/sub-agents` on 8 September 2026. Field names below are the real ones, not the plan's table headings.
 
@@ -18,10 +18,10 @@ The file is a markdown file with a YAML frontmatter block delimited by `---`. Ev
 | `description` | string | free text, one or two sentences | yes | This is routing copy. The lead reads it to pick an agent, so say what the agent does and when to use it |
 | `model` | string | `opus`, `sonnet`, `haiku`, `fable`, `inherit` | no | Alias only. Never a pinned model ID (principle 3). Omitting it inherits the session model, which is not the same as `inherit` being wrong - be explicit |
 | `effort` | string | `low`, `medium`, `high`, `xhigh`, `max` | no | Overrides session effort. Omit only where the roster says n/a |
-| `tools` | comma-separated string on one line | tool names, `Agent(type)`, `mcp__<server>`, `mcp__<server>__*`, `mcp__<server>__<tool>` | no | An allowlist. Omitting it inherits every tool, which no fleet subagent should do. Not a YAML list - a single comma-separated line |
+| `tools` | comma-separated string on one line | tool names, `Agent(type)`, `mcp__<server>`, `mcp__<server>__*`, `mcp__<server>__<tool>` | no | An allowlist. Omitting it inherits every tool, which no fleet subagent should do. `lead` is the one omission: it is the session rather than a subagent, so an allowlist would strip tools from the session itself. Written as a single comma-separated line by fleet convention; the sub-agents reference accepts a YAML list as well, so a list here is a style finding rather than a broken agent |
 | `disallowedTools` | comma-separated string on one line | same syntax as `tools` | no | Subtracts from the inherited or allowed set. Use it only as a second lock on a stated invariant |
 | `skills` | YAML list | skill names | no | Preloads the full skill body at startup. Every fleet agent lists at least `glossary`, `handoff` and `using-memory` |
-| `color` | string | `red`, `blue`, `green`, `yellow`, `purple`, `orange`, `pink`, `cyan` | no | Cosmetic; makes an agent findable in the task list. Pick one per agent and do not reuse |
+| `color` | string | `red`, `blue`, `green`, `yellow`, `purple`, `orange`, `pink`, `cyan` | no | Cosmetic; makes an agent findable in the task list. Pick one per agent |
 | `isolation` | string | `worktree` | no | Only `coder` sets it |
 | `memory` | string | `user`, `project`, `local` | no | **No fleet agent sets this.** See 1.3 |
 
@@ -41,7 +41,11 @@ Four of the plan's section 4 columns do not survive contact with the real frontm
 
 **Write cannot be scoped to a path.** Same shape of problem: "Write (docs/specs only)" is `Write` in `tools` plus a body invariant naming the directory. The same applies to `Edit` scoped to one repo.
 
-One more that is not a column but bites everywhere: **"MCP (read)" needs explicit tool names.** `mcp__rzem-memory__*` grants the write tools too. A read-only memory agent lists the read tools individually - `memory_search`, `memory_read_document`, `memory_tree`, `memory_kv_get`, `memory_kv_list` - and may repeat the write tools under `disallowedTools` as a second lock. Only `researcher` and the lead get `memory_capture`.
+One more that is not a column but bites everywhere: **"MCP (read)" needs explicit tool names.** `mcp__claude_ai_Memory__*` grants the write tools too. A read-only memory agent lists the read tools individually - `memory_search`, `memory_read_document`, `memory_tree`, `memory_kv_get`, `memory_kv_list` - and may repeat the write tools under `disallowedTools` as a second lock. Only `researcher` and the lead get `memory_capture`.
+
+### 1.4 Which preloaded skills resolve today
+
+`skills:` resolves a name from the plugin, the project and user scope alike, and a name that resolves nowhere is a silent no-op (check 6 of `migration-checklist`). As of 9 September 2026 the plugin ships `glossary`, `handoff`, `board`, `migration-checklist`, `compound` and `run-article`. Of the other names the bodies preload, only `brainstorming` resolves, from the superpowers plugin. `using-memory`, `alex-voice`, `grilling`, `humanize`, `cyber-identity-docs` and `design-studio` exist in other repos and have not been moved in yet (plan section 8). `docwright`, `tdd`, `review-checklist` and the stack suite (`electron`, `react`, `drizzle`, `fastify`, `tailwind`) do not exist yet (plan section 15). The names stay in the bodies as forward references; update this paragraph when one lands.
 
 ## 2. Body structure
 
@@ -96,7 +100,7 @@ The `migration-checklist` skill runs a superset of this. Minimum, every time:
 1. `name` matches the filename and the roster row.
 2. `model` is an alias, not an ID.
 3. `effort` matches the roster row.
-4. `tools` is a comma-separated line, is an allowlist, and expands any "MCP (read)" into named read tools.
+4. `tools` is a comma-separated line, is an allowlist, and expands any "MCP (read)" into named read tools. `lead` alone omits it.
 5. `memory` and `isolation` are absent unless the roster row genuinely asks for `worktree`.
 6. `skills` includes `glossary`, `handoff` and `using-memory`.
 7. Four H2 sections, in order, and no others.
@@ -108,15 +112,16 @@ The `migration-checklist` skill runs a superset of this. Minimum, every time:
 
 A `tools` line grants an MCP server by the name Claude Code registered it under - `mcp__<server>` for the whole server, `mcp__<server>__<tool>` for one tool. The name is case-sensitive and nothing normalises it. A body naming a server that does not exist grants nothing, raises no error and prints no warning: the agent just runs without those tools, and the first sign of trouble is a `researcher` that cannot reach Hugging Face or a `spec-writer` that cannot read the board. A wrong server name is a silent no-op, which is why it belongs in this file rather than in someone's memory.
 
-The fleet uses four servers:
+The fleet uses three servers today, all reached as claude.ai connectors. A connector is registered as `claude_ai_<Name>`, with the spaces in its display name turned into underscores, so the identifiers below are what `claude mcp list` and the tool list actually show:
 
 | Server | Granted as | Carried by | Where the name came from |
 |---|---|---|---|
-| `rzem-memory` | `mcp__rzem-memory__<tool>` | all nine agents | Alex's own server, named in his MCP config. Authoritative |
-| `Notion` | `mcp__Notion` | `spec-writer`, `fleet-steward`, the lead | Observed in a live connector session |
-| `Hugging_Face` | `mcp__Hugging_Face` | `researcher` | Observed in a live connector session |
-| `Context7` | `mcp__Context7` | `coder` | Observed in a live connector session |
+| rzem-memory, the "Memory" connector at memory-mcp.rzem.ai | `mcp__claude_ai_Memory__<tool>` | all nine agents | `claude mcp list` on Alex's laptop, 9 September 2026 |
+| Notion | `mcp__claude_ai_Notion`, and `mcp__claude_ai_Notion__<tool>` in `disallowedTools` | `spec-writer`, `fleet-steward`, the lead | `claude mcp list` on Alex's laptop, 9 September 2026 |
+| Hugging Face | `mcp__claude_ai_Hugging_Face` | `researcher` | `claude mcp list` on Alex's laptop, 9 September 2026 |
 
-Only `rzem-memory` is confirmed. The other three are transcribed from an observed connector session, which is the best evidence available and is still not the same thing as Alex's Claude Code MCP configuration: a connector's display name and the key Claude Code registers it under can differ, and the underscore in `Hugging_Face` is exactly the sort of detail that a rename or a different transport would change. Confirm all three against `claude mcp list` and the relevant `.mcp.json` before the first run, and if one differs, correct this table and the body that names it in the same change.
+Context7 is not installed, so `coder` does not carry it. When it is, it arrives either as a connector (`mcp__claude_ai_Context7`) or, from the official plugin, as `mcp__plugin_context7_<server>`. Add the entry to the body only once `claude mcp list` shows it, and record the spelling here first.
 
-Two scoping notes that go with the names. `rzem-memory` reaches all nine agents deliberately (plan section 6); every other server stays scoped, because an MCP server's tool list is paid for on every turn of every agent that carries it. And `Context7` is granted in the shared `coder` body as a tool allowlist entry only - the server itself is wired in the local copy under `home/agents/`, because a plugin agent cannot set `mcpServers` (plan section 9).
+The names were confirmed on one machine. A connector follows Alex's claude.ai login rather than a machine, so the lab boxes and Claude Code on the web should see the same identifiers, but that is an expectation until `claude mcp list` has been run there too. The earlier spellings `mcp__rzem-memory__`, `mcp__Notion` and `mcp__Hugging_Face` were transcribed from display names and granted nothing: a wrong server name is a silent no-op, which is why this table exists. One consequence worth knowing: a connector is one login shared by every agent, so the nine per-agent memory credentials in plan section 6 do not separate agent namespaces today.
+
+Two scoping notes that go with the names. rzem-memory reaches all nine agents deliberately (plan section 6); every other server stays scoped, because an MCP server's tool list is paid for on every turn of every agent that carries it. And a plugin agent cannot set `mcpServers` (plan section 9), so any server that is not a connector has to be registered at user scope, or wired in a local copy under `home/agents/`, before a body can name it.

@@ -5,8 +5,8 @@ model: opus
 effort: xhigh
 # memory and isolation are omitted on purpose. Per-agent memory lives on the
 # rzem-memory server, and a docs-only agent has nothing to isolate.
-tools: Read, Grep, Glob, Write, WebSearch, mcp__Notion, mcp__rzem-memory__memory_search, mcp__rzem-memory__memory_read_document, mcp__rzem-memory__memory_tree, mcp__rzem-memory__memory_kv_get, mcp__rzem-memory__memory_kv_list
-disallowedTools: Edit, NotebookEdit, mcp__Notion__notion-create-pages, mcp__Notion__notion-update-page, mcp__Notion__notion-move-pages, mcp__Notion__notion-duplicate-page, mcp__Notion__notion-create-comment, mcp__Notion__notion-create-database, mcp__Notion__notion-update-data-source, mcp__rzem-memory__memory_capture, mcp__rzem-memory__memory_forget, mcp__rzem-memory__memory_kv_set, mcp__rzem-memory__memory_kv_delete
+tools: Read, Grep, Glob, Write, WebSearch, mcp__claude_ai_Notion, mcp__claude_ai_Memory__memory_search, mcp__claude_ai_Memory__memory_read_document, mcp__claude_ai_Memory__memory_tree, mcp__claude_ai_Memory__memory_kv_get, mcp__claude_ai_Memory__memory_kv_list
+disallowedTools: Edit, NotebookEdit, mcp__claude_ai_Notion__notion-create-pages, mcp__claude_ai_Notion__notion-update-page, mcp__claude_ai_Notion__notion-move-pages, mcp__claude_ai_Notion__notion-duplicate-page, mcp__claude_ai_Notion__notion-create-comment, mcp__claude_ai_Notion__notion-create-database, mcp__claude_ai_Notion__notion-update-data-source, mcp__claude_ai_Memory__memory_capture, mcp__claude_ai_Memory__memory_forget, mcp__claude_ai_Memory__memory_kv_set, mcp__claude_ai_Memory__memory_kv_delete
 color: purple
 skills:
   - glossary

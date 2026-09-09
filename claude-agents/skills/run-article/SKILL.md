@@ -51,7 +51,7 @@ Commit it with the work. An article written in a `coder` worktree rides the same
 
 ## If you write no files
 
-`reviewer` and `researcher` never create a file, deliberately and by hook enforcement, and the article is not an exception worth carving. Return it as prose above your handoff instead, and say in a Done bullet that you did. The lead saves it to `docs/runs/` under the same convention.
+`reviewer` and `researcher` never create a file - deliberately, by their frontmatter, and for `reviewer` by hook enforcement as well - and the article is not an exception worth carving. Return it as prose above your handoff instead, and say in a Done bullet that you did. The lead saves it to `docs/runs/` under the same convention.
 
 One rule if you do that: no level-2 headings. A `## ` line anywhere in the final message fails the handoff check and your run is sent back to re-emit. Demote every heading one level; `### ` does not match the validator's `^## ` anchor. Prose above the handoff is tolerated on purpose, and this is what that tolerance is for.
 

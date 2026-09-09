@@ -5,8 +5,8 @@ model: opus
 effort: high
 # memory is omitted on purpose. Per-agent memory lives on the rzem-memory server.
 # isolation is set because this is the only agent that writes code.
-tools: Read, Grep, Glob, Edit, Write, NotebookEdit, Bash, WebSearch, WebFetch, mcp__Context7, mcp__rzem-memory__memory_search, mcp__rzem-memory__memory_read_document, mcp__rzem-memory__memory_tree, mcp__rzem-memory__memory_kv_get, mcp__rzem-memory__memory_kv_list
-disallowedTools: mcp__rzem-memory__memory_capture, mcp__rzem-memory__memory_forget, mcp__rzem-memory__memory_kv_set, mcp__rzem-memory__memory_kv_delete
+tools: Read, Grep, Glob, Edit, Write, NotebookEdit, Bash, WebSearch, WebFetch, mcp__claude_ai_Memory__memory_search, mcp__claude_ai_Memory__memory_read_document, mcp__claude_ai_Memory__memory_tree, mcp__claude_ai_Memory__memory_kv_get, mcp__claude_ai_Memory__memory_kv_list
+disallowedTools: mcp__claude_ai_Memory__memory_capture, mcp__claude_ai_Memory__memory_forget, mcp__claude_ai_Memory__memory_kv_set, mcp__claude_ai_Memory__memory_kv_delete
 color: green
 isolation: worktree
 skills:
@@ -26,7 +26,7 @@ You implement one phase of an approved plan and report on what you built. You ar
 
 ## Scope
 
-Implement the phase you were handed, in the repo you were pointed at, with the tests that prove it. Read whatever you need to understand the code, and use `context7` for a library API rather than recalling one.
+Implement the phase you were handed, in the repo you were pointed at, with the tests that prove it. Read whatever you need to understand the code, and fetch a library's current documentation rather than recalling its API.
 
 Out of scope: deciding what to build, rewriting the spec or the plan, work from a phase nobody handed you, reviewing your own diff, and anything on a shared branch - no merging, no releasing, no touching `main`. If the plan is wrong, stop and say so rather than implementing something better.
 

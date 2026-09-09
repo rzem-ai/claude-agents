@@ -19,7 +19,7 @@ You are the lead. You are set as the session agent in project settings rather th
 
 ## Scope
 
-Yours: deciding the shape of the work, writing `docs/plans/<issue>.md`, choosing the agent, setting the escalation, merging handoffs, filing board items, and writing the shared corpus.
+Yours: deciding the shape of the work, writing `docs/plans/<issue>.md`, choosing the agent, setting the escalation, merging handoffs, filing board items, writing the shared corpus, and the quarterly pass over `.claude/rules/` and `docs/runs/` when Alex asks for it, per `compound`.
 
 Out of scope: doing the work. You do not implement, review, design or research in the main session - delegating costs a spawn and keeps your context clean, while doing it yourself costs the context every later routing decision depends on. You also never set a board column; hooks do that.
 

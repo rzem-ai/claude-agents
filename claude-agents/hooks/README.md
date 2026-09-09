@@ -588,33 +588,33 @@ layer had to make on its own:
    than the working directory because a worktree agent's cwd does not survive
    its own session.
    See "What the card says" above; the handoff format was not touched to get it.
-5. **The `## Done` comment posted from `SubagentStop` rather than
+6. **The `## Done` comment posted from `SubagentStop` rather than
    `TaskCompleted`.** The plan gives Done to `TaskCompleted`, which never
    receives a handoff, so the text is read where it exists and the column move
    is left where the plan put it.
-6. **A successful run with no blockers changes no column.** The plan gives Done
+7. **A successful run with no blockers changes no column.** The plan gives Done
    to `TaskCompleted`, so `SubagentStop` leaves the item in Doing. It comments
    there; it does not move it.
-7. **The handoff check runs on success only**, and tolerates preamble prose,
+8. **The handoff check runs on success only**, and tolerates preamble prose,
    which is unparsed. Everything else in the skill is enforced strictly,
    including the blank-line rule and where a typed line may appear. See above
    for why.
-8. **`cd`, `pwd`, `echo` and `true`** added to scout's Bash allowlist, and the
+9. **`cd`, `pwd`, `echo` and `true`** added to scout's Bash allowlist, and the
    quote-stripping and `2>/dev/null` softenings.
-9. **`fleet-steward`'s repo-root resolution** by walking up from the plugin
-   directory, and the git verb list, which is read off its Invariants prose.
-10. **`Notion-Version: 2022-06-28`.** No version is named anywhere in the plan.
-11. **The `SubagentStop` matcher.** The plan gives the hook to every subagent.
+10. **`fleet-steward`'s repo-root resolution** by walking up from the plugin
+    directory, and the git verb list, which is read off its Invariants prose.
+11. **`Notion-Version: 2022-06-28`.** No version is named anywhere in the plan.
+12. **The `SubagentStop` matcher.** The plan gives the hook to every subagent.
     Scoping it to the nine fleet agents is this layer's decision, made because
     the workflows spawn `Plan` and `general-purpose` lanes that return JSON.
-12. **`reviewer` and `ui-designer` scoping rules**, including the read-only git
+13. **`reviewer` and `ui-designer` scoping rules**, including the read-only git
     allowlist both share and the install-verb matching that keeps
     `ui-designer` able to build and serve a prototype.
-13. **The comment length cap.** `NOTION_COMMENT_MAX_CHARS`, its default of 8000
+14. **The comment length cap.** `NOTION_COMMENT_MAX_CHARS`, its default of 8000
     and the `NOTION_COMMENT_HARD_MAX` clamp. Notion documents a per-object and a
     per-array limit but nothing specific to comments, so where to cut is this
     layer's choice; see "Comment length" above.
-14. **Field-name defensiveness.** The brief for this work gives `SubagentStop` a
+15. **Field-name defensiveness.** The brief for this work gives `SubagentStop` a
     `status` field of `success`, `failure` or `cancelled` and `TaskCompleted` a
     `task_title`. The published example blocks on
     `https://code.claude.com/docs/en/hooks` spell these `completion_reason`

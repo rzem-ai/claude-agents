@@ -33,9 +33,8 @@ Never edit `.env` or any file holding a credential.
 
 The project glossary is `.claude/rules/glossary.md` and loads on every turn. Use its
 words with its meanings, and if a term you need is missing, say so rather than
-inventing one. That file is generated from the `glossary` skill in `claude-agents`
-and is republished to Notion from the same source, so never edit it here - change
-the skill and regenerate.
+inventing one. That file is generated from the `glossary` skill in `claude-agents`,
+so never edit it here - change the skill and regenerate.
 
 ## Where work lives
 
