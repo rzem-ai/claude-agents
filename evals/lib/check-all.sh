@@ -11,6 +11,7 @@
 #   scope-hook-contract   each role is held to its invariants, and can still work
 #   workflow-logic        the workflow branches decide on evidence
 #   runner-gate           the eval runner fails when the run failed
+#   glossary              the generated rule still matches the canonical skill
 #
 # Usage:  evals/lib/check-all.sh [-v]
 
@@ -54,6 +55,14 @@ run board-hook-contract "$LIB_DIR/board-hook-contract.sh"
 run scope-hook-contract "$LIB_DIR/scope-hook-contract.sh"
 run workflow-logic      node "$LIB_DIR/workflow-logic.mjs"
 run runner-gate         "$LIB_DIR/runner-gate.sh"
+
+printf '\n=== glossary ===\n'
+if "$REPO_ROOT/scripts/gen-glossary-rule.sh" --check; then
+    printf 'glossary: ok\n'
+else
+    printf 'glossary: FAILED\n'
+    FAILED+=("glossary")
+fi
 
 printf '\n---\n'
 if [ "${#FAILED[@]}" -ne 0 ]; then

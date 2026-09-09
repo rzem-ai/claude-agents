@@ -46,15 +46,26 @@ A comment ending in a `[Cut to fit a Notion comment ...]` line names a file unde
 
 ## Telling the hooks which item
 
-Hooks write the columns, but nothing tells a hook which row a subagent is working on. The spawn prompt does, with a `Board-Item:` line, and putting it there is the lead's job. Without it every hook in the chain runs correctly and moves nothing.
+Hooks write the columns, but nothing tells a hook which row a subagent is working on.
 
-One line of its own, anywhere in the spawn prompt, conventionally the first line so an edit further down cannot lose it:
+**The binding is the session, set at launch.** `SubagentStart` receives the agent's identity and nothing else - no spawn prompt under any name - so a line in the prompt cannot reach it:
+
+```sh
+CLAUDE_AGENTS_BOARD_PAGE_ID=24f1a3b9c1d24e6f8a0b1c2d3e4f5061 \
+  claude --agent claude-agents:lead
+```
+
+Every spawn in that session belongs to that item. Work on an unrelated item starts in its own session, and an unbound session moves nothing - which is correct, because most spawns are not board work.
+
+**Completion is a separate question.** The binding says which item is in flight. It never says that a given task finished it, and `TaskCompleted` will not guess: only a task whose subject carries `[board:<page-id>]` moves a row to done, and that marker goes on the one task that represents completing the whole issue. An ordinary execution task carries no marker however much it contributed. A card that silently reads done is taken as finished work.
+
+**The `Board-Item:` line is still worth writing, as context for the agent.** It tells the agent which row it is working against so it can fetch it; it is not a hook transport, and it never was. Do not describe it as one.
 
 ```
 Board-Item: 24f1a3b9c1d24e6f8a0b1c2d3e4f5061
 ```
 
-What `SubagentStart` actually accepts, as `hooks/lib/notion.sh` parses it:
+If a future runtime does send the spawn prompt to `SubagentStart`, the hook already reads it, and this is the format it accepts, as `hooks/lib/notion.sh` parses it:
 
 - The first matching line wins. Later ones are ignored, so one line per spawn.
 - The label is case-insensitive and may be indented, and a leading `- ` is tolerated so the line survives being written as a list item. Nothing else may precede it on the line.
@@ -62,9 +73,7 @@ What `SubagentStart` actually accepts, as `hooks/lib/notion.sh` parses it:
 - The value may be a dashed UUID, a bare undashed 32-character id, or a page URL pasted straight out of Notion. A query string or fragment is stripped, then the last 32 hexadecimal characters are taken and re-dashed, which is why a URL carrying a title slug still resolves.
 - A value with fewer than 32 hexadecimal characters is not an id. The line is then treated as absent, silently.
 
-For a session working one item end to end, `CLAUDE_AGENTS_BOARD_PAGE_ID` in the environment does the same job for every spawn in it, and the line overrides it per spawn.
-
-The line is addressed to the hook, not to the agent receiving it. If you are the agent, use it to fetch the row you are working against; never treat it as permission to move a column.
+If you are the agent receiving the line, use it to fetch the row you are working against; never treat it as permission to move a column. Columns belong to the hooks.
 
 **Which spawns carry it.** Any spawn doing board-tracked work: a `coder` on a plan phase, a `reviewer` on that diff, a `spec-writer` interviewing against a filed item, a `ui-designer`, `tech-writer` or `researcher` commissioned against one. The test is whether the result belongs on a row.
 

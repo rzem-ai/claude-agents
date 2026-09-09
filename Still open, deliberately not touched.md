@@ -2,9 +2,19 @@
 
   - Steward scope. The compound skill, the runs README and the CLAUDE.md template still hand the steward a quarterly rules prune and the glossary republish that its body forbids, and its editing scope excludes CHANGELOG.md. You did not pick a direction on that one. Either widen the steward's scope and add
     a fifth job, or move both to the lead at compound time. Say which and I'll do it.
-  - home/settings.json clobbers the live file. The install script copies, your live settings have 19 keys the repo does not know about, and zero deny entries today. Merge logic in the script is a code change, so I left it.
   - Two skills have diverging copies (using-memory across the agent-memory repos, alex-voice across angus and weekly-roundup). When you do move them in, one copy has to be declared canonical.
-  - pr-review-toolkit is disabled in your live settings while the reviewer and the review-round workflow assume it ran.
-  - The hooks README's own TODO stands. The docs do not settle status versus completion_reason or task_title versus task_name; confirm against a live hook input.
+  - pr-review-toolkit is disabled in your live settings while the reviewer and the review-round workflow assume it ran. The reviewer prompt still says "assume the easy findings are taken". Either enable it, or have the workflow report the mechanical pass as absent rather than assumed.
   - No git tags exist, so the changelog's compare links stay dead until v0.1.0 through v0.3.0 are tagged.
-  
+
+  Closed on 9 September 2026, in the fleet review fix round (branch fix/fleet-review-2026-09-09):
+
+  - ~~home/settings.json clobbers the live file.~~ The installer merges now: objects recursively, arrays unioned so a hand-added deny rule survives, repository scalars winning only where the repo supplies that key. Invalid JSON is an error rather than a reason to overwrite. Your 19 unknown keys survive an install; verified against a temporary fixture.
+  - ~~The hooks README's own TODO stands. The docs do not settle status versus completion_reason or task_title versus task_name.~~ Settled, and the answer was that neither spelling was real. The docs pages truncate before the event sections, so it came from the zod schemas in the shipped CLI binary: TaskCompleted sends `task_subject`, SubagentStart sends no spawn prompt at all, SubagentStop sends no status. Three hooks were reading fields that do not exist, which is why the board bindings had never once fired. See hooks/README.md item 15 for the schemas and how to re-derive them after a CLI upgrade.
+
+  Newly open, from the same round:
+
+  - **Failure and cancellation never reach Blocked.** SubagentStop carries no status field, so board-subagent-stop.sh cannot detect a failed or cancelled run. The read is kept for forward compatibility and the docs no longer claim it works. The route that does work is a `Blocker:` line in the handoff. Reaching the other one needs either a runtime field or reading `agent_transcript_path`, which is real work.
+  - **review-round no longer carries fixes back.** It reviews one round and hands a fix request to the lead, because coder fixes in an isolated worktree and the script has no supported way to learn that worktree's path or commit. Restoring the automatic loop needs a structured result - worktreePath, baseCommit, headCommit, testResults, unresolvedFindings - built and tested. The fix prompt is kept as an unreachable function so the wording survives.
+  - **Per-agent board binding is gone, replaced by one item per session.** Restoring it needs a supported correlation between the Agent tool's invocation and the subagent identity in the event. Not with a shared "latest prompt" file: two agents spawned together would race for the same line.
+  - **The scope hook is still not a containment boundary.** The parser holes are fixed and the reviewer is an allowlist now, but a program run through Bash writes wherever the process can, and no shell-level check sees inside it. The sandbox in home/settings.json is a credential boundary, not a role boundary - its denyWrite covers ~/.ssh and friends, not other repositories. Unattended steward runs need filesystem permissions before they are safe.
+  - **Nothing has been run against a live Claude.** Every fix is covered by deterministic tests (evals/lib/check-all.sh, 122 checks) that stub the model out. What those cannot prove: agentType resolution, skill preloading, worktree base selection, and whether a workflow's structured output reaches the SubagentStop hook as JSON or as the Markdown handoff that hook requires. That last one is the open question most likely to change a design. Capture redacted real events before trusting any of it.
