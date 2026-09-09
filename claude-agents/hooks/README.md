@@ -863,3 +863,46 @@ layer had to make on its own:
     This does not make the scope hook a containment boundary, and nothing here
     changes that. A program run through Bash still writes wherever the process
     can, and no shell-level check sees inside it.
+
+18. **coder writes in its own worktree, or it does not write - September 2026.**
+    The one preventive check in the fleet, and the only answer to a limit
+    `review-round` cannot fix from inside a workflow.
+
+    `coder` carries `isolation: worktree`, and everything downstream assumes it
+    holds. Nothing checked. `review-round` can only *detect* a fix that landed in
+    the main checkout - by the time its verification runs, coder has already
+    branched and committed - and the fix prompt asking coder to check first is an
+    instruction, not a boundary. But `coder` has an `agentType`, so this hook
+    governs its Bash calls, and git answers the question directly: a linked
+    worktree's git dir sits under `.git/worktrees/`, a main checkout's does not.
+
+    ```
+    $ git -C <linked worktree> rev-parse --absolute-git-dir
+    /repo/.git/worktrees/fix-r1
+    $ git -C <main checkout> rev-parse --absolute-git-dir
+    /repo/.git
+    ```
+
+    So a git command that **writes** - the verbs in `CODER_WRITING_GIT` - is
+    refused unless its target directory can be shown to be a linked worktree.
+    The target is the command's own `-C` where it has one, otherwise the tool
+    call's `cwd`. Reads are untouched, and so is everything that is not git:
+    `git log`, `git diff`, `npm test` and `pytest` all run in a main checkout
+    exactly as before. This enforces `coder.md`'s own second step, which already
+    says to confirm the worktree before touching anything.
+
+    **Not being able to tell is not permission.** A directory that is not a
+    repository at all is refused too, on the grounds that a git write there would
+    fail anyway and that the case this exists for - isolation silently not
+    happening - is precisely the case where nothing announces itself.
+
+    **Know what this costs.** Worktree isolation for a workflow-spawned `coder`
+    has never been observed against a live Claude (see "Still open"). If it turns
+    out not to hold, `coder` will now be **blocked from every writing git
+    command** rather than quietly committing to the checkout it happens to be
+    in. That is the intended failure and the right one, but it is a stop rather
+    than a slow leak: if coder starts raising blockers about worktrees, this hook
+    is why, and the answer is to fix isolation rather than to remove the check.
+    `worktree.baseRef` defaults to `fresh`, which branches from
+    `origin/<default-branch>`, so a repository with no remote cannot cut one at
+    all - that is what the 10 September probe hit.

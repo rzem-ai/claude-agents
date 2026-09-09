@@ -563,6 +563,71 @@ enforce_reviewer() {
   return 0
 }
 
+# ----------------------------------------------------------------------- coder
+# Invariants: "Confirm you are in your worktree and that it is clean before you
+# touch anything", and out of scope is "anything on a shared branch - no
+# merging, no releasing, no touching main".
+#
+# This is the only place that can PREVENT a fix landing in the main checkout.
+# review-round can detect it afterwards - by then coder has already branched and
+# committed - and the fix prompt asks coder to check first, but an instruction
+# is not a boundary. coder carries an agentType, so this hook governs its Bash
+# calls, and git itself answers the question: a linked worktree's git dir is
+# under `.git/worktrees/`, a main checkout's is not.
+#
+# Reads are untouched. So is everything that is not git. What is refused is a
+# git command that writes, in a directory that cannot be shown to be a worktree
+# - including a directory that is not a repository at all, where such a command
+# would fail anyway. Not being able to tell is not permission: the whole point
+# is the case where isolation silently did not happen, which is exactly when
+# nothing announces itself.
+CODER_WRITING_GIT=" commit switch checkout branch reset merge rebase push stash cherry-pick revert am apply tag clean rm mv restore worktree "
+
+# The directory a git command actually targets: its -C if it has one, else the
+# directory the tool call runs in.
+git_target_dir() {
+  local seg="$1" tok want=no
+  # shellcheck disable=SC2086 # deliberate word splitting: this is a word scan
+  set -- $(command_words "$seg")
+  for tok in "$@"; do
+    if [ "$want" = yes ]; then printf '%s' "$tok"; return 0; fi
+    [ "$tok" = "-C" ] && want=yes
+  done
+  printf '%s' "$cwd"
+}
+
+enforce_coder() {
+  [ "$tool_name" = "Bash" ] || return 0
+  [ -n "$command_str" ] || return 0
+  command -v git >/dev/null 2>&1 || return 0
+
+  local scan seg verb target gitdir
+  scan="$(strip_quoted "$command_str")"
+  scan="$(printf '%s' "$scan" | sed -E 's/(\|\||&&|;|\||&)/\n/g')"
+  while IFS= read -r seg; do
+    seg="$(printf '%s' "$seg" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+    [ -n "$seg" ] || continue
+    [ "$(leading_token "$seg")" = "git" ] || continue
+    verb="$(sub_verb "$seg")"
+    case "$CODER_WRITING_GIT" in
+      *" $verb "*) ;;
+      *) continue ;;
+    esac
+
+    target="$(git_target_dir "$seg")"
+    [ -n "$target" ] || target="."
+    gitdir="$(git -C "$target" rev-parse --absolute-git-dir 2>/dev/null)" || gitdir=""
+    case "$gitdir" in
+      */worktrees/*) continue ;;
+    esac
+    if [ -z "$gitdir" ]; then
+      deny "coder invariant: \"Confirm you are in your worktree and that it is clean before you touch anything.\" \"git $verb\" writes, and $target is not a git repository at all, so it cannot be the worktree you were given. Find the worktree you were handed, or stop and say so in a \"Blocker: \" line."
+    fi
+    deny "coder invariant: \"Confirm you are in your worktree and that it is clean before you touch anything\", and out of scope is \"anything on a shared branch\". \"git $verb\" writes, and $target is not a linked worktree - git reports its git dir as $gitdir, which is a main checkout. Committing there puts your work on somebody else's branch. Work in the worktree you were given; if you have not got one, change nothing and raise a \"Blocker: \" line saying so."
+  done <<< "$scan"
+  return 0
+}
+
 # ----------------------------------------------------------------- ui-designer
 # Invariant: "Never run a git command that writes, and never install anything
 # into the product repo."
@@ -668,6 +733,7 @@ case "$agent" in
   fleet-steward) enforce_fleet_steward ;;
   reviewer)      enforce_reviewer ;;
   ui-designer)   enforce_ui_designer ;;
+  coder)         enforce_coder ;;
   *)             ;;
 esac
 

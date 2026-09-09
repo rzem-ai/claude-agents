@@ -117,6 +117,23 @@ function saysYes(v) {
   if (typeof v === 'string') return !NO_WORDS.has(v.trim().toLowerCase())
   return Boolean(v)
 }
+// Not the negation of saysYes: absent and undefined are neither a yes nor a no,
+// and the difference is what "confirmed isolated" turns on.
+function saysNo(v) {
+  if (v === false) return true
+  return typeof v === 'string' && NO_WORDS.has(v.trim().toLowerCase()) && v.trim() !== ''
+}
+
+// git prints the path it resolved, and macOS resolves /tmp through /private, so
+// string equality would leave a real worktree unfindable in its own list - and
+// this check fails closed, so that would mean the loop never closes.
+function samePath(a, b) {
+  const trim = (p) => String(p || '').replace(/\/+$/, '')
+  const x = trim(a)
+  const y = trim(b)
+  if (!x || !y) return false
+  return x === y || '/private' + x === y || x === '/private' + y
+}
 function isBlocking(f) {
   return saysYes(f && f.blocking)
 }
@@ -544,11 +561,23 @@ function gateFix(v, blocking, head) {
   // saying nothing - and in the probe both agents ran in the main checkout, so
   // silence is the shape this failure actually takes. Confirmation is an
   // explicit isMain: false, or the worktree list saying so about this path.
-  if (saysYes(v.isMain)) return NOT_ISOLATED
-  if (v.isMain !== false && String(v.isMain).toLowerCase() !== 'false') {
-    const entry = (v.worktrees || []).find((w) => w && w.path && w.path === v.worktreePath)
-    if (!entry) return NOT_CONFIRMED_ISOLATED
-    if (entry.isMain !== false) return entry.isMain === true ? NOT_ISOLATED : NOT_CONFIRMED_ISOLATED
+  // The worktree list is consulted FIRST, always. Guarding the cross-check
+  // behind the flat field meant an `isMain: false` skipped it - so a payload
+  // that contradicted itself in one object, flat field saying not-main while
+  // its own list said that exact path IS main, was believed on the flat claim.
+  // Fixing "absent" was not fixing "lying", and they are one branch apart.
+  const entry = (v.worktrees || []).find((w) => w && w.path && samePath(w.path, v.worktreePath))
+  if (entry) {
+    if (saysYes(entry.isMain)) return NOT_ISOLATED
+    if (!saysNo(entry.isMain)) return NOT_CONFIRMED_ISOLATED
+    // The list says this path is not the main checkout. If the flat field says
+    // it is, the payload contradicts itself and neither half can be trusted -
+    // whichever way round the disagreement runs.
+    if (saysYes(v.isMain)) return NOT_CONFIRMED_ISOLATED
+  } else if (!saysNo(v.isMain)) {
+    // No entry for this path: the flat field is all there is, and it has to be
+    // an explicit no rather than merely not a yes.
+    return NOT_CONFIRMED_ISOLATED
   }
   if (!saysYes(v.containsReviewedHead))
     return (
@@ -980,16 +1009,18 @@ async function commissionFixes({ tag, blocking, review, fixLabel }) {
     [
       'Fix the blocking findings from ' + tag + ' of the review of ' + reviewRange + '. Fix these and nothing else.',
       intentPath ? 'The plan this implements is at ' + intentPath + ', and it is approved.' : '',
-      'Inside your worktree, before you change anything, run: git switch -c fix/' + fixLabel + ' ' + reviewedHead,
+      'FIRST, before any command that writes anything, run: git rev-parse --git-dir',
+      'If its output does not contain "/worktrees/", you are in the main checkout rather than your own worktree. Run no writing git command at all - no switch, no branch, no commit - change nothing, and end with a "- Blocker: " line naming the directory and what that command printed. Committing to a shared working branch is out of scope for you, and this is the check that tells you which one you are in.',
+      'Only once that check has passed: git switch -c fix/' + fixLabel + ' ' + reviewedHead,
       'That is not optional bookkeeping. A worktree is cut from the default branch unless it is told otherwise, so without it your commits are not built on the code that was reviewed, and the next round has nothing it can review.',
-      'If that fails, or if git merge-base --is-ancestor ' + reviewedHead + ' HEAD does not exit 0, your worktree is not built on the reviewed commit. Change nothing, and end with a "- Blocker: " line naming your worktree path and what git merge-base reports. Do not rebase, merge or reset to fix it yourself.',
+      'If that switch fails, or if git merge-base --is-ancestor ' + reviewedHead + ' HEAD does not exit 0, your worktree is not built on the reviewed commit. Change nothing, and end with a "- Blocker: " line naming your worktree path and what git merge-base reports. Do not rebase, merge or reset to fix it yourself.',
       'Blocking findings:\n' + JSON.stringify(blocking, null, 2),
       'Non-blocking findings, for context only - do not fix them, they are follow-up work:\n' +
         JSON.stringify((review.findings || []).filter((f) => !f.blocking), null, 2),
       'A failing test first where the finding is a defect, then the smallest change that passes it. Commit small.',
       'If a finding is wrong, say so and leave the code alone rather than changing it to satisfy the review. Record that as a "## Not done" bullet reading "rejected as wrong: <file> - <why>", so the next reviewer sees a decision rather than an omission. The other two spellings are "not attempted: <file> - <why>" and "attempted and failed: <file> - <why>".',
       'Run the tests, the lint and the build before you finish, and record every command you could not run.',
-      'In your "## Done" section include three bullets exactly in this shape, so the verification can be cross-checked against what you believe you did: "- worktree: <absolute path>", "- base-commit: <sha you branched from>", "- head-commit: <sha of your last commit>". Also say whether git rev-parse --git-dir contains "/worktrees/".',
+      'In your "## Done" section include three bullets exactly in this shape, so the verification can be cross-checked against what you believe you did: "- worktree: <absolute path>", "- base-commit: <sha you branched from>", "- head-commit: <sha of your last commit>", plus a fourth saying what the git rev-parse --git-dir check above printed.',
     ]
       .filter(Boolean)
       .join('\n\n'),

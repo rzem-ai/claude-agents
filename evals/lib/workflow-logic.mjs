@@ -374,6 +374,87 @@ const FIX = { range: 'main...feature/refresh', issue: 'x', fix: true, maxRounds:
   check('main-worktree-reason-names-it', 'and says the run was not isolated', /main checkout|not isolated/i.test(JSON.stringify(result.fixRequest || {})), result.fixRequest)
 }
 
+// Fixing "absent" is not fixing "lying". The flat isMain guarded the very
+// cross-check that exists to check it, so a payload contradicting itself in one
+// object - flat field says not-main, its own worktree list says that exact path
+// IS main - was believed on the flat claim.
+{
+  const r = responder({
+    'verify fix': {
+      headCommit: 'bbb2222', worktreePath: '/w/fix', isMain: false, containsReviewedHead: true,
+      dirty: false, filesChanged: ['src/a.ts'], commits: ['c'], candidates: ['bbb2222'],
+      worktrees: [{ path: '/w/fix', head: 'bbb2222', dirty: false, isMain: true }],
+    },
+  })
+  const { result } = await runWorkflow('review-round.js', FIX, r)
+  check('worktree-list-beats-the-flat-claim', 'a flat isMain:false does not override a worktree list that says otherwise', result.stopped === 'fix not isolated', result.stopped)
+}
+{
+  const r = responder({
+    'verify fix': {
+      headCommit: 'bbb2222', worktreePath: '/w/fix', isMain: 'false', containsReviewedHead: true,
+      dirty: false, filesChanged: ['src/a.ts'], commits: ['c'], candidates: ['bbb2222'],
+      worktrees: [{ path: '/w/fix', head: 'bbb2222', dirty: false, isMain: 'true' }],
+    },
+  })
+  const { result } = await runWorkflow('review-round.js', FIX, r)
+  check('string-flags-read-the-same-way', 'and the strings "true"/"false" read the same as the booleans everywhere', result.stopped === 'fix not isolated', result.stopped)
+}
+
+// The fail-OPEN direction on the two flags that had no case for it. `dirty` was
+// pinned by string-dirty-stops; these were not.
+for (const [name, patch] of [
+  ['string-false-not-descendant-stops', { containsReviewedHead: 'false' }],
+  ['string-true-is-main-stops', { isMain: 'true' }],
+]) {
+  const r = responder({
+    'verify fix': Object.assign({
+      headCommit: 'bbb2222', worktreePath: '/w/fix', isMain: false, containsReviewedHead: true,
+      dirty: false, filesChanged: ['src/a.ts'], commits: ['c'], candidates: ['bbb2222'],
+      worktrees: [{ path: '/w/fix', head: 'bbb2222', dirty: false, isMain: false }],
+    }, patch),
+  })
+  const { result } = await runWorkflow('review-round.js', FIX, r)
+  check(name, 'a flag arriving as a string is read for what it says, not for being a string', /unverified fix|not isolated/.test(result.stopped || ''), result.stopped)
+}
+
+// The flat field is the fallback for when the list has no entry for that path,
+// and that path has to stay open - a lane may report a commit in a worktree the
+// list call did not cover. It is a fallback, not the primary evidence.
+{
+  const r = responder({
+    'verify fix': {
+      headCommit: 'bbb2222', worktreePath: '/w/fix', isMain: false, containsReviewedHead: true,
+      dirty: false, filesChanged: ['src/a.ts'], commits: ['c'], candidates: ['bbb2222'], worktrees: [],
+    },
+  })
+  const { result } = await runWorkflow('review-round.js', FIX, r)
+  check('flat-flag-is-the-fallback', 'with no list entry for the path, an explicit isMain:false is accepted', result.stopped === 'clean', result.stopped)
+}
+{
+  const r = responder({
+    'verify fix': {
+      headCommit: 'bbb2222', worktreePath: '/w/fix', containsReviewedHead: true,
+      dirty: false, filesChanged: ['src/a.ts'], commits: ['c'], candidates: ['bbb2222'], worktrees: [],
+    },
+  })
+  const { result } = await runWorkflow('review-round.js', FIX, r)
+  check('no-evidence-either-way-stops', 'and with neither a list entry nor a flat answer, the run stops', result.stopped === 'fix not isolated', result.stopped)
+}
+
+// git's own path is what the list reports, and macOS resolves /tmp to /private/tmp.
+{
+  const r = responder({
+    'verify fix': {
+      headCommit: 'bbb2222', worktreePath: '/w/fix/', containsReviewedHead: true,
+      dirty: false, filesChanged: ['src/a.ts'], commits: ['c'], candidates: ['bbb2222'],
+      worktrees: [{ path: '/w/fix', head: 'bbb2222', dirty: false, isMain: false }],
+    },
+  })
+  const { result } = await runWorkflow('review-round.js', FIX, r)
+  check('trailing-slash-still-matches-the-list', 'a trailing slash does not stop the worktree list being found', result.stopped === 'clean', result.stopped)
+}
+
 // The dangerous shape, and the one a first pass at this test missed: the lane
 // reports a REAL commit and says isMain. Mutation testing found that deleting
 // the isMain guard in gateFix broke nothing, because the only case exercising
@@ -493,7 +574,7 @@ for (const reported of ['./src/a.ts', 'src/a.ts:88']) {
     'verify fix': {
       headCommit: 'bbb2222', containsReviewedHead: true, dirty: false,
       filesChanged: ['packages/totally/unrelated/index.ts'], commits: ['c'], isMain: false,
-      worktreePath: '/w/fix', candidates: ['bbb2222'], worktrees: [],
+      worktreePath: '/w/fix', candidates: ['bbb2222'], worktrees: [{ path: '/w/fix', head: 'bbb2222', dirty: false, isMain: false }],
     },
   })
   const { result } = await runWorkflow('review-round.js', FIX, r)
@@ -506,7 +587,7 @@ for (const reported of ['./src/a.ts', 'src/a.ts:88']) {
     'verify fix': {
       headCommit: 'bbb2222', containsReviewedHead: true, dirty: false,
       filesChanged: ['/Users/alex/repo/src/a.ts'], commits: ['c'], isMain: false,
-      worktreePath: '/w/fix', candidates: ['bbb2222'], worktrees: [],
+      worktreePath: '/w/fix', candidates: ['bbb2222'], worktrees: [{ path: '/w/fix', head: 'bbb2222', dirty: false, isMain: false }],
     },
   })
   const { result } = await runWorkflow('review-round.js', FIX, r)
@@ -711,7 +792,7 @@ const GATE_HOLES = [
     'a fix with no known location cannot be re-reviewed in the checkout that holds it'],
   ['ambiguous-with-a-sha-stops', { headCommit: 'bbb2222', containsReviewedHead: true, dirty: false, filesChanged: ['src/a.ts'], commits: ['c'], isMain: false, worktreePath: '/w/fix', candidates: ['bbb2222', 'ccc3333'], worktrees: [] },
     'a lane that names three candidates and then picks one is still guessing'],
-  ['string-dirty-stops', { headCommit: 'bbb2222', containsReviewedHead: true, dirty: 'true', filesChanged: ['src/a.ts'], commits: ['c'], isMain: false, worktreePath: '/w/fix', candidates: ['bbb2222'], worktrees: [] },
+  ['string-dirty-stops', { headCommit: 'bbb2222', containsReviewedHead: true, dirty: 'true', filesChanged: ['src/a.ts'], commits: ['c'], isMain: false, worktreePath: '/w/fix', candidates: ['bbb2222'], worktrees: [{ path: '/w/fix', head: 'bbb2222', dirty: false, isMain: false }] },
     'a boolean that arrived as a string is not a licence to read it as false'],
 ]
 for (const [name, verify, why] of GATE_HOLES) {
@@ -730,7 +811,7 @@ for (const [name, verify, why] of GATE_HOLES) {
         ? { verdict: 'request changes', summary: 's', findings: [{ blocking: true, what: 'something is wrong', why: 'w' }] }
         : { verdict: 'approve', summary: 'fixed', findings: [] }
     },
-    'verify fix': { headCommit: 'bbb2222', containsReviewedHead: true, dirty: false, filesChanged: [], commits: [], isMain: false, worktreePath: '/w/fix', candidates: ['bbb2222'], worktrees: [] },
+    'verify fix': { headCommit: 'bbb2222', containsReviewedHead: true, dirty: false, filesChanged: [], commits: [], isMain: false, worktreePath: '/w/fix', candidates: ['bbb2222'], worktrees: [{ path: '/w/fix', head: 'bbb2222', dirty: false, isMain: false }] },
   })
   const { result } = await runWorkflow('review-round.js', FIX, r)
   check('nameless-finding-stops', 'a fix cannot be checked against findings that name no file, so it is not adopted', result.stopped === 'unverified fix', result.stopped)
@@ -786,6 +867,106 @@ for (const [name, verify, why] of GATE_HOLES) {
   const { result } = await runWorkflow('review-round.js', FIX, r)
   const b = (result.fixes[0] || {}).unresolvedFindings || []
   check('disposition-does-not-bleed', 'a file mentioned in passing does not inherit another finding’s disposition', b.every((f) => f.file !== 'src/b.ts' || f.disposition === 'not attempted'), b)
+}
+
+console.log('\nreview-round: claims that were right, and now watched')
+
+// The bug class this harness was built for - "a claim promoted to verified by
+// agents failing to answer". The happy case was pinned; the contradicted one
+// was not.
+{
+  const seen = {}
+  const r = responder()
+  const inner = (p, o, sState) => {
+    if (!o.agentType && o.schema && /Mechanical review pass/.test(p)) {
+      const rnd = (/Round (\d+)/.exec(p) || [])[1] || '?'
+      seen[rnd] = (seen[rnd] || 0) + 1
+      if (seen[rnd] === 1) return { lane: 'tests', ran: ['pnpm test'], findings: rnd === '2' ? [{ file: 'src/a.ts', what: 'a test fails over the fix' }] : [] }
+      return { lane: 'lint and format', ran: ['x'], findings: [] }
+    }
+    return r(p, o, sState)
+  }
+  const { result } = await runWorkflow('review-round.js', FIX, inner)
+  const t = (result.fixes[0] || {}).testResults || {}
+  check('contradicted-test-claims-stay-unverified', 'a tests lane that reports findings does not confirm the fix', t.verified === false && /contradicted/.test(t.verifiedBy || ''), t)
+}
+
+// A reviewer that said nothing is not a clean round.
+{
+  const { result } = await runWorkflow('review-round.js', { range: 'main...x', issue: 'x' }, responder({ reviewer: null }))
+  check('silent-reviewer-is-not-clean', 'silence from the reviewer is its own stop reason, not "clean"', result.stopped === 'reviewer returned nothing' && result.approved === false, [result.stopped, result.approved])
+}
+
+// A reviewer contradicting itself - approving while marking a finding blocking
+// - is exactly why the flags are read the strict way.
+{
+  const r = responder({ reviewer: { verdict: 'approve', summary: 's', findings: [{ blocking: true, file: 'src/a.ts', what: 'b', why: 'w' }] } })
+  const { result } = await runWorkflow('review-round.js', { range: 'main...x', issue: 'x' }, r)
+  check('approve-with-a-blocker-is-not-approved', 'an approve verdict beside a blocking finding is not an approval', result.approved === false && result.stopped === 'fix handoff required', [result.stopped, result.approved])
+}
+
+// Only the three named dispositions are dispositions. Anything else is a Not
+// done bullet, and reporting it as coder's decision would put a word coder
+// never chose in front of the next reviewer.
+{
+  const r = responder({
+    reviewer: (p, o, sState) => {
+      sState.round += 1
+      return sState.round === 1
+        ? { verdict: 'request changes', summary: 's', findings: [{ blocking: true, file: 'src/a.ts', what: 'a', why: 'w' }, { blocking: true, file: 'src/b.ts', what: 'b', why: 'w' }] }
+        : { verdict: 'approve', summary: 'fixed', findings: [] }
+    },
+    coder: handoff({ done: HINTS, notDone: ['note: src/b.ts is fine as it stands'] }),
+  })
+  const { result } = await runWorkflow('review-round.js', FIX, r)
+  const u = (result.fixes[0] || {}).unresolvedFindings || []
+  check('unknown-disposition-is-not-a-disposition', 'a Not done bullet that is not one of the three reads as not attempted', u.length === 1 && u[0].disposition === 'not attempted', u)
+}
+
+// The headline invariant, for the field that decides where every later lane
+// runs: git says where the fix is, and coder's claim is recorded, not followed.
+{
+  const r = responder({ coder: handoff({ done: ['worktree: /w/coder-lied', 'head-commit: bbb2222', 'fixed it'] }) })
+  const { result, calls } = await runWorkflow('review-round.js', FIX, r)
+  const round2 = calls.filter((c) => /Round 2/.test(c.prompt))
+  check('git-decides-where-the-fix-is', 'a coder claiming a different worktree does not redirect the next round', round2.length > 0 && round2.every((c) => !/coder-lied/.test(c.prompt)), round2.length)
+  check('the-lie-is-recorded', 'and the disagreement is written down rather than dropped', ((result.fixes[0] || {}).claimMismatch || []).some((m) => /worktreePath/.test(m) && /coder-lied/.test(m)), (result.fixes[0] || {}).claimMismatch)
+}
+
+// A commit has to look like a commit.
+{
+  const r = responder({ 'verify fix': { headCommit: 'the-fix-branch', worktreePath: '/w/fix', isMain: false, containsReviewedHead: true, dirty: false, filesChanged: ['src/a.ts'], commits: ['c'], candidates: ['x'], worktrees: [] } })
+  const { result } = await runWorkflow('review-round.js', FIX, r)
+  check('headCommit-must-look-like-a-commit', 'a branch name is not a commit', result.stopped === 'unverified fix', result.stopped)
+}
+
+// The honesty fixes, which were themselves untested.
+{
+  const { result } = await runWorkflow('review-round.js', FIX, responder({ coder: handoff({ done: HINTS, decisions: ['Blocker: which TTL?'] }) }))
+  check('no-next-round-is-promised', 'a run that stopped does not promise a next round that will not come', (result.unverified || []).every((u) => !/the next round re-runs/.test(u)), result.unverified)
+}
+{
+  const { result } = await runWorkflow('review-round.js', FIX, responder({ coder: handoff({ done: HINTS, decisions: ['Propose item: rename the helper', 'Propose memory: the TTL is 15 minutes'] }) }))
+  check('coder-proposals-are-carried', 'coder cannot file its own proposals, so the run carries them back', (result.proposals || []).length === 2, result.proposals)
+}
+
+// An unrecognised verdict is reported as what it was read as, not as what
+// arrived, or the field says one thing and the decision was another.
+{
+  const { result } = await runWorkflow('review-round.js', { range: 'main...x', issue: 'x' }, responder({ reviewer: { verdict: 'lgtm', summary: 's', findings: [] } }))
+  check('coerced-verdict-is-reported-coerced', 'the verdict field reports the reading the run acted on', result.verdict === 'request changes', result.verdict)
+}
+
+// The fix prompt used to tell coder to branch and commit FIRST and report the
+// isolation check afterwards, which guaranteed that a non-isolated coder wrote
+// to the main checkout before anything could notice. The gate can only ever
+// detect that; the ordering is what makes a compliant coder never do it.
+{
+  const { calls } = await runWorkflow('review-round.js', FIX, responder())
+  const fix = calls.find((c) => c.opts.agentType === 'coder')
+  const p = fix ? fix.prompt : ''
+  check('isolation-checked-before-anything-is-written', 'the fix prompt checks which checkout it is in before it writes', p.indexOf('rev-parse --git-dir') > -1 && p.indexOf('rev-parse --git-dir') < p.indexOf('git switch -c'), [p.indexOf('rev-parse --git-dir'), p.indexOf('git switch -c')])
+  check('main-checkout-is-refused-not-reported', 'and says to write nothing at all if it is the main checkout', /Run no writing git command at all/.test(p), false)
 }
 
 console.log(`\n${passed} passed, ${failed} failed`)

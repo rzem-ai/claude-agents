@@ -41,6 +41,21 @@ mkdir -p "$TMP/other/docs/specs"
 mkdir -p "$TMP/redirected/docs"
 ln -sfn "$PROJECT/src" "$TMP/redirected/docs/specs"
 
+# A real repository and a real linked worktree, because the coder guard below
+# asks git which of the two it is in rather than trusting a path shape.
+MAINCO="$TMP/repo-main"
+WT="$TMP/repo-wt"
+if command -v git >/dev/null 2>&1; then
+    mkdir -p "$MAINCO"
+    git -C "$MAINCO" init -q . 2>/dev/null
+    git -C "$MAINCO" config user.email t@t
+    git -C "$MAINCO" config user.name t
+    printf 'x\n' > "$MAINCO/a.txt"
+    git -C "$MAINCO" add -A 2>/dev/null
+    git -C "$MAINCO" commit -qm base 2>/dev/null
+    git -C "$MAINCO" worktree add -q "$WT" -b wt-branch HEAD 2>/dev/null
+fi
+
 PASSED=0
 FAILED=0
 
@@ -86,6 +101,20 @@ deny_bash_saying() {
     # $1 agent, $2 command, $3 substring the reason must contain
     local reason
     reason=$(deny_reason "$(bash_event "$1" "$2" "$PROJECT")" "$PROJECT")
+    if printf '%s' "$reason" | grep -qF -- "$3"; then
+        PASSED=$((PASSED + 1))
+        [ "$VERBOSE" -eq 1 ] && printf '  ok    deny  %s: %s\n' "$1" "$2"
+    else
+        FAILED=$((FAILED + 1))
+        printf '  FAIL  %s: %s\n        denied, but not for "%s": %s\n' "$1" "$2" "$3" "${reason:0:110}"
+    fi
+    return 0
+}
+
+deny_bash_saying_in() {
+    # $1 agent, $2 command, $3 substring the reason must contain, $4 cwd
+    local reason
+    reason=$(deny_reason "$(bash_event "$1" "$2" "$4")" "$4")
     if printf '%s' "$reason" | grep -qF -- "$3"; then
         PASSED=$((PASSED + 1))
         [ "$VERBOSE" -eq 1 ] && printf '  ok    deny  %s: %s\n' "$1" "$2"
@@ -305,6 +334,42 @@ deny_bash_saying fleet-steward 'git --work-tree /tmp/x reset --hard' 'git reset'
 deny_bash_saying fleet-steward 'git --namespace ns merge main' 'git merge'
 deny_bash_saying fleet-steward 'git --config-env k=V merge main' 'git merge'
 deny_bash_saying fleet-steward 'git -c user.name=x rebase main' 'git rebase'
+
+printf '\ncoder writes in its own worktree, or it does not write\n'
+
+# The fix loop can only ever DETECT that a fix landed in the main checkout,
+# because coder has already branched and committed by the time anything
+# verifies. This is the one place that can prevent it: coder carries an
+# agentType, so this hook governs its Bash calls, and git itself can say which
+# checkout a directory belongs to. Its own body already requires the check
+# ("Confirm you are in your worktree ... before you touch anything"); this is
+# that invariant with something behind it.
+if [ -d "$WT" ]; then
+    allow_bash coder 'git commit -m "fix the thing"' "$WT"
+    allow_bash coder 'git switch -c fix/r1 HEAD' "$WT"
+    allow_bash coder 'git add -A && git commit -m x' "$WT"
+
+    deny_bash_saying_in coder 'git commit -m "fix the thing"' 'not a linked worktree' "$MAINCO"
+    deny_bash_saying_in coder 'git switch -c fix/r1 HEAD' 'not a linked worktree' "$MAINCO"
+    deny_bash_saying_in coder 'git reset --hard HEAD~1' 'not a linked worktree' "$MAINCO"
+
+    # Reading is always fine; the invariant is about writing to a shared branch.
+    allow_bash coder 'git log --oneline -5' "$MAINCO"
+    allow_bash coder 'git diff HEAD' "$MAINCO"
+    allow_bash coder 'git status' "$MAINCO"
+
+    # An explicit -C targets that directory, so that is the one to ask about.
+    deny_bash_saying_in coder "git -C $MAINCO commit -m x" 'not a linked worktree' "$WT"
+    allow_bash coder "git -C $WT commit -m x" "$MAINCO"
+
+    # Cannot tell is not permission. A directory that is not a repository at all
+    # cannot be a worktree, and a git write there would fail anyway.
+    deny_bash_saying_in coder 'git commit -m x' 'not a git repository' "$TMP"
+
+    # Everything else coder does is untouched.
+    allow_bash coder 'npm test' "$MAINCO"
+    allow_bash coder 'python3 -m pytest' "$MAINCO"
+fi
 
 printf '\n%s passed, %s failed\n' "$PASSED" "$FAILED"
 if [ "$FAILED" -ne 0 ]; then
