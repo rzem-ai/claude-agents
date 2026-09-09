@@ -9,6 +9,106 @@ The version in `.claude-plugin/plugin.json` is load-bearing. Clients keep the
 cached copy of the plugin until that number changes, so every change that should
 reach a machine needs a version bump and an entry below.
 
+## [0.5.0] - 2026-09-09
+
+The fix round for the 9 September fleet review
+(`docs/2026-09-09-fleet-review-resolution.md`). Every finding in that document
+was reproduced before it was fixed, and the three that rested on the published
+hook docs were settled against the zod schemas in the shipped CLI binary, since
+the docs pages truncate before the event sections.
+
+### Fixed
+
+- **Three hooks read fields the runtime does not send.** `TaskCompleted` sends
+  `task_subject`; `task_title` and `task_name` appear nowhere in the CLI binary.
+  `SubagentStart` sends `agent_id` and `agent_type` and no spawn prompt under
+  any name. `SubagentStop` sends no `status`, and `completion_reason` is not in
+  the binary at all. A hook reading a missing field does not fail loudly - it
+  takes its fallback forever, and the fallback looked like normal operation.
+  Consequently the `[board:<id>]` marker had never resolved, the `Board-Item:`
+  binding had never fired, and no failed or cancelled subagent had ever reached
+  Blocked. `hooks/README.md` item 15 records the schemas and how to re-derive
+  them after a CLI upgrade.
+- **Any completed task could close an issue.** `TaskCompleted` fell back to the
+  item most recently picked up in the session, so an issue with twenty
+  execution tasks went to Done on the first, and a session holding two items
+  closed whichever was touched last. Both fallbacks are gone: only an explicit
+  `[board:<page-id>]` marker moves a card. Moving nothing is the better failure,
+  because a card that silently reads Done is taken as finished work.
+- **The test gate could approve the wrong checkout.** It preferred
+  `CLAUDE_PROJECT_DIR` over the hook's `cwd`, and `coder` runs with
+  `isolation: worktree`, so a passing parent could approve failing worktree
+  code. It tests the `cwd` that emitted the event and refuses when there is no
+  usable checkout. A `pass` marker is also no longer trusted when anything in
+  the tree is newer than it; a `fail` marker still blocks at any age, because
+  blocking on stale evidence is safe and approving on it is not.
+- **The scope hook admitted writes by read-only agents.** `strip_quoted` erased
+  both kinds of quote before the substitution check, but the shell only disarms
+  `$( )` inside single quotes, so `echo "$(touch x)"` was accepted. `sed` writes
+  with no redirection character at all and its script is normally quoted, so
+  `sed -n 'w /tmp/proof'` read as an ordinary `sed -n`. `reviewer` used a
+  denylist of build tools, which is why `touch` went through - a denylist of
+  ways to create a file cannot be finished - and is now an allowlist, which also
+  closes `cp`, `mv`, `tee`, `ln`, `install` and `python`. `fleet-steward`'s Bash
+  branch inspected only git verbs, so every ordinary shell write outside its
+  repo was accepted; redirection targets are now resolved and confined.
+- **Write destinations were barely checked.** `*/docs/specs/*` matched any
+  project's specs directory, `..` was collapsed without asking the filesystem,
+  and `ui-designer` and `tech-writer` had no write branch at all despite both
+  holding `Write`. `hooks/lib/check-write-scope.py` resolves symlinks and
+  anchors to the project.
+- **A research claim could be verified by silence.** One refutation plus two
+  failed agent calls scored as a claim that stands. A claim now stands only on
+  two actual positives with nothing against, and is refuted only when every lens
+  reported and every one refuted.
+- **A typo'd stage skipped the approval gate.** Only the literal `'plan'` was
+  checked against spec approval, so `plna` planned from an unapproved spec and
+  reported itself as `stage: 'plan'`.
+- **The review loop re-read the same diff every round.** `coder` fixes in an
+  isolated worktree and `range` is assigned once, so fixes went somewhere the
+  next round never looked while the run burned its round cap.
+- **The eval runner could not fail, and could not say what it ran.** A stub
+  returning a valid handoff inside an `is_error` envelope and exiting 7 was
+  reported as "All gates passed". It also invoked a bare `--agent scout` with no
+  `--plugin-dir`, so a run proved nothing about the definitions in the checkout.
+- **`run-article` was documented and unreachable.** Four agents are told to work
+  the skill; none listed it under `skills:`. The `ui-designer` eval gate also
+  rejected every `docs/` path, including the commissioned article itself.
+- **`install-home.sh` clobbered live settings.** It copied `settings.json` over
+  the existing file, deleting every key the repository does not know about along
+  with any hand-added deny rule. It merges now.
+
+### Changed
+
+- `review-round` is one round per invocation. Blocking findings come back as a
+  `fixRequest` for the lead to run, and the workflow is invoked again against
+  the fix commit. Carrying fixes back automatically needs a structured result
+  contract that has to be built and tested, not prompted.
+- Board binding is one item per session, via `CLAUDE_AGENTS_BOARD_PAGE_ID`. This
+  is narrower than the `Board-Item:` convention it replaces and is not the same
+  thing; the line is still emitted as context for the agent, but it is not a
+  hook transport and never was.
+- `spec-writer`'s interview invariant now forbids presenting a spec as
+  interviewed when it is not, rather than forbidding a pre-interview draft. The
+  `spec-to-plan` strawman is deliberate: a wrong draft is faster to correct than
+  a blank page is to fill.
+- `fleet-steward`'s invariant says what the hook enforces and what it does not.
+  A program run through Bash writes wherever the process can, and no
+  shell-level check sees inside it.
+
+### Added
+
+- `evals/lib/check-all.sh` runs every deterministic check in one command: shell
+  and workflow syntax, the 28 handoff fixtures, the glossary generator, and four
+  new suites - `board-hook-contract.sh`, `scope-hook-contract.sh`,
+  `workflow-logic.mjs` and `runner-gate.sh`. 122 checks. Nothing in it calls a
+  model, opens a socket or touches Notion, so it is safe as a pre-commit and CI
+  gate.
+- Each eval run writes `definition-provenance.json`: commit, branch, dirty flag
+  and a sha256 per agent and skill file. A baseline is only evidence if you can
+  say later which definitions produced it.
+- `scripts/merge-settings.py`, the settings merge policy.
+
 ## [0.4.0] - 2026-09-09
 
 ### Changed
@@ -170,7 +270,8 @@ Initial scaffolding. The repo became a plugin marketplace with one plugin in it.
   `templates/rules/` and `home/` in the repo.
 - This changelog.
 
-[Unreleased]: https://github.com/rzem-ai/claude-agents/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/rzem-ai/claude-agents/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/rzem-ai/claude-agents/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/rzem-ai/claude-agents/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/rzem-ai/claude-agents/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/rzem-ai/claude-agents/compare/v0.1.0...v0.2.0

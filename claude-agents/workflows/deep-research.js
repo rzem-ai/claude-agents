@@ -257,13 +257,40 @@ async function crossCheck(results, roundTag) {
     ),
   )
 
+  // A lens that returned nothing is a check that did not happen, and a check
+  // that did not happen is not a vote in favour. The old counts said "refuted
+  // unless two lenses refute it, unverifiable unless two cannot verify it,
+  // otherwise it stands", so one refutation alongside two failed agent calls
+  // scored {stands: 1} - a claim promoted to verified by the absence of
+  // evidence. `null` is a documented result for a stopped or failed call, so
+  // this was reachable on any flaky run, not just a contrived one.
+  //
+  // The rule now: a claim stands only if at least two lenses actually reported
+  // and none of them refuted it. Anything mixed is unverified and carries its
+  // reasons forward, because a contradiction that vanishes from the record is
+  // worse than one that is merely unresolved. Unanimity is deliberately not
+  // required - with three lenses that would let a single failed call sink every
+  // claim in the run, which trades one wrong answer for a useless one.
   for (const j of judged.filter(Boolean)) {
     const votes = j.votes
-    const no = votes.filter((v) => v.verdict === 'refuted').length
-    const cannot = votes.filter((v) => v.verdict === 'unverifiable').length
-    if (no >= 2) refuted.push({ ...j.claim, why: votes.filter((v) => v.verdict === 'refuted').map((v) => v.why) })
-    else if (cannot >= 2 || !votes.length) unverifiable.push({ ...j.claim, why: votes.map((v) => v.why) })
-    else stands.push({ ...j.claim, checkedBy: votes.length })
+    const negatives = votes.filter((v) => v.verdict === 'refuted')
+    const positives = votes.filter((v) => v.verdict === 'stands')
+    const missing = LENSES.length - votes.length
+    const why = votes.map((v) => v.verdict + ': ' + v.why)
+    if (missing > 0) why.push(missing + ' of ' + LENSES.length + ' verification lenses returned no result.')
+
+    // Refutation needs every lens to have reported and every one to refute.
+    // Declaring a claim refuted on one refutation and two failed calls is the
+    // same mistake as declaring it verified on them, pointed the other way -
+    // and refuted is the cheap verdict here, since the lens prompt tells each
+    // check to default to refuted when it is uncertain.
+    if (negatives.length === LENSES.length) {
+      refuted.push({ ...j.claim, why, checks: votes })
+    } else if (negatives.length === 0 && positives.length >= 2) {
+      stands.push({ ...j.claim, checkedBy: positives.length, checks: votes })
+    } else {
+      unverifiable.push({ ...j.claim, why, checks: votes })
+    }
   }
   return fresh.length
 }

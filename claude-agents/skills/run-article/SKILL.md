@@ -1,6 +1,6 @@
 ---
 name: run-article
-description: How to write a run article - the readable account of one run that the handoff cannot carry, covering what was tried and abandoned, what the constraint turned out to be, what surprised you and what to do differently. Articles live in the repo at docs/runs/, git-versioned beside the code they describe, and the path goes in a Done bullet so it reaches the board card. Discovered rather than preloaded, because most runs never write one.
+description: How to write a run article - the readable account of one run that the handoff cannot carry, covering what was tried and abandoned, what the constraint turned out to be, what surprised you and what to do differently. Articles live in the repo at docs/runs/, git-versioned beside the code they describe, and the path goes in a Done bullet so it reaches the board card. Preloaded into coder, reviewer, researcher and ui-designer, and used only when the spawn prompt asks for one; writable agents save under docs/runs/ and read-only agents return the article above their handoff.
 when_to_use: Use when a spawn prompt asks for a run article, a write-up, a narrative account, an essay or a post-mortem of the work you are about to do or have just done, in those words or near them, and when Alex asks for one after the fact. The ask comes from the lead at spawn time, so do not write one on your own judgement, and never write one instead of the handoff.
 ---
 

@@ -207,6 +207,7 @@ claude-agents/
     workflows/                        # spec-to-plan, review-round, deep-research variants
     CHANGELOG.md
   evals/                              # one smoke eval per agent, run by claude -p in CI
+  evals/lib/check-all.sh              # every deterministic check; no model, no network, no Notion
   docs/agent-contract.md              # what every agent body conforms to; the migration checklist checks against it
   docs/runs/                          # run articles, one per substantial run, per the run-article skill
   home/                               # user-scope files: settings.json, CLAUDE.md, rules/, local agent copies

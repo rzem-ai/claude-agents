@@ -52,6 +52,16 @@ if (!issue) {
 const specPath = 'docs/specs/' + issue + '.md'
 const planPath = 'docs/plans/' + issue + '.md'
 const requested = input.stage || 'auto'
+// Reject an unknown stage before anything spawns. Only `plan` was ever checked
+// against spec approval, so a stage that was neither `plan` nor `spec` - a typo
+// like `plna` - skipped the approval guard, skipped the spec branch, and fell
+// straight through into plan generation. It planned from an unapproved or
+// absent spec and then reported itself as `stage: 'plan'`.
+if (!['auto', 'spec', 'plan'].includes(requested)) {
+  throw new Error(
+    'stage must be auto, spec or plan; got ' + JSON.stringify(requested) + '.',
+  )
+}
 const context = input.brief || input.context || '(none supplied - the board item is the brief)'
 
 // --- Gate check ------------------------------------------------------------
@@ -188,6 +198,7 @@ if (stage === 'spec') {
   const draft = await agent(
     [
       'Write ' + specPath + ' as a draft for Alex to edit. Write nowhere else, and never under docs/plans/.',
+      'This is a strawman written before the interview, not after one. That is deliberate: Alex reacts to a wrong draft faster than he fills a blank page. It means the draft must read as a strawman - status draft, every supplied line marked, every question you would have asked left standing in the file. Do not write a handoff that implies the interview happened.',
       'Sections: problem, non-goals, acceptance criteria, open questions.',
       'Put a status line reading draft in the first fifteen lines. Alex changes it to approved once he has edited the file, and nothing downstream runs until he does.',
       'Every question below that Alex has not answered is an open question in the file, not a decision you made for him.',

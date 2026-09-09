@@ -25,22 +25,43 @@ which both agents preload.
 
 ### The convention
 
-**The lead puts a `Board-Item:` line in the spawn prompt of every subagent it
-spawns against a board item.** One line, anywhere in the prompt:
+> **This convention does not work, and never did.** It depended on
+> `SubagentStart` carrying the spawn prompt in an `instructions` field. The
+> event carries the common fields plus `agent_id` and `agent_type` and nothing
+> else - see item 15 below - so the `Board-Item:` line has never once been read.
+> It is described here because the lead and the `board` skill still emit it and
+> because it is the shape to restore once there is a supported way to correlate
+> a spawn with the subagent it produced. Do not rely on it today.
 
-```
-Board-Item: 24f1a3b9c1d24e6f8a0b1c2d3e4f5061
+**A board session is bound to one item at launch**, by environment variable:
+
+```sh
+CLAUDE_AGENTS_BOARD_PAGE_ID=24f1a3b9c1d24e6f8a0b1c2d3e4f5061 \
+  claude --agent claude-agents:lead
 ```
 
 The value is a Notion page id, dashed or undashed, or the page URL copied
-straight out of Notion. `SubagentStart` reads it from the `instructions` field,
-normalises it to a dashed UUID, and records it in a state file keyed by
-`session_id` and `agent_id`. `SubagentStop` reads that file back. Nothing else
-in the chain has to know anything.
+straight out of Notion. `SubagentStart` normalises it to a dashed UUID and
+records it in a state file keyed by `session_id` and `agent_id`; `SubagentStop`
+reads that file back.
 
-A spawn with no `Board-Item:` line moves no column, logs one line saying so, and
-exits 0. That is the correct behaviour for the `scout` you spawned to answer a
-question: most spawns are not board items and should not touch the board.
+This is narrower than the convention it replaces, and it should not be sold as
+the same thing: all delegated work in that session belongs to that one item, so
+unrelated work starts in an unbound session. An unbound session moves no column,
+logs one line saying so, and exits 0 - which is also the right behaviour for the
+`scout` you spawned to answer a question. Most spawns are not board items.
+
+Restoring per-agent binding needs a supported correlation between the Agent
+tool's invocation and the subagent identity in the event. It must not be done
+with a shared "latest prompt" file: two agents spawned together would race for
+the same line, which is the same class of bug as the last-item guess that used
+to close the wrong card.
+
+**Completion is separate from binding.** A session binding says which item is in
+flight; it never says that a given task finished it. Only a task whose
+`task_subject` carries `[board:<page-id>]` moves an item to Done, and that
+marker belongs on the one task representing completion of the whole tracked
+issue - never on an ordinary execution task, however much it contributed.
 
 ### What must be wired up
 
@@ -62,26 +83,32 @@ question: most spawns are not board items and should not touch the board.
 
 `SubagentStart`:
 
-1. `Board-Item:` in the spawn prompt.
-2. `CLAUDE_AGENTS_BOARD_PAGE_ID` in the environment. Set this for a session that
-   is working one issue end to end and you would rather not repeat yourself.
+1. `Board-Item:` in the spawn prompt. **Unreachable** - the event carries no
+   spawn prompt. Kept so that a runtime which starts sending one works without
+   another change here.
+2. `CLAUDE_AGENTS_BOARD_PAGE_ID` in the environment. In practice this is the
+   only one.
 3. Nothing. No column moves.
 
 `SubagentStop`: the state file for this `agent_id`, then the environment
 variable, then nothing.
 
-`TaskCompleted` has no `agent_id`, so it resolves differently:
+`TaskCompleted` has no `agent_id`, and it answers a different question - not
+"which item is in flight?" but "does this task finish that issue?":
 
-1. A `[board:<page-id>]` marker anywhere in the task title.
-2. The item most recently picked up in this session, from
-   `sessions/<session_id>/last-item`.
-3. `CLAUDE_AGENTS_BOARD_PAGE_ID`.
-4. Nothing. The test gate still runs; no column moves.
+1. A `[board:<page-id>]` marker anywhere in `task_subject`.
+2. Nothing. The test gate still runs; no column moves.
 
-Fallback 2 is the one to watch. A session juggling two board items at once will
-attribute a completed task to whichever was picked up last. If you work two
-items in one session, put the `[board:...]` marker in the task title and the
-guess never happens.
+There is deliberately no fallback. There used to be two - the item most recently
+picked up in the session, then `CLAUDE_AGENTS_BOARD_PAGE_ID` - and both answered
+the wrong question. An issue with twenty execution tasks reached Done on the
+first one, and a session holding two items closed whichever was touched last.
+Because the hook was also reading a field name that does not exist, the marker
+never matched and *every* completion went through that guess.
+
+Moving nothing is the better failure. A card that silently reads Done is taken
+as finished work; a card that has not moved is visibly not finished. Mark the
+one task that represents completing the whole issue, and only that one.
 
 ### State files
 
@@ -430,8 +457,38 @@ anything into the product repo". The same read-only `git` allowlist. Installs ar
 matched on the verb rather than the command, because "use Bash only to build,
 serve or screenshot a prototype" is the job: `npx serve` and `npm run build` are
 allowed, `npm install`, `pnpm add`, `pip install`, `cargo add`, `go get` and
-`brew install` are not. Write tools are left alone - `Write` is how a prototype
-gets made, and `Edit` is already off its frontmatter.
+`brew install` are not.
+
+Write destinations go through `lib/check-write-scope.py`, which runs before the
+role dispatch for the four roles that hold `Write`. It exists because a glob on
+a lexically normalised path answered the wrong question three times over:
+`*/docs/specs/*` matched *any* project's specs directory, `..` was collapsed
+without asking the filesystem so a symlinked `docs/specs` resolved to itself,
+and `ui-designer` and `tech-writer` had no write branch at all - `Edit` was off
+their frontmatter, but `Write` replaces a source file just as completely. The
+checker resolves symlinks on the deepest existing ancestor and anchors to this
+project:
+
+| Role | May write |
+|---|---|
+| `spec-writer` | `<project>/docs/specs/**` |
+| `tech-writer` | `<project>/docs/**` (`.md`, `.mdx`, `.txt`) and a Markdown file at the project root |
+| `ui-designer` | `<project>/prototypes/**` and `<project>/docs/runs/**` |
+| `fleet-steward` | anywhere inside `$CLAUDE_AGENTS_REPO` |
+
+`docs/runs/**` is open to `ui-designer` on purpose: a commissioned run article
+is an authorised deliverable, and a gate that rejected every `docs/` write
+rejected that too. Set `CLAUDE_AGENTS_OUTPUT_FILES` in the launching
+environment - never in agent-authored content - to narrow `tech-writer` or
+`ui-designer` to an exact list of commissioned files:
+
+```json
+{"tech-writer": ["README.md", "docs/adr/001-session-refresh.md"]}
+```
+
+It only narrows. Listing a path outside the role's default scope does not grant
+it, and two agents needing different lists need a binding keyed by agent
+identity rather than one shared, widened list.
 
 This hook **fails open**. Bad input, a missing `jq`, an unexpected error: it logs
 and allows. Be clear about what that costs. For the per-agent half there is no
@@ -520,7 +577,7 @@ jq -n '{session_id:"s1",agent_id:"a1",agent_type:"coder",status:"success",
 
 # 4. the test gate, failing: Blocked, then exit 2
 CLAUDE_AGENTS_TEST_COMMAND='exit 1' jq -n '{session_id:"s1",cwd:"/tmp",task_id:"t1",
-        task_title:"Wire it [board:24f1a3b9c1d24e6f8a0b1c2d3e4f5061]"}' > /tmp/ca/in.json
+        task_subject:"Wire it [board:24f1a3b9c1d24e6f8a0b1c2d3e4f5061]"}' > /tmp/ca/in.json
 CLAUDE_AGENTS_TEST_COMMAND='exit 1' ./board-task-completed.sh < /tmp/ca/in.json; echo "exit $?"
 
 # 5. scoping: a deny prints JSON, an allow prints nothing
@@ -614,12 +671,41 @@ layer had to make on its own:
     and the `NOTION_COMMENT_HARD_MAX` clamp. Notion documents a per-object and a
     per-array limit but nothing specific to comments, so where to cut is this
     layer's choice; see "Comment length" above.
-15. **Field-name defensiveness.** The brief for this work gives `SubagentStop` a
-    `status` field of `success`, `failure` or `cancelled` and `TaskCompleted` a
-    `task_title`. The published example blocks on
-    `https://code.claude.com/docs/en/hooks` spell these `completion_reason`
-    (`success`, `error`, `user_interrupt`) and `task_name`. Rather than pick
-    one, the hooks read `.status // .completion_reason` and
-    `.task_title // .task_name`, and normalise `error` to failure and
-    `user_interrupt` to cancelled. **Confirm which is real against a live hook
-    input and delete the loser**, because carrying both hides a rename.
+15. **Field names - settled, September 2026.** This entry used to say the brief
+    and the published examples disagreed, that the hooks read both spellings,
+    and that someone should confirm which was real. Carrying both did not hedge
+    the risk; it hid that *neither* was real.
+
+    The docs pages truncate before the event sections, so the answer came from
+    the zod schemas in the shipped CLI binary:
+
+    | Event | Fields |
+    |---|---|
+    | `TaskCompleted` | `task_id`, `task_subject`, `task_description?`, `teammate_name?`, `team_name?` |
+    | `SubagentStart` | the common fields, `agent_id`, `agent_type` |
+    | `SubagentStop` | `stop_hook_active`, `agent_id`, `agent_transcript_path`, `agent_type`, `last_assistant_message?`, `background_tasks?` |
+
+    `task_title` and `task_name` appear **nowhere** in the binary, and neither
+    does `completion_reason`. Three consequences, all of which had been running
+    silently:
+
+    - `board-task-completed.sh` never resolved a `[board:<id>]` marker, so every
+      completion fell through to the last-item guess. It reads `task_subject`
+      now, and the guess is gone (see "Which board item").
+    - `board-subagent-start.sh` had no spawn prompt to read, so the
+      `Board-Item:` binding never fired once. `CLAUDE_AGENTS_BOARD_PAGE_ID` is
+      the supported binding.
+    - `board-subagent-stop.sh` has no `status` to key on, so its
+      Blocked-on-failure path is unreachable. The read is kept for forward
+      compatibility, but **do not describe failure or cancellation transitions
+      as working** - the route to Blocked that does work is a `Blocker:` line in
+      the handoff.
+
+    To re-derive this after a CLI upgrade:
+
+    ```sh
+    strings -a "$(readlink -f "$(command -v claude)")" \
+      | grep -o 'hook_event_name:"TaskCompleted".\{0,200\}'
+    ```
+
+    `evals/lib/board-hook-contract.sh` pins all of it.

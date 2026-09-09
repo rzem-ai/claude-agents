@@ -211,8 +211,18 @@ session_id="$(printf '%s' "$input" | jq -r '.session_id // ""')"
 agent_id="$(printf '%s' "$input" | jq -r '.agent_id // ""')"
 agent_type="$(printf '%s' "$input" | jq -r '.agent_type // ""')"
 message="$(printf '%s' "$input" | jq -r '.last_assistant_message // ""')"
-# `status` is the documented field. `completion_reason` is read as a fallback
-# because the published example block spells it that way; see README.
+# Neither of these fields exists. The SubagentStop schema in the shipped CLI is
+# stop_hook_active, agent_id, agent_transcript_path, agent_type,
+# last_assistant_message and background_tasks; `status` is not in it and
+# `completion_reason` appears nowhere in the binary at all. So the branch below
+# has only ever taken its empty case, and no failed or cancelled subagent has
+# ever moved an item to Blocked.
+#
+# They are still read, because the read is free and the day the runtime does
+# emit a status this hook starts working. What has changed is the claim: the
+# Blocked-on-failure path is aspirational, not live, and the working route to
+# Blocked is a `Blocker:` line in the handoff, which is handled further down.
+# Do not describe failure transitions as verified until a real event shows one.
 status_raw="$(printf '%s' "$input" | jq -r '.status // .completion_reason // ""')"
 
 case "$(printf '%s' "$status_raw" | tr 'A-Z' 'a-z')" in
@@ -220,7 +230,7 @@ case "$(printf '%s' "$status_raw" | tr 'A-Z' 'a-z')" in
   failure|failed|error)            status=failure ;;
   cancelled|canceled|user_interrupt|interrupted) status=cancelled ;;
   "") status=success
-      board_log "$HOOK" "no status field on the hook input; treating the run as a success" ;;
+      board_log "$HOOK" "the runtime sends no status field on SubagentStop, so failure and cancellation cannot be detected here; treating the run as a success and relying on the handoff's Blocker: lines" ;;
   *)  status=success
       board_log "$HOOK" "unrecognised status \"$status_raw\"; treating the run as a success" ;;
 esac

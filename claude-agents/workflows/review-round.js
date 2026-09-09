@@ -1,13 +1,13 @@
 export const meta = {
   name: 'review-round',
-  description: 'Review a diff in numbered rounds: a cheap mechanical pass, then the Opus reviewer verdict, then fixes by coder, then re-review',
+  description:
+    'Review one numbered round of a diff: a cheap mechanical pass, then the Opus reviewer verdict, then a fix handoff if anything blocks',
   whenToUse:
-    'After a coder finishes a plan phase and before anything merges. One run does as many rounds as it takes, up to the cap.',
+    'After a coder finishes a plan phase and before anything merges. One run is one round: it reviews and reports. Blocking findings come back as a fix handoff for the lead to run, then invoke this again with { round: 2 } against the fix commit.',
   phases: [
     { title: 'Scope the diff', detail: 'what changed, how much, and whether it touches anything sensitive' },
     { title: 'Round 1 mechanical', detail: 'lint, types, tests and obvious smells, in parallel', model: 'sonnet' },
     { title: 'Round 1 verdict', detail: 'the reviewer verdict and ranked findings' },
-    { title: 'Round 1 fixes', detail: 'coder fixes the blocking findings; later rounds add their own groups' },
   ],
 }
 
@@ -35,6 +35,14 @@ export const meta = {
 //
 //   /claude-agents:review-round { "base": "main", "head": "HEAD", "issue": "session-refresh" }
 //   /claude-agents:review-round { "range": "main...feature/refresh", "maxRounds": 2 }
+//   /claude-agents:review-round { "range": "main...abc1234", "round": 2 }
+//
+// One invocation is one round. If the verdict has blocking findings the run
+// stops with a fixRequest rather than commissioning coder itself: coder fixes in
+// an isolated worktree, and this script has no supported way to learn that
+// worktree's path or commit, so a fix round used to vanish and the next round
+// re-read the identical diff. The lead runs the fix, resolves it to a commit,
+// and invokes this again against that commit with the next round number.
 // ---------------------------------------------------------------------------
 
 const SCOUT = 'scout'
@@ -168,11 +176,23 @@ const VERDICT_SCHEMA = {
 // --- The rounds ------------------------------------------------------------
 
 const rounds = []
-let round = input.round || 1
+// `round` is which numbered round this invocation is, not a counter this script
+// advances. One invocation is one round: it reviews, and if there are blocking
+// findings it hands the fix back. The lead runs the fix, then invokes this again
+// with { round: 2 } against the fix commit. That is why there is no loop here
+// any more - the previous one incremented `round` without ever re-pointing the
+// review at the fixed code, so every extra round re-read the same diff.
+const round = input.round || 1
 let stopped = 'clean'
 
-while (round <= maxRounds) {
+reviewPass: {
   const tag = 'Round ' + round
+
+  if (round > maxRounds) {
+    stopped = 'round cap'
+    log('Round ' + round + ' is past the cap of ' + maxRounds + '. This is not an approval.')
+    break reviewPass
+  }
 
   // A barrier is right here: the verdict stage needs every lane's findings in
   // hand, so that it can see what the mechanical pass already took.
@@ -250,7 +270,7 @@ while (round <= maxRounds) {
   if (!review) {
     stopped = 'reviewer returned nothing'
     log(tag + ': the reviewer returned nothing. Stopping rather than treating silence as approval.')
-    break
+    break reviewPass
   }
 
   const blocking = (review.findings || []).filter((f) => f.blocking)
@@ -258,26 +278,55 @@ while (round <= maxRounds) {
 
   if (!blocking.length) {
     stopped = 'clean'
-    break
-  }
-  if (round === maxRounds) {
-    stopped = 'round cap'
-    log(
-      'Stopping at the round cap of ' +
-        maxRounds +
-        ' with ' +
-        blocking.length +
-        ' blocking findings still open. This is not an approval.',
-    )
-    break
+    break reviewPass
   }
 
-  // One coder, not one per finding. Parallel coders would each fix in their own
-  // worktree and the fixes would not meet. Isolation is not set here either -
-  // the coder body already carries isolation: worktree, and a fresh worktree
-  // cut by this script could easily be cut from the wrong commit.
-  phase(tag + ' fixes')
-  const fixes = await agent(
+  // Stop here and hand the fix back to the lead.
+  //
+  // This used to commission coder directly, and the loop it created never
+  // closed. coder carries `isolation: worktree`, so its fixes land as commits
+  // in a worktree this script never learns the path of. Nothing recorded a fix
+  // HEAD, moved the reviewed ref, or integrated anything - `range` is a const
+  // assigned once, so round two re-read the original `main...feature/refresh`,
+  // found the identical findings, and ran to the round cap while the fixes sat
+  // in a directory nobody looked at again. The commit comment above worried
+  // about cutting a worktree from the wrong commit; the deeper problem was that
+  // the fixes had nowhere to come back to.
+  //
+  // Reviewing is a thing this workflow can do correctly. Getting a fix commit
+  // back from an isolated worktree, verifying it contains the requested change
+  // and re-pointing every later reader at it is a structured contract
+  // (worktreePath, baseCommit, headCommit, testResults, unresolvedFindings)
+  // that has to be built and tested, not a prompt. Until it exists, stopping
+  // with an explicit handoff loses nothing: the findings are the deliverable,
+  // and a run that silently re-reviewed stale code was worse than one that
+  // stops.
+  //
+  // It also removes a second problem: this path could spawn coder with no
+  // approved plan, which is not a thing the fleet permits anywhere else.
+  rounds[rounds.length - 1].fixRequest = {
+    range,
+    plan: intentPath,
+    findings: blocking,
+    requiresApprovedPlan: true,
+  }
+  stopped = 'fix handoff required'
+  log(
+    tag +
+      ': ' +
+      blocking.length +
+      ' blocking finding(s) need a fix run and a new reviewed commit. This workflow reviews; it does not carry fixes back.',
+  )
+  break reviewPass
+}
+
+// Kept for the structured fix contract described above: this is the prompt the
+// fix run needs, and it is the thing to move back into the loop once a coder
+// result can be resolved to a commit. It is deliberately unreachable rather
+// than deleted, so the wording does not have to be reinvented.
+// eslint-disable-next-line no-unused-vars
+async function commissionFixes({ tag, range, intentPath, blocking, review }) {
+  return await agent(
     [
       'Fix the blocking findings from ' + tag + ' of the review of ' + range + '. Fix these and nothing else.',
       intentPath ? 'The plan this implements is at ' + intentPath + '.' : '',
@@ -292,15 +341,6 @@ while (round <= maxRounds) {
       .join('\n\n'),
     { agentType: CODER, phase: tag + ' fixes', label: tag + ' fixes' },
   )
-
-  rounds[rounds.length - 1].fixes = fixes
-  if (!fixes) {
-    stopped = 'fix round returned nothing'
-    log(tag + ': the fix round returned nothing. Stopping.')
-    break
-  }
-
-  round += 1
 }
 
 const last = rounds[rounds.length - 1] || {}
@@ -329,8 +369,8 @@ return {
   })),
   nextStep:
     stopped === 'clean'
-      ? 'No blocking findings. The follow-ups above are Propose item: lines for the lead to file, not merge blockers.'
-      : 'Blocking findings remain after ' +
-        rounds.length +
-        ' rounds. Re-run with a higher maxRounds, or take the remaining findings to Alex as Blocker: lines.',
+      ? 'No blocking findings. Read the unverified checks and follow-ups above before deciding whether to merge; they are Propose item: lines for the lead to file, not merge blockers.'
+      : stopped === 'fix handoff required'
+        ? 'Confirm the approved plan, resolve the reviewed head to a commit, and run coder from that commit. Record the resulting worktree path and commit, check the commit actually contains the requested changes, then run this workflow again against that commit in that checkout. A coder saying it committed the fixes is not a review target, and merging just to make another review possible is not an option.'
+        : 'The review is incomplete. Read the stop reason above and resolve it; this run is not an approval.',
 }

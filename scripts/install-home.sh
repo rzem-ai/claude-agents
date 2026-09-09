@@ -297,6 +297,56 @@ backup_file() {
     BACKUP_USED=1
 }
 
+install_settings() {
+    # settings.json is merged, never copied. The live file carries machine state
+    # the repository has never heard of - model, enabled plugins, statusLine, a
+    # deny rule added by hand - and a copy deletes all of it. See
+    # scripts/merge-settings.py for the merge policy and what it deliberately
+    # will not do (it never removes a managed entry that the repo has dropped).
+    local src="$1" rel="$2" dest="$CLAUDE_DIR/$2" tmp staged
+    command -v python3 >/dev/null 2>&1 || die 'python3 is required to merge settings.json'
+    if [ -L "$dest" ]; then
+        die "'$rel' is a symlink; refusing to merge into it. Replace it with a real file first."
+    fi
+
+    tmp=$(mktemp "${TMPDIR:-/tmp}/fleet-settings.XXXXXX") || die 'cannot create a temporary file for the settings merge'
+    chmod 0600 "$tmp"
+    if ! python3 "$REPO_ROOT/scripts/merge-settings.py" "$dest" "$src" "$tmp"; then
+        rm -f "$tmp"
+        die "merging '$rel' failed; the existing file has not been touched"
+    fi
+
+    if [ -f "$dest" ] && cmp -s "$tmp" "$dest"; then
+        rm -f "$tmp"
+        N_UNCHANGED=$((N_UNCHANGED + 1))
+        return 0
+    fi
+
+    if [ -e "$dest" ]; then
+        backup_file "$dest" "$rel"
+        N_UPDATED=$((N_UPDATED + 1))
+    else
+        N_CREATED=$((N_CREATED + 1))
+    fi
+
+    if [ "$DRY_RUN" -eq 1 ]; then
+        info "would merge    $rel (unrelated settings preserved)"
+        rm -f "$tmp"
+        return 0
+    fi
+
+    mkdir -p "$(dirname "$dest")"
+    # Stage beside the destination so the final rename stays on one filesystem.
+    staged=$(mktemp "$(dirname "$dest")/.fleet-settings.XXXXXX") || {
+        rm -f "$tmp"; die 'cannot stage the merged settings'; }
+    if ! cp "$tmp" "$staged" || ! chmod 0644 "$staged" || ! mv "$staged" "$dest"; then
+        rm -f "$tmp" "$staged"
+        die 'cannot install the merged settings'
+    fi
+    rm -f "$tmp"
+    info "merged         $rel"
+}
+
 install_one() {
     # $1 source path, $2 relative path under ~/.claude
     local src="$1" rel="$2" dest mode
@@ -306,6 +356,11 @@ install_one() {
         warn "refusing to install '$rel': that path is per-machine state and is never touched."
         N_SKIPPED=$((N_SKIPPED + 1))
         return 0
+    fi
+
+    if [ "$rel" = 'settings.json' ]; then
+        install_settings "$src" "$rel"
+        return
     fi
 
     if [ -x "$src" ]; then mode=0755; else mode=0644; fi
