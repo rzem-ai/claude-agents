@@ -70,6 +70,35 @@ replaced the message" from "the hook never fired".
   `StructuredOutput` block is a run that owed no handoff and passes, a final
   `text` block is recovered and validated like any other, and a transcript it
   cannot read passes and says so. Both shapes were read off real transcripts.
+- **The two parsers now agree about which word is the command, by
+  construction.** `leading_token` stripped `VAR=val` to find `npm`, while
+  `sub_verb` dropped position one - which *was* the assignment - and returned
+  `npm` as the verb, so `NODE_ENV=production npm install react` walked past the
+  install ban on that disagreement alone. Both now start from `command_words`,
+  which also makes shell wrappers transparent: `command git merge`,
+  `env GIT_DIR=/x git merge` and `sudo git reset` are the command that follows
+  them, as they are to the shell. A closed list of wrappers, because it costs no
+  false denies - unlike treating any token matching a forbidden verb as one,
+  which would stall the one agent that runs unattended on `git log --grep=merge`.
+- **A line continuation stranded the verb.** Deleting the trailing backslash
+  without joining the lines left `merge main` as its own segment, whose leading
+  token was not git, so it was skipped entirely and
+  `git -C /tmp/wt \<newline>merge main` was allowed. Continuations are joined
+  out of the command before anything splits on newlines, and the rule that
+  merely deleted the backslash is gone rather than left looking load-bearing.
+- **The install ban looked in the wrong place for the verb.** It required the
+  install verb to be the first non-option word, so `npm --prefix /tmp/x install`
+  put a path where the verb was looked for. It now scans for the first word that
+  *is* an install verb, continuing past a non-verb only when a long option
+  preceded it - which keeps `npm run link` allowed and `npm -g install` denied.
+- **The transcript reader reported on a stale block.** It took `last` of a list
+  already filtered to StructuredOutput-or-text, so a final block that was
+  neither - an ordinary tool call with no closing prose - was invisible and it
+  reached back to an earlier text block and called that the final message. That
+  re-created the original failure: exit 2 telling an agent to re-emit a handoff,
+  quoting text that was never one. It now takes the last block and classifies it
+  after, which also makes the discriminator testable: nothing had proved that a
+  non-StructuredOutput tool call is not structured output.
 - **`sub_verb` replaces `git_verb`, which was three kinds of wrong.** Reading
   the verb by stripping to the literal text `"git"` broke two things the first
   attempt did not cover. `ui-designer`'s entire install ban - the only
@@ -163,10 +192,10 @@ replaced the message" from "the hook never fired".
   blocking, pinned from both sides. Mutation testing found this; three of the
   new cases turned out to survive having the behaviour they named deleted, and
   were replaced with ones that do not.
-- The suite runs 337 numbered checks across five suites, plus the 28 handoff
-  fixtures the two parity checks drive - 365 against 122 before this round.
-  `workflow-logic` 16 to 84, `scope-hook-contract` 60 to 98,
-  `board-hook-contract` 13 to 22, and `handoff-extractor-parity` new at 128.
+- The suite runs 365 numbered checks across five suites, plus the 28 handoff
+  fixtures the two parity checks drive - 393 against 122 before this round.
+  `workflow-logic` 16 to 84, `scope-hook-contract` 60 to 121,
+  `board-hook-contract` 13 to 27, and `handoff-extractor-parity` new at 128.
 - `hooks/README.md` records what the probe measured beyond item 15's table:
   `SubagentStop` also sends `cwd`, `effort`, `permission_mode`, `prompt_id`,
   `session_crons` and `transcript_path`; `SubagentStart` also sends `cwd`,

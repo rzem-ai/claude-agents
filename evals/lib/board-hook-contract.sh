@@ -287,6 +287,42 @@ mk_transcript "$TMP/t-none.jsonl" none
 run_hook board-subagent-stop.sh "$(stop_absent "$TMP/t-none.jsonl")"
 [ "$RC" -eq 0 ]; check stop-transcript-no-assistant-passes "a transcript with no assistant content decides nothing" $?
 
+# `last` was taken over a list already filtered to StructuredOutput-or-text, so
+# a final block that is neither - an ordinary tool call with no closing prose -
+# was invisible and the reader reached back to an EARLIER text block and called
+# it the final message. That re-created the original failure: exit 2, telling an
+# agent to re-emit a handoff, quoting text that was never one.
+printf '%s\n' \
+  '{"type":"assistant","message":{"content":[{"type":"text","text":"Let me check the config file."}]}}' \
+  '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"ls"}}]}}' \
+  > "$TMP/t-trailing-tool.jsonl"
+run_hook board-subagent-stop.sh "$(stop_absent "$TMP/t-trailing-tool.jsonl")"
+[ "$RC" -eq 0 ]; check stop-transcript-trailing-tool-passes "a transcript ending in a tool call is not a handoff to validate" $?
+log_has "ends in text"; [ $? -ne 0 ]; check stop-transcript-does-not-claim-text "and the hook does not claim it ended in text" $?
+
+# The discriminator has to discriminate: any tool_use last must not read as a
+# StructuredOutput one, or the load-bearing test of the whole fix proves nothing.
+printf '%s\n' \
+  '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"StructuredOutput","input":{"a":1}}]}}' \
+  '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Grep","input":{}}]}}' \
+  > "$TMP/t-tool-after-structured.jsonl"
+run_hook board-subagent-stop.sh "$(stop_absent "$TMP/t-tool-after-structured.jsonl")"
+log_has "StructuredOutput"; [ $? -ne 0 ]; check stop-transcript-tool-is-not-structured "a later ordinary tool call is not read as structured output" $?
+
+# Only assistant turns speak for the agent.
+printf '%s\n' \
+  '{"type":"assistant","message":{"content":[{"type":"text","text":"## Done\n- x\n\n## Not done\n- None\n\n## Unverified\n- None\n\n## Decisions needed\n- None"}]}}' \
+  '{"type":"user","message":{"content":[{"type":"text","text":"not the agent talking"}]}}' \
+  > "$TMP/t-user-last.jsonl"
+run_hook board-subagent-stop.sh "$(stop_absent "$TMP/t-user-last.jsonl")"
+[ "$RC" -eq 0 ]; check stop-transcript-ignores-user-turns "a user turn after the agent's does not become the handoff" $?
+
+# The `!= yes` hardening: a payload jq cannot read must not fall through and be
+# validated as an empty handoff.
+RC=0
+printf '' | BOARD_LOG_FILE="$TMP/log.$$" "$HOOKS/board-subagent-stop.sh" >"$TMP/out" 2>"$TMP/err" || RC=$?
+[ "$RC" -eq 0 ]; check stop-empty-stdin-does-not-block "empty stdin is not a malformed handoff" $?
+
 printf '\n%s passed, %s failed\n' "$PASSED" "$FAILED"
 if [ "$FAILED" -ne 0 ]; then
     printf 'A board hook is reading a field the runtime does not send, or moving a card without evidence.\n'

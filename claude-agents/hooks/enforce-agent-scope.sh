@@ -73,6 +73,11 @@ tool_name="$(printf '%s' "$input" | jq -r '.tool_name // ""')"
 cwd="$(printf '%s' "$input" | jq -r '.cwd // ""')"
 file_path="$(printf '%s' "$input" | jq -r '.tool_input.file_path // .tool_input.notebook_path // .tool_input.path // ""')"
 command_str="$(printf '%s' "$input" | jq -r '.tool_input.command // ""')"
+# A line continuation is a backslash and the newline after it, and the shell
+# deletes both, joining the words either side. The callers below split segments
+# on newlines, so without this the verb was stranded on a second segment whose
+# leading token was not the command - and was skipped entirely.
+command_str="${command_str//\\$'\n'/}"
 
 # A plugin agent can arrive as "scout" or as "plugin-name:scout".
 agent="${agent_type##*:}"
@@ -132,13 +137,19 @@ enforce_spec_writer() {
 # always loses to expansion. See the note in this file's header - the scope hook
 # is a role reminder, not a containment boundary.
 sub_verb() {
-  local seg="$1" tok skip_next=no
+  local seg tok skip_next=no
+  seg="$(command_words "$1")"
   # Undo what a backslash does, in the shell's own order: a trailing one
   # continues the line and vanishes; one before whitespace joins that
   # whitespace into the word; any other quotes the next character and
   # disappears. The placeholder keeps an escaped space from splitting a path
   # into two words without pretending to know what the path says.
-  seg="$(printf '%s' "$seg" | sed -e 's/\\$//' -e 's/\\\([[:space:]]\)/_/g' -e 's/\\\(.\)/\1/g')"
+  # What a backslash does, in the shell's order: before whitespace it makes that
+  # whitespace part of the word; anywhere else it quotes the next character and
+  # disappears. The line-continuation case is NOT handled here - it is joined
+  # out of command_str before anything splits on newlines, because deleting the
+  # backslash without joining is what stranded the verb on a second segment.
+  seg="$(printf '%s' "$seg" | sed -e 's/\\\([[:space:]]\)/_/g' -e 's/\\\(.\)/\1/g')"
   # shellcheck disable=SC2086 # deliberate word splitting: this is a word scan
   set -- $seg
   [ "$#" -gt 0 ] || { printf ''; return 0; }
@@ -213,18 +224,41 @@ sed_writes() {
 
 # The command a segment actually runs: leading VAR=value assignments dropped,
 # then the basename of the first word. Empty if the segment is only assignments.
-leading_token() {
-  local seg="$1" tok next
+# Wrappers the shell runs straight through: the real command is what follows.
+# A closed list, because it costs no false denies - unlike treating any token
+# that matches a forbidden verb as one.
+COMMAND_WRAPPERS=" command env builtin exec nohup time sudo xargs "
+
+# The segment with leading assignments and wrapper commands removed. Both
+# parsers below start from this, so they cannot disagree about which word is the
+# command - and they did: leading_token stripped VAR=val to find "npm" while
+# sub_verb dropped position one, which WAS the assignment, and returned "npm" as
+# the verb. `NODE_ENV=production npm install react` walked past the install ban
+# on that disagreement alone.
+command_words() {
+  local seg="$1" first next
   while :; do
-    tok="$(printf '%s' "$seg" | awk '{print $1}')"
-    case "$tok" in
+    first="$(printf '%s' "$seg" | awk '{print $1}')"
+    case "$first" in
+      "") break ;;
       *=*) ;;
-      *) break ;;
+      *)
+        case "$COMMAND_WRAPPERS" in
+          *" ${first##*/} "*) ;;
+          *) break ;;
+        esac
+        ;;
     esac
     next="$(printf '%s' "$seg" | sed -E 's/^[^[:space:]]+[[:space:]]+//')"
-    if [ "$next" = "$seg" ]; then tok=""; break; fi
+    if [ "$next" = "$seg" ]; then seg=""; break; fi
     seg="$next"
   done
+  printf '%s' "$seg"
+}
+
+leading_token() {
+  local tok
+  tok="$(printf '%s' "$(command_words "$1")" | awk '{print $1}')"
   printf '%s\n' "${tok##*/}"
 }
 
@@ -419,8 +453,10 @@ enforce_fleet_steward() {
   scan="$(printf '%s' "$scan" | sed -E 's/(\|\||&&|;|\||&)/\n/g')"
   while IFS= read -r seg; do
     seg="$(printf '%s' "$seg" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
-    case "$(printf '%s' "$seg" | awk '{print $1}')" in
-      git|*/git) ;;
+    # leading_token, not the raw first word: an assignment or a wrapper in front
+    # of git is transparent to the shell and has to be transparent here.
+    case "$(leading_token "$seg")" in
+      git) ;;
       *) continue ;;
     esac
     verb="$(sub_verb "${seg}")"
@@ -539,6 +575,34 @@ UI_DESIGNER_ALLOWED_GIT=" log show blame diff ls-files status shortlog describe 
 UI_DESIGNER_INSTALLERS=" npm pnpm yarn bun pip pip3 pipx poetry uv gem bundle composer cargo go brew apt apt-get "
 UI_DESIGNER_INSTALL_VERBS=" install i ci add require get remove uninstall update upgrade link "
 
+# The install verb is the first word that IS one, not merely the first word that
+# is not an option: `npm --prefix /tmp/x install react` is an ordinary idiom and
+# put the path where the verb was looked for. Scanning past a non-verb word only
+# when a LONG option preceded it keeps `npm run link` allowed - long options
+# commonly take a separate value, short flags usually do not, so `npm -g install`
+# still reads `install`.
+install_verb() {
+  local seg tok prev=""
+  seg="$(command_words "$1")"
+  # shellcheck disable=SC2086 # deliberate word splitting: this is a word scan
+  set -- $seg
+  [ "$#" -gt 0 ] || { printf ''; return 0; }
+  shift
+  for tok in "$@"; do
+    case "$tok" in
+      -*) prev="$tok"; continue ;;
+    esac
+    case "$UI_DESIGNER_INSTALL_VERBS" in
+      *" $tok "*) printf '%s' "$tok"; return 0 ;;
+    esac
+    case "$prev" in
+      --*) prev="" ; continue ;;
+      *) printf ''; return 0 ;;
+    esac
+  done
+  printf ''
+}
+
 enforce_ui_designer() {
   [ "$tool_name" = "Bash" ] || return 0
   [ -n "$command_str" ] || return 0
@@ -564,6 +628,7 @@ enforce_ui_designer() {
 
     case "$UI_DESIGNER_INSTALLERS" in
       *" $tok "*)
+        verb="$(install_verb "$seg")"
         case "$UI_DESIGNER_INSTALL_VERBS" in
           *" $verb "*)
             deny "ui-designer invariant: \"Never run a git command that writes, and never install anything into the product repo.\" \"$tok $verb\" installs into the repo. A prototype is self-contained: build it from what is already there, and name any dependency the real thing would need in the handoff." ;;

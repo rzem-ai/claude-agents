@@ -202,17 +202,25 @@ TRANSCRIPT_MAX_BYTES="${CLAUDE_AGENTS_TRANSCRIPT_MAX_BYTES:-20000000}"
 
 transcript_final_block() {
   local path="$1" size out
+  # The readability test is belt and braces: an unreadable file makes jq fail
+  # into the same `return 1` below, so nothing behaves differently without it.
   [ -n "$path" ] && [ -f "$path" ] && [ -r "$path" ] || return 1
   size="$(wc -c < "$path" 2>/dev/null | tr -d ' ')" || return 1
   case "$size" in ''|*[!0-9]*) return 1 ;; esac
   [ "$size" -le "$TRANSCRIPT_MAX_BYTES" ] || return 1
+  # Take the LAST assistant content block and THEN classify it. Filtering first
+  # and taking `last` of what survived meant a final block that was neither -
+  # an ordinary tool call with no closing prose - was invisible, and the reader
+  # reached back to an earlier text block and reported it as the final message.
+  # That produced exit 2 quoting text that was never a handoff, which is the
+  # failure this whole branch exists to stop.
   out="$(jq -s -c '
-    [ .[] | select(.type == "assistant") | .message.content[]?
-      | select((.type == "tool_use" and .name == "StructuredOutput") or .type == "text") ]
+    [ .[] | select(.type == "assistant") | .message.content[]? ]
     | last
     | if . == null then empty
-      elif .type == "tool_use" then {t: "structured"}
-      else {t: "text", v: .text} end' "$path" 2>/dev/null)" || return 1
+      elif (.type == "tool_use" and .name == "StructuredOutput") then {t: "structured"}
+      elif .type == "text" then {t: "text", v: .text}
+      else empty end' "$path" 2>/dev/null)" || return 1
   [ -n "$out" ] || return 1
   printf '%s' "$out"
 }

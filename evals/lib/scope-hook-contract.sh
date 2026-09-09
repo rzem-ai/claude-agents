@@ -72,6 +72,30 @@ expect() {
     return 0
 }
 
+# Why a deny happened, not just that it did. Four cases in this file denied for
+# the right answer and the wrong reason - the pre-fix parser read the verb of
+# `git -C /path reset` as "-C", which missed the allowlist and denied by
+# accident. Asserting the message names the real verb turns those from
+# coincidence into coverage, and would have caught the -C bug on its own.
+deny_reason() {
+    printf '%s' "$1" | CLAUDE_PROJECT_DIR="$2" CLAUDE_AGENTS_REPO="$REPO_ROOT" "$HOOK" 2>/dev/null \
+        | jq -r '.hookSpecificOutput.permissionDecisionReason // ""'
+}
+
+deny_bash_saying() {
+    # $1 agent, $2 command, $3 substring the reason must contain
+    local reason
+    reason=$(deny_reason "$(bash_event "$1" "$2" "$PROJECT")" "$PROJECT")
+    if printf '%s' "$reason" | grep -qF -- "$3"; then
+        PASSED=$((PASSED + 1))
+        [ "$VERBOSE" -eq 1 ] && printf '  ok    deny  %s: %s\n' "$1" "$2"
+    else
+        FAILED=$((FAILED + 1))
+        printf '  FAIL  %s: %s\n        denied, but not for "%s": %s\n' "$1" "$2" "$3" "${reason:0:110}"
+    fi
+    return 0
+}
+
 deny_bash()  { expect deny  "$1: $2" "$(bash_event "$1" "$2" "${3:-$PROJECT}")" "${3:-$PROJECT}"; }
 allow_bash() { expect allow "$1: $2" "$(bash_event "$1" "$2" "${3:-$PROJECT}")" "${3:-$PROJECT}"; }
 deny_write()  { expect deny  "$1 -> $2" "$(write_event "$1" "$2" "${3:-$PROJECT}")" "${3:-$PROJECT}"; }
@@ -169,9 +193,9 @@ allow_bash reviewer 'git -c core.pager=cat -C /tmp/wt show HEAD'
 # The point of finding the real verb is that the allowlist still applies to it.
 # A global option must not become a way to smuggle a writing verb past the
 # check, which is exactly what a laxer fix would buy.
-deny_bash  scout    'git -C /tmp/wt reset --hard HEAD~1'
-deny_bash  reviewer 'git -C /tmp/wt commit -m x'
-deny_bash  reviewer 'git --no-pager -C /tmp/wt checkout main'
+deny_bash_saying scout    'git -C /tmp/wt reset --hard HEAD~1' 'git reset'
+deny_bash_saying reviewer 'git -C /tmp/wt commit -m x' 'git commit'
+deny_bash_saying reviewer 'git --no-pager -C /tmp/wt checkout main' 'git checkout'
 deny_bash  fleet-steward 'git -C /tmp/wt push --force origin main'
 deny_bash  fleet-steward 'git -C /tmp/wt merge main'
 
@@ -235,6 +259,52 @@ deny_bash  fleet-steward 'git \merge main'
 deny_bash  fleet-steward 'git m\erge main'
 deny_bash  fleet-steward 'git re\set --hard HEAD~1'
 allow_bash scout         'git \log --oneline'
+
+printf '\nThe two parsers agree about which word is the command\n'
+
+# leading_token strips VAR=val to find the command; sub_verb dropped position 1,
+# which IS the assignment. So the two disagreed and the verb came back as the
+# command name. This is the commonest way anyone types an npm install.
+deny_bash_saying ui-designer 'NODE_ENV=production npm install react' 'npm install'
+deny_bash_saying ui-designer 'FOO=1 BAR=2 pip3 install requests' 'pip3 install'
+deny_bash_saying fleet-steward 'GIT_AUTHOR_NAME=x git merge main' 'git merge'
+allow_bash ui-designer 'NODE_ENV=production npm run build'
+
+# A wrapper is transparent to the shell, so it has to be transparent here too.
+# A closed list, because it costs no false denies - unlike matching any token.
+deny_bash_saying fleet-steward 'command git merge main' 'git merge'
+deny_bash_saying fleet-steward 'env git reset --hard HEAD~1' 'git reset'
+deny_bash_saying fleet-steward 'env GIT_DIR=/x git merge main' 'git merge'
+deny_bash_saying ui-designer 'command npm install react' 'npm install'
+allow_bash scout 'command git log --oneline'
+allow_bash reviewer 'env git diff main...HEAD'
+
+# A line continuation joins two lines into one command. Deleting the backslash
+# without joining stranded the verb on a second segment whose leading token was
+# not git, so it was skipped entirely.
+deny_bash_saying fleet-steward 'git -C /tmp/wt \
+merge main' 'git merge'
+deny_bash_saying fleet-steward 'git \
+reset --hard HEAD~1' 'git reset'
+allow_bash scout 'git \
+log --oneline'
+
+# The install ban asks whether an installer is installing, so the verb it looks
+# for is the first INSTALL VERB among the words - not the first word that is not
+# an option. `npm --prefix <path> install` is an ordinary CI idiom.
+deny_bash_saying ui-designer 'npm --prefix /tmp/proto install react' 'npm install'
+deny_bash_saying ui-designer 'npm --registry https://r.example.com install react' 'npm install'
+deny_bash_saying ui-designer 'pip3 --log /tmp/l.txt install requests' 'pip3 install'
+allow_bash ui-designer 'npm --prefix /tmp/proto run build'
+allow_bash ui-designer 'npx --yes serve prototypes/'
+
+# Every entry in the value-taking option list, held there by a test. The list
+# has been wrong twice; four of its entries had nothing pinning them.
+deny_bash_saying fleet-steward 'git --git-dir /tmp/x/.git merge main' 'git merge'
+deny_bash_saying fleet-steward 'git --work-tree /tmp/x reset --hard' 'git reset'
+deny_bash_saying fleet-steward 'git --namespace ns merge main' 'git merge'
+deny_bash_saying fleet-steward 'git --config-env k=V merge main' 'git merge'
+deny_bash_saying fleet-steward 'git -c user.name=x rebase main' 'git rebase'
 
 printf '\n%s passed, %s failed\n' "$PASSED" "$FAILED"
 if [ "$FAILED" -ne 0 ]; then
