@@ -103,39 +103,55 @@ enforce_spec_writer() {
   deny "spec-writer invariant: \"Never write anywhere except under docs/specs/: not source, not config, not tests, and never a plan under docs/plans/.\" $tool_name targeted $abs. Write the spec to docs/specs/<issue>.md instead. Anything else belongs to the lead."
 }
 
-# Extracts the git subcommand from a command line, skipping the global options
-# that may sit between "git" and the verb.
+# The subcommand a segment would actually run: the first word after the command
+# word that is not an option, and not an option's value.
 #
-# The parser used to read the second whitespace-separated token, so
-# "git -C /path log" resolved to a verb of "-C". That disagreed with the shell
-# about where the verb is, which is the same family of hole as the quote
-# stripper, and it broke in both directions at once. Against an allowlist
-# (scout, reviewer, ui-designer) an unrecognised verb denies, so reading a
-# worktree with "git -C" was refused - a false deny, invisible because nobody
-# blames a reviewer that cannot read. Against a denylist (fleet-steward) an
-# unrecognised verb ALLOWS, so "git -C /path push --force", "git -C /path merge"
-# and "git -C /path reset --hard" all sailed past the three git operations that
-# agent is explicitly forbidden to perform.
+# Two roles need it and neither is only about git - fleet-steward asks which git
+# verb, ui-designer asks that AND which package-manager verb, since its
+# invariant bans installing rather than bans npm. So the command word is dropped
+# BY POSITION, because the shell's first word is the command whatever it is
+# called.
 #
-# Every git global option is dashed and the verb never is, so: skip dashed
-# tokens, and skip the value of the ones that take a separate argument. A line
-# with no undashed token has no verb, and callers must treat the empty string as
-# "not a read" rather than as a match.
-git_verb() {
-  local rest="${1#*git}" tok skip_next=no
-  # A backslash-escaped space does not end a token, but word splitting believes
-  # it does, so "git -C /tmp/a\ b reset --hard" would resolve its verb to "b".
-  # Quoted paths never reach here unsplit - the quote stripper collapses them
-  # first - but escapes do. Every escaped pair is replaced with a single
-  # ordinary character, which keeps the path one token without pretending to
-  # know what the path says. Nothing downstream reads the path, only the verb.
-  rest="$(printf '%s' "$rest" | sed 's/\\./x/g')"
-  # shellcheck disable=SC2086 # deliberate word splitting: this is a verb scan
-  set -- $rest
+# Three ways this has been got wrong, all of them live at some point:
+#
+#   awk '{print $2}'      read "-C" as the verb of `git -C /path log`. Against
+#                         an allowlist that denies (scout, reviewer,
+#                         ui-designer); against fleet-steward's denylist it
+#                         ALLOWS, so `git -C /path push --force` walked past a
+#                         ban. Fixed, item 17.
+#   "${1#*git}"           strips to the first literal "git" in the string, so
+#                         `/opt/git/bin/git merge` had a verb of "/bin/git", and
+#                         `npm install react` - which contains no "git" at all -
+#                         had a verb of "npm", silently retiring ui-designer's
+#                         entire install ban.
+#   collapsing every \.   fixed escapes in the path and broke them in the verb:
+#                         `git \merge` runs merge, and read as "xerge".
+#
+# What it is not: a shell. `command git merge`, `env git merge` and
+# `x=m; git ${x}erge` all defeat it, because a denylist over unexpanded text
+# always loses to expansion. See the note in this file's header - the scope hook
+# is a role reminder, not a containment boundary.
+sub_verb() {
+  local seg="$1" tok skip_next=no
+  # Undo what a backslash does, in the shell's own order: a trailing one
+  # continues the line and vanishes; one before whitespace joins that
+  # whitespace into the word; any other quotes the next character and
+  # disappears. The placeholder keeps an escaped space from splitting a path
+  # into two words without pretending to know what the path says.
+  seg="$(printf '%s' "$seg" | sed -e 's/\\$//' -e 's/\\\([[:space:]]\)/_/g' -e 's/\\\(.\)/\1/g')"
+  # shellcheck disable=SC2086 # deliberate word splitting: this is a word scan
+  set -- $seg
+  [ "$#" -gt 0 ] || { printf ''; return 0; }
+  shift
   for tok in "$@"; do
     if [ "$skip_next" = yes ]; then skip_next=no; continue; fi
     case "$tok" in
-      -C|-c|--git-dir|--work-tree|--namespace|--exec-path|--super-prefix|--config-env)
+      # git's global options that take a SEPARATE value, checked against the
+      # installed git rather than recalled. --attr-source does take one.
+      # --exec-path does NOT - it prints the path and exits - so listing it
+      # here made it swallow the verb that followed. --super-prefix was
+      # removed in git 2.49 and is gone from this list with it.
+      -C|-c|--git-dir|--work-tree|--namespace|--attr-source|--config-env)
         skip_next=yes; continue ;;
       -*) continue ;;
       *) printf '%s' "$tok"; return 0 ;;
@@ -292,7 +308,7 @@ enforce_scout() {
         esac
         ;;
       git)
-        verb="$(git_verb "${first}")"
+        verb="$(sub_verb "${first}")"
         case "$SCOUT_ALLOWED_GIT" in
           *" $verb "*) ;;
           *) deny "scout invariant: read-only git only - log, show, blame, diff, ls-files. \"git $verb\" is not one of them." ;;
@@ -407,7 +423,7 @@ enforce_fleet_steward() {
       git|*/git) ;;
       *) continue ;;
     esac
-    verb="$(git_verb "${seg}")"
+    verb="$(sub_verb "${seg}")"
     case "$verb" in
       merge|rebase|reset|filter-branch|filter-repo)
         deny "fleet-steward invariant: \"Never merge\" and \"never run a git command that rewrites shared history: no force-push, no reset, no rebase onto a shared branch.\" \"git $verb\" is one of those. File it and propose it; Alex decides on the pull request." ;;
@@ -488,7 +504,7 @@ enforce_reviewer() {
 
     case "$tok" in
       git)
-        verb="$(git_verb "${seg}")"
+        verb="$(sub_verb "${seg}")"
         case "$REVIEWER_ALLOWED_GIT" in
           *" $verb "*) ;;
           *) deny "reviewer invariant: \"Never run a git command that writes: no commit, push, force-push, checkout, stash, reset or rebase. Read-only git only.\" \"git $verb\" is not a read-only verb. Read the history with git log, show, blame, diff or ls-files; anything that changes a ref belongs to coder." ;;
@@ -535,7 +551,7 @@ enforce_ui_designer() {
     [ -n "$seg" ] || continue
     tok="$(leading_token "$seg")"
     [ -n "$tok" ] || continue
-    verb="$(git_verb "${seg}")"
+    verb="$(sub_verb "${seg}")"
 
     case "$tok" in
       git)

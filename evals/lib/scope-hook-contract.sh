@@ -189,6 +189,53 @@ deny_bash  fleet-steward 'git -C /tmp/a\ b push --force origin main'
 allow_bash scout         'git -C /tmp/a\ b log --oneline'
 allow_bash reviewer      'git -C /tmp/a\ b diff HEAD'
 
+printf '\nThe verb is the one the shell would run\n'
+
+# ui-designer had three cases in this file and all three were write_event, so
+# the role's entire Bash invariant - "never install anything into the product
+# repo" - was uncovered. A refactor of the verb scanner broke it outright and
+# the suite stayed green. The hook is the only thing enforcing this: nothing in
+# home/settings.json denies an installer.
+deny_bash  ui-designer 'npm install react'
+deny_bash  ui-designer 'npm i react'
+deny_bash  ui-designer 'npm ci'
+deny_bash  ui-designer 'pnpm add zod'
+deny_bash  ui-designer 'yarn add lodash'
+deny_bash  ui-designer 'pip3 install requests'
+deny_bash  ui-designer 'brew install jq'
+deny_bash  ui-designer 'cargo add serde'
+# ...while the job itself stays possible. That is the whole reason installers
+# are matched on their verbs rather than denied outright.
+allow_bash ui-designer 'npx serve prototypes/'
+allow_bash ui-designer 'npm run build'
+allow_bash ui-designer 'python3 -m http.server 8000'
+
+# The command is the FIRST token, not the first place the string says "git".
+# A prefix-strip finds the "git" in the directory name and reads the rest of
+# the path as the verb, which denies a read and - worse - allows a write for
+# the one role whose check is a denylist.
+deny_bash  fleet-steward '/opt/git/bin/git merge main'
+deny_bash  fleet-steward '/usr/local/Cellar/git/2.49.0/bin/git reset --hard HEAD~1'
+allow_bash scout         '/opt/git/bin/git log --oneline'
+allow_bash reviewer      '/opt/git/bin/git diff main...HEAD'
+
+# Global options that take a separate value, checked against the git actually
+# installed rather than against a remembered list. --attr-source consumes its
+# value; --exec-path does NOT (it prints the path and exits), so listing it as
+# value-taking makes it swallow the real verb.
+deny_bash  fleet-steward 'git --attr-source HEAD merge main'
+deny_bash  fleet-steward 'git --attr-source HEAD reset --hard HEAD~1'
+deny_bash  fleet-steward 'git --exec-path merge main'
+allow_bash reviewer      'git --attr-source HEAD diff main...HEAD'
+
+# A backslash quotes the next character and then disappears, so `git \merge`
+# runs merge. Collapsing every escaped pair to a placeholder fixed escapes in
+# the path and broke them in the verb.
+deny_bash  fleet-steward 'git \merge main'
+deny_bash  fleet-steward 'git m\erge main'
+deny_bash  fleet-steward 'git re\set --hard HEAD~1'
+allow_bash scout         'git \log --oneline'
+
 printf '\n%s passed, %s failed\n' "$PASSED" "$FAILED"
 if [ "$FAILED" -ne 0 ]; then
     printf 'The scope hook admits something a role forbids, or blocks work the role exists to do.\n'

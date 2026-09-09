@@ -189,6 +189,34 @@ extract_section() {
     || true
 }
 
+# The last assistant content block in a subagent's transcript, as one compact
+# JSON object: {"t":"structured"} for a StructuredOutput tool call, or
+# {"t":"text","v":...} for prose. Returns 1 and prints nothing when the file is
+# missing, unreadable, oversized, unparseable, or holds no assistant content -
+# "cannot tell" is a third answer and never a guess at either of the other two.
+#
+# Both shapes were read off real transcripts rather than assumed; see
+# hooks/README.md item 16. Read agent_transcript_path and never transcript_path:
+# the event sends both, and only the first is scoped to this subagent.
+TRANSCRIPT_MAX_BYTES="${CLAUDE_AGENTS_TRANSCRIPT_MAX_BYTES:-20000000}"
+
+transcript_final_block() {
+  local path="$1" size out
+  [ -n "$path" ] && [ -f "$path" ] && [ -r "$path" ] || return 1
+  size="$(wc -c < "$path" 2>/dev/null | tr -d ' ')" || return 1
+  case "$size" in ''|*[!0-9]*) return 1 ;; esac
+  [ "$size" -le "$TRANSCRIPT_MAX_BYTES" ] || return 1
+  out="$(jq -s -c '
+    [ .[] | select(.type == "assistant") | .message.content[]?
+      | select((.type == "tool_use" and .name == "StructuredOutput") or .type == "text") ]
+    | last
+    | if . == null then empty
+      elif .type == "tool_use" then {t: "structured"}
+      else {t: "text", v: .text} end' "$path" 2>/dev/null)" || return 1
+  [ -n "$out" ] || return 1
+  printf '%s' "$out"
+}
+
 # board_comment_text HEADLINE BODY -> the one shape every card comment takes:
 # a headline naming the transition and where the detail came from, a blank line,
 # then the handoff lines themselves. An empty body leaves the headline alone,
@@ -219,6 +247,7 @@ message="$(printf '%s' "$input" | jq -r '.last_assistant_message // ""')"
 # A JSON null counts as absent for the same reason: it is no message, not an
 # empty one.
 has_message="$(printf '%s' "$input" | jq -r 'if has("last_assistant_message") and .last_assistant_message != null then "yes" else "no" end')"
+agent_transcript="$(printf '%s' "$input" | jq -r '.agent_transcript_path // ""')"
 # Neither of these fields exists. The SubagentStop schema in the shipped CLI is
 # stop_hook_active, agent_id, agent_transcript_path, agent_type,
 # last_assistant_message and background_tasks; `status` is not in it and
@@ -305,9 +334,28 @@ fi
 # The column is left alone either way: TaskCompleted owns Done, there are no
 # Blocker: lines to read, and a card that invents a comment out of structured
 # output nobody parsed is worse than a card that says nothing.
-if [ "$has_message" = no ]; then
-  board_log "$HOOK" "${agent_type:-agent} sent no final message, so there is no handoff to validate; leaving the column alone. The event does not say why - a schema-carrying spawn is the known cause, but this hook cannot tell that from any other reason the field is absent"
-  exit 0
+# `!= yes` rather than `= no`, so a jq that printed nothing at all - empty
+# stdin, a payload that is not an object - lands here rather than falling
+# through to be validated as an empty handoff.
+if [ "$has_message" != yes ]; then
+  transcript_block="$(transcript_final_block "$agent_transcript")" || transcript_block=""
+  case "$(printf '%s' "$transcript_block" | jq -r '.t // ""' 2>/dev/null)" in
+    structured)
+      board_log "$HOOK" "${agent_type:-agent} finished on a StructuredOutput call, so it was never asked for a handoff and there is nothing to validate; leaving the column alone"
+      exit 0
+      ;;
+    text)
+      # The runtime dropped a message the transcript still holds. Recover it and
+      # hold it to the same rules as any other - this is the empty-handoff case,
+      # and it is the one the gate exists for.
+      message="$(printf '%s' "$transcript_block" | jq -r '.v // ""')"
+      board_log "$HOOK" "${agent_type:-agent} sent no final message in the event, but its transcript ends in text; validating that as the handoff"
+      ;;
+    *)
+      board_log "$HOOK" "${agent_type:-agent} sent no final message and its transcript could not be read, so why is unknown; letting the run stop rather than demanding a handoff that may never have been owed"
+      exit 0
+      ;;
+  esac
 fi
 
 if ! validate_handoff "$message"; then

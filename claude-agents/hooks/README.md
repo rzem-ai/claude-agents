@@ -782,19 +782,39 @@ layer had to make on its own:
     noting: it is a supported route to the directory a subagent actually worked
     in, which is the thing `review-round.js` had no way to learn.
 
-    **The accepted gap.** The probe proved that a schema-carrying spawn produces
-    an absent field. It did not prove the converse, and the hook cannot tell the
-    two apart from the event alone: any other cause of an absent final message
-    now lands in the same branch and exits 0 silently, where before it exited 2.
-    That is a deliberate trade - a false pass on a rare unknown beats deadlocking
-    every workflow in the fleet - but it is a gap, not a diagnosis, and the log
-    line says so rather than naming a cause it cannot see.
+    **Absent does not prove why, so the hook asks the transcript.** The first
+    version of this fix passed any run with an absent field and said in its log
+    that it could not tell why. That was not good enough, and the reason is in
+    the runtime: `SubagentStop` builds the field as
 
-    What would close it: `SubagentStop` carries `agent_transcript_path`, and the
-    final assistant content block in that transcript is a `StructuredOutput`
-    `tool_use` for a schema run and a `text` block otherwise. Reading it turns
-    the discriminator into evidence. That is real work against an undocumented
-    on-disk format, so it is written down here rather than done.
+    ```js
+    let p = findLast(m => m.type === "assistant"),
+        f = p ? textOf(p.message.content).trim() || void 0 : void 0
+    ```
+
+    `.trim() || void 0` turns an empty *or whitespace-only* final message into
+    `undefined`, and undefined properties drop out of the payload. So
+    `last_assistant_message: ""` is **unreachable** - and a fleet agent that was
+    asked for a handoff and produced nothing sends a byte-identical payload to a
+    schema spawn. Passing every absent field therefore retired the gate for
+    exactly the case it exists to catch, while a test pinning the empty string
+    made the coverage look complete.
+
+    `agent_transcript_path` tells them apart, and both shapes were read off real
+    probe transcripts rather than assumed:
+
+    | Last assistant content block | Means | Hook does |
+    |---|---|---|
+    | `tool_use` named `StructuredOutput` | a schema run, never asked for a handoff | passes, column untouched |
+    | `text` | the runtime dropped a message the transcript still holds | recovers it and validates it like any other |
+    | unreadable, oversized, absent, or no assistant content | cannot tell | passes, and says so |
+
+    Read `agent_transcript_path`, never `transcript_path`: the event sends both
+    and only the first is scoped to the subagent. The third row is the residual
+    gap and it is deliberate - a transcript this hook cannot read is not a
+    reason to refuse to let a subagent stop, because deadlocking a run is worse
+    than a rare silent pass. `CLAUDE_AGENTS_TRANSCRIPT_MAX_BYTES` caps the read
+    at 20 MB.
 
     To re-derive after a CLI upgrade, spawn one agent twice from a workflow -
     once with a `schema`, once without - behind a `SubagentStop` hook that dumps

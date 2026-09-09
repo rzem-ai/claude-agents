@@ -58,10 +58,34 @@ replaced the message" from "the hook never fired".
   premise is now stated correctly: the handoff is the only account of the run
   anything downstream gets, and a `Blocker:` line is the one route to the human
   queue that works.
-- **The stop hook stated an inference as a fact.** Its log line said the agent
-  "returned structured output"; the probe proved a schema spawn produces an
-  absent message, never the converse. It now says the message was absent and
-  that the event does not say why.
+- **An absent final message is now diagnosed rather than assumed.** The first
+  version of this fix passed every run whose message was absent and logged that
+  it could not tell why. An adversarial review found why that was not good
+  enough: the runtime builds the field as `.trim() || void 0`, so
+  `last_assistant_message: ""` is **unreachable** - a fleet agent that was asked
+  for a handoff and produced nothing sends a byte-identical payload to a schema
+  spawn. Passing every absent field therefore retired the gate for exactly the
+  case it exists to catch, and the test pinning the empty string made the
+  coverage look complete. The hook now reads `agent_transcript_path`: a final
+  `StructuredOutput` block is a run that owed no handoff and passes, a final
+  `text` block is recovered and validated like any other, and a transcript it
+  cannot read passes and says so. Both shapes were read off real transcripts.
+- **`sub_verb` replaces `git_verb`, which was three kinds of wrong.** Reading
+  the verb by stripping to the literal text `"git"` broke two things the first
+  attempt did not cover. `ui-designer`'s entire install ban - the only
+  enforcement, since nothing in `home/settings.json` denies an installer - went
+  dead, because `npm install react` contains no `"git"` and so resolved to a
+  verb of `npm`; the suite missed it because all three `ui-designer` cases were
+  write events and the role had no Bash coverage at all. And a git binary at a
+  path containing `git` (`/opt/homebrew/opt/git/bin/git merge`) resolved to
+  `/bin/git`, allowing a merge for `fleet-steward` and denying a read for
+  `scout`. The command word is now dropped by position. Three further fixes in
+  the same pass: `--attr-source` takes a separate value and was missing;
+  `--exec-path` does not take one and was wrongly listed, so it swallowed the
+  verb after it; `--super-prefix` was removed in git 2.49. And escape
+  collapsing, which fixed escapes in the path, mangled them in the verb -
+  `git \merge main` runs merge and read as `xerge`. Backslashes now follow the
+  shell's own rules.
 
 ### Added
 
@@ -100,10 +124,10 @@ replaced the message" from "the hook never fired".
   blocking, pinned from both sides. Mutation testing found this; three of the
   new cases turned out to survive having the behaviour they named deleted, and
   were replaced with ones that do not.
-- The suite runs 285 numbered checks across five suites, plus the 28 handoff
-  fixtures the two parity checks drive - 313 against 122 before this round.
-  `workflow-logic` 16 to 61, `scope-hook-contract` 60 to 75,
-  `board-hook-contract` 13 to 16, and `handoff-extractor-parity` new at 128.
+- The suite runs 314 numbered checks across five suites, plus the 28 handoff
+  fixtures the two parity checks drive - 342 against 122 before this round.
+  `workflow-logic` 16 to 61, `scope-hook-contract` 60 to 98,
+  `board-hook-contract` 13 to 22, and `handoff-extractor-parity` new at 128.
 - `hooks/README.md` records what the probe measured beyond item 15's table:
   `SubagentStop` also sends `cwd`, `effort`, `permission_mode`, `prompt_id`,
   `session_crons` and `transcript_path`; `SubagentStart` also sends `cwd`,
