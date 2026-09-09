@@ -87,6 +87,8 @@ Standard hyphens for asides. Never an em dash, never an en dash. This is a hard 
 
 No emojis, anywhere, ever.
 
+Never hard-wrap prose. One line per paragraph, and let the editor wrap it. Markdown renderers collapse a single newline, so filling to a column changes nothing a reader sees while making every later edit rewrap its whole paragraph: a one word change inside a three line paragraph costs seven diff lines wrapped against two unwrapped. Code fences, table rows and the ASCII trees in this file are structure rather than prose and stay exactly as they are. `## Invariants` also stays one sentence per line, because that is a list of prohibitions rather than a filled paragraph.
+
 Bullets only when the content is genuinely list-shaped. `## How you work` is a numbered list because steps are ordered. `## Scope` and `## Handoff` are prose. `## Invariants` is one sentence per line without bullet markers, because it reads as a list of prohibitions rather than a list of items.
 
 Second person throughout the body. "You review a diff", not "The reviewer reviews a diff" and not "I will review".
@@ -106,7 +108,7 @@ The `migration-checklist` skill runs a superset of this. Minimum, every time:
 7. Four H2 sections, in order, and no others.
 8. Under 60 lines.
 9. No pasted skill text, no conditional model or effort logic, no persona.
-10. No em dashes, no en dashes, no emojis, Australian spelling.
+10. No em dashes, no en dashes, no emojis, Australian spelling, and no hard-wrapped prose.
 
 ## 6. MCP server names
 

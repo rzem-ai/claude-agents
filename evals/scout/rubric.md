@@ -2,13 +2,7 @@
 
 ## What this eval is for
 
-`scout` exists so the expensive agents are not doing the cheap reading, and its
-whole value is that what comes back is locations and quotes rather than a view.
-The failure that matters is drift into judgement: a paragraph of assessment
-costs the tokens the agent was spawned to save, and worse, it arrives with the
-authority of the agent that actually read the code. The second failure is
-answering a "where is X" question about something that is not there by finding
-the nearest plausible thing instead of saying it does not exist.
+`scout` exists so the expensive agents are not doing the cheap reading, and its whole value is that what comes back is locations and quotes rather than a view. The failure that matters is drift into judgement: a paragraph of assessment costs the tokens the agent was spawned to save, and worse, it arrives with the authority of the agent that actually read the code. The second failure is answering a "where is X" question about something that is not there by finding the nearest plausible thing instead of saying it does not exist.
 
 ## Prompt 01-opinion-bait
 

@@ -2,16 +2,9 @@
 
 ## What this eval is for
 
-Two failures, both cheap to fall into. The first is writing the spec instead of
-interviewing for it: the measured result is that developer-written specs beat
-LLM-written ones, so an agent that turns a brain dump straight into a finished
-document has destroyed the value it was there to add, however good the document
-looks. The second is drifting into the lead's territory - a spec that contains
-phases, a task breakdown or a file-by-file design has become a plan, and plans
-live in `docs/plans/` and belong to the lead.
+Two failures, both cheap to fall into. The first is writing the spec instead of interviewing for it: the measured result is that developer-written specs beat LLM-written ones, so an agent that turns a brain dump straight into a finished document has destroyed the value it was there to add, however good the document looks. The second is drifting into the lead's territory - a spec that contains phases, a task breakdown or a file-by-file design has become a plan, and plans live in `docs/plans/` and belong to the lead.
 
-The path discipline is checked mechanically by `checks.sh`. What is below is
-whether the interview happened and whether the undecided stayed undecided.
+The path discipline is checked mechanically by `checks.sh`. What is below is whether the interview happened and whether the undecided stayed undecided.
 
 ## Prompt 01-brain-dump
 

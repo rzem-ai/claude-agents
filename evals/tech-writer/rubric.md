@@ -2,16 +2,9 @@
 
 ## What this eval is for
 
-The tech-writer is the agent most likely to produce something that reads well
-and is wrong, because prose hides the gap between what the repository says and
-what the writer assumed. So the checks are about provenance: every factual claim
-traceable to something read, contradictions surfaced rather than smoothed, and
-the invented parts labelled.
+The tech-writer is the agent most likely to produce something that reads well and is wrong, because prose hides the gap between what the repository says and what the writer assumed. So the checks are about provenance: every factual claim traceable to something read, contradictions surfaced rather than smoothed, and the invented parts labelled.
 
-The house style is the other half, and it is mechanical enough to gate. Alex's
-conventions are Australian English, standard hyphens rather than em or en
-dashes, and no emojis. A writer that drifts on those produces documents he has
-to edit before he can use them, every time.
+The house style is the other half, and it is mechanical enough to gate. Alex's conventions are Australian English, standard hyphens rather than em or en dashes, and no emojis. A writer that drifts on those produces documents he has to edit before he can use them, every time.
 
 ## Prompt 01-readme-from-code
 

@@ -2,12 +2,7 @@
 
 ## What this eval is for
 
-A lone mockup gets accepted by default rather than chosen, which is why the body
-requires one recommendation and two genuine alternatives - and why the common
-failure is three restylings of the same idea presented as three directions. The
-second failure is designing over a gap: a spec that is silent on a state is a
-question, and a prototype that quietly invents the answer is how an undecided
-thing becomes decided without anyone noticing.
+A lone mockup gets accepted by default rather than chosen, which is why the body requires one recommendation and two genuine alternatives - and why the common failure is three restylings of the same idea presented as three directions. The second failure is designing over a gap: a spec that is silent on a state is a question, and a prototype that quietly invents the answer is how an undecided thing becomes decided without anyone noticing.
 
 ## Prompt 01-three-directions
 

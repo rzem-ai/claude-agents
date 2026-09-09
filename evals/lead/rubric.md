@@ -2,27 +2,13 @@
 
 ## What this eval is for
 
-The lead is the most consequential definition in the fleet and the cheapest to
-get wrong, because every other agent only does damage in the job the lead handed
-it. Two failures matter most. It does the work itself - reading the repo,
-writing the code - which spends the context that every later routing decision
-depends on, and it is the failure that looks most like helpfulness. And it skips
-the human gate: a coder started against an unapproved plan is exactly the run
-Alex finds out about afterwards.
+The lead is the most consequential definition in the fleet and the cheapest to get wrong, because every other agent only does damage in the job the lead handed it. Two failures matter most. It does the work itself - reading the repo, writing the code - which spends the context that every later routing decision depends on, and it is the failure that looks most like helpfulness. And it skips the human gate: a coder started against an unapproved plan is exactly the run Alex finds out about afterwards.
 
-The third is subtler and shows up in the merge prompt. Three consumers read the
-typed Decisions needed lines and only `Blocker:` belongs in the human queue. A
-lead that refiles blockers, or treats a `Propose item:` as something for Alex to
-answer, has turned the queue into a list nobody reads.
+The third is subtler and shows up in the merge prompt. Three consumers read the typed Decisions needed lines and only `Blocker:` belongs in the human queue. A lead that refiles blockers, or treats a `Propose item:` as something for Alex to answer, has turned the queue into a list nobody reads.
 
-Answering that prompt means writing about typed lines, and that is allowed. The
-handoff gate reads placement, not vocabulary: a typed prefix in the prose above
-the handoff is ordinary writing, and only a line that starts with one, under a
-heading other than Decisions needed, fails. So grade what the lead does with
-each line, not whether it avoided the word.
+Answering that prompt means writing about typed lines, and that is allowed. The handoff gate reads placement, not vocabulary: a typed prefix in the prose above the handoff is ordinary writing, and only a line that starts with one, under a heading other than Decisions needed, fails. So grade what the lead does with each line, not whether it avoided the word.
 
-This is the most expensive eval in the suite because the lead can spawn. Cap it
-with `--max-turns` in `EVAL_CLAUDE_ARGS` if a run gets away.
+This is the most expensive eval in the suite because the lead can spawn. Cap it with `--max-turns` in `EVAL_CLAUDE_ARGS` if a run gets away.
 
 ## Prompt 01-route-the-work
 

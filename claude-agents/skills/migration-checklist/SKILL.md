@@ -11,7 +11,7 @@ Run this over every file in `claude-agents/agents/` and every `SKILL.md` in `cla
 
 The output is a pull request against `claude-agents` with the diffs and a table of findings. Never a merge, and never a silent fix - a check that fails is reported even when the fix is obvious. Run the smoke evals on the PR before asking for a review, and bump `plugin.json` in it, because clients keep the cached copy until that number changes.
 
-Two commands do most of the mechanical work.
+Three commands do most of the mechanical work.
 
 ```bash
 python3 - claude-agents/agents/*.md claude-agents/skills/*/SKILL.md <<'PY'
@@ -24,6 +24,27 @@ for p in sys.argv[1:]:
 PY
 
 python3 -c "import glob;[print(p,i+1,l.rstrip()) for p in glob.glob('claude-agents/**/*.md',recursive=True)+glob.glob('docs/**/*.md',recursive=True) for i,l in enumerate(open(p)) if '\u2013' in l or '\u2014' in l]"
+```
+
+```bash
+python3 - <<'WRAP'
+import glob, re, sys
+skip = re.compile(r'\s*([#|>`~]|[-*+]\s|\d+[.)]\s|\[[^\]]+\]:\s)')
+hits = 0
+for p in sorted(glob.glob('claude-agents/**/*.md', recursive=True) + glob.glob('docs/**/*.md', recursive=True)):
+    lines = open(p).read().split('\n')
+    start, fenced = 0, False
+    if lines and lines[0].strip() == '---':                       # frontmatter is not prose
+        start = next((i for i, l in enumerate(lines[1:], 1) if l.strip() == '---'), 0) + 1
+    for i in range(start, len(lines) - 1):
+        l = lines[i]
+        if l.lstrip().startswith(('```', '~~~')): fenced = not fenced; continue
+        if fenced or len(l) < 60 or skip.match(l): continue
+        if l.rstrip()[-1] in '.!?:;': continue                    # one sentence per line, not a filled paragraph
+        if lines[i + 1].strip() and not skip.match(lines[i + 1]):
+            print(f'{p}:{i+1}: prose is hard-wrapped'); hits += 1; break
+sys.exit(1 if hits else 0)
+WRAP
 ```
 
 ## Frontmatter that parses
@@ -68,7 +89,7 @@ python3 -c "import glob;[print(p,i+1,l.rstrip()) for p in glob.glob('claude-agen
 
 18. **No pasted skill text, no conditional model or effort logic, no persona, no board writes.** Text that explains what `handoff` or `review-checklist` says is a copy that will go stale. A line of the shape "if the diff touches auth, use xhigh" is wrong in a body because an agent cannot change its own model mid-run and the decision belongs to the lead. A line telling an agent to update a status is wrong because columns are written by hooks.
 
-19. **Conventions hold.** Australian spelling, standard hyphens only, no em dashes or en dashes, no emojis, second person throughout. Run the second command above; it prints every offending line with its file and line number.
+19. **Conventions hold.** Australian spelling, standard hyphens only, no em dashes or en dashes, no emojis, second person throughout, and prose that is not hard-wrapped. Run the second command above for the dashes and the third for the wrapping; each prints every offending line with its file and line number. The third skips frontmatter, fenced blocks, tables and lists, and treats a line ending in punctuation as deliberate, so `## Invariants` does not trip it.
 
 20. **The contract file itself is current.** If this migration added or renamed a field, `docs/agent-contract.md` changes first and the nine bodies second, in the same PR. A checklist run against a stale contract passes everything and proves nothing.
 
