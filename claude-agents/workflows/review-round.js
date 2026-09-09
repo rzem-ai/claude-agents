@@ -371,6 +371,11 @@ if (!SHA_RE.test(reviewBase) || !SHA_RE.test(reviewedHead)) {
 let worktreesBefore = (pinned && pinned.worktrees) || []
 let reviewRange = reviewBase + '...' + reviewedHead
 let checkoutPath = ''
+// Reported at the end, and re-derived every round: a fix adds files, so
+// whether the change touches anything sensitive is a fact about the code as it
+// now stands rather than about the range this run started with.
+let sensitive = false
+let sensitiveFiles = []
 log('Reviewing ' + rawRange + ', pinned to ' + reviewRange + '.')
 
 // --- schemas ---------------------------------------------------------------
@@ -552,8 +557,8 @@ while (true) {
     break
   }
 
-  const sensitiveFiles = scope.files.filter((f) => SENSITIVE.test(f))
-  const sensitive = sensitiveFiles.length > 0
+  sensitiveFiles = scope.files.filter((f) => SENSITIVE.test(f))
+  sensitive = sensitiveFiles.length > 0
   log(
     tag +
       ': ' +
@@ -939,7 +944,8 @@ return {
   issue,
   intent: intentPath,
   autoFix,
-  sensitive: Boolean(last.mechanical),
+  sensitive,
+  sensitiveFiles,
   roundsRun: rounds.length,
   stopped,
   approved: stopped === 'clean',

@@ -435,6 +435,18 @@ for (const reported of ['./src/a.ts', 'src/a.ts:88']) {
   check('path-forms-still-match', 'a reviewer path form still matches what git reports: ' + reported, result.stopped === 'clean', [reported, result.stopped])
 }
 
+// Escalation is the lead's policy, written down here rather than in the
+// reviewer's body, so the return has to say honestly whether it fired.
+{
+  const r = responder({ match: 1 })
+  const { result, calls } = await runWorkflow('review-round.js', { range: 'main...x', issue: 'x' }, (p, o, s) =>
+    /git diff --stat/.test(p) ? { files: ['src/session-token.ts'], added: 3, removed: 1, commits: ['c'] } : r(p, o, s),
+  )
+  const verdict = calls.find((c) => c.opts.agentType === 'reviewer')
+  check('sensitive-paths-escalate', 'a sensitive path raises the verdict effort', verdict && verdict.opts.effort === 'max', verdict && verdict.opts.effort)
+  check('sensitive-reported-honestly', 'and the run reports that it did, naming the file', result.sensitive === true && (result.sensitiveFiles || []).includes('src/session-token.ts'), [result.sensitive, result.sensitiveFiles])
+}
+
 // --- the loop actually closes ------------------------------------------------
 
 {
