@@ -118,6 +118,20 @@ replaced the message" from "the hook never fired".
 
 ### Added
 
+- **`coder` writes in its own worktree, or it does not write.** The only
+  preventive check in the fleet. `review-round` can detect a fix that landed in
+  the main checkout but never prevent it - by the time verification runs, coder
+  has already branched and committed - and asking coder to check first is an
+  instruction, not a boundary. `coder` has an `agentType`, so
+  `enforce-agent-scope.sh` governs its Bash calls, and git answers directly: a
+  linked worktree's git dir sits under `.git/worktrees/`. A writing git verb is
+  refused unless its target - the command's own `-C`, else the call's `cwd` -
+  can be shown to be one. Reads and non-git commands are untouched. Not being
+  able to tell is not permission, because the case this exists for is isolation
+  silently not happening. Know the cost: if isolation does not hold, coder now
+  stops rather than leaking commits into whatever checkout it is in. See
+  `hooks/README.md` item 18.
+
 - **`review-round` carries fixes back, behind `fix: true`.** The loop was
   removed last round because `coder` fixes in an isolated worktree and the
   script had no supported way to learn that worktree's path or commit. It is
@@ -192,9 +206,9 @@ replaced the message" from "the hook never fired".
   blocking, pinned from both sides. Mutation testing found this; three of the
   new cases turned out to survive having the behaviour they named deleted, and
   were replaced with ones that do not.
-- The suite runs 365 numbered checks across five suites, plus the 28 handoff
-  fixtures the two parity checks drive - 393 against 122 before this round.
-  `workflow-logic` 16 to 84, `scope-hook-contract` 60 to 121,
+- The suite runs 398 numbered checks across five suites, plus the 28 handoff
+  fixtures the two parity checks drive - 426 against 122 before this round.
+  `workflow-logic` 16 to 103, `scope-hook-contract` 60 to 135,
   `board-hook-contract` 13 to 27, and `handoff-extractor-parity` new at 128.
 - `hooks/README.md` records what the probe measured beyond item 15's table:
   `SubagentStop` also sends `cwd`, `effort`, `permission_mode`, `prompt_id`,
