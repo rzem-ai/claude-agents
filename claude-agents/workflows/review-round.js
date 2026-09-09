@@ -93,6 +93,18 @@ const SENSITIVE =
   /(auth|authz|authn|login|logout|session|token|jwt|oauth|saml|oidc|password|passkey|credential|secret|crypto|cipher|hash|permission|entitlement|\.env|keychain|vault)/i
 
 const SHA_RE = /^[0-9a-f]{7,40}$/i
+// The eval harness has never applied a schema, and neither has anything else
+// this script's booleans arrive from. Two readings are both wrong: a truthy
+// test makes the string "false" a blocking finding, and a strict `=== true`
+// makes the string "true" a passing one - and that second failure approves a
+// merge. So a reviewer's flag is read to FAIL CLOSED: anything that is not
+// recognisably a no counts as blocking.
+const NOT_BLOCKING = new Set(['false', 'no', '0', ''])
+function isBlocking(f) {
+  const b = f && f.blocking
+  if (typeof b === 'string') return !NOT_BLOCKING.has(b.trim().toLowerCase())
+  return Boolean(b)
+}
 const VERDICTS = ['approve', 'approve with follow-ups', 'request changes']
 const DISPOSITIONS = ['not attempted', 'attempted and failed', 'rejected as wrong']
 
@@ -667,7 +679,7 @@ while (true) {
     log(tag + ': verdict "' + review.verdict + '" is not one of the three, so it is read as "request changes".')
     review.verdict = 'request changes'
   }
-  const blocking = (review.findings || []).filter((f) => f && f.blocking === true)
+  const blocking = (review.findings || []).filter(isBlocking)
   log(tag + ': ' + review.verdict + ', ' + blocking.length + ' blocking of ' + (review.findings || []).length + '.')
 
   if (!blocking.length) {
@@ -876,7 +888,7 @@ async function commissionFixes({ tag, blocking, review, fixLabel }) {
 
 const last = rounds[rounds.length - 1] || {}
 const lastVerdict = last.verdict || {}
-const stillBlocking = (lastVerdict.findings || []).filter((f) => f && f.blocking === true)
+const stillBlocking = (lastVerdict.findings || []).filter(isBlocking)
 const lastFix = fixes[fixes.length - 1] || null
 
 // Every stop reason gets its own next step. A run that falls through to a
@@ -934,7 +946,7 @@ return {
   verdict: lastVerdict.verdict || (stopped === 'nothing to review' ? 'nothing to review' : 'no verdict'),
   summary: lastVerdict.summary || '',
   blocking: stillBlocking,
-  followUps: (lastVerdict.findings || []).filter((f) => f && f.blocking !== true),
+  followUps: (lastVerdict.findings || []).filter((f) => !isBlocking(f)),
   unverified: (lastVerdict.unverified || []).concat(
     fixes.filter((f) => !f.testResults.verified).map((f) => 'Round ' + f.round + ' fix: ' + f.testResults.verifiedBy),
   ),
@@ -946,7 +958,7 @@ return {
     round: r.round,
     mechanical: (r.mechanical || []).reduce((n, m) => n + (m.findings || []).length, 0),
     verdict: (r.verdict || {}).verdict || 'none',
-    blocking: ((r.verdict || {}).findings || []).filter((f) => f && f.blocking === true).length,
+    blocking: ((r.verdict || {}).findings || []).filter(isBlocking).length,
     fixed: fixes.some((f) => f.round === r.round && SHA_RE.test(f.headCommit)),
   })),
   nextStep: NEXT_STEP[stopped] || 'The review is incomplete. Read the stop reason above and resolve it; this run is not an approval.',

@@ -93,9 +93,16 @@ replaced the message" from "the hook never fired".
 
 ### Changed
 
-- The suite runs 279 numbered checks across five suites, plus the 28 handoff
-  fixtures the two parity checks drive - 307 against 122 before this round.
-  `workflow-logic` 16 to 55, `scope-hook-contract` 60 to 75,
+- A reviewer's `blocking` flag is read to fail closed. Both obvious readings
+  are wrong: a truthy test makes the string `"false"` a blocking finding, and a
+  strict `=== true` makes the string `"true"` a passing one - and that second
+  failure approves a merge. Anything not recognisably a no now counts as
+  blocking, pinned from both sides. Mutation testing found this; three of the
+  new cases turned out to survive having the behaviour they named deleted, and
+  were replaced with ones that do not.
+- The suite runs 283 numbered checks across five suites, plus the 28 handoff
+  fixtures the two parity checks drive - 311 against 122 before this round.
+  `workflow-logic` 16 to 59, `scope-hook-contract` 60 to 75,
   `board-hook-contract` 13 to 16, and `handoff-extractor-parity` new at 128.
 - `hooks/README.md` records what the probe measured beyond item 15's table:
   `SubagentStop` also sends `cwd`, `effort`, `permission_mode`, `prompt_id`,

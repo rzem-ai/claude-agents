@@ -371,6 +371,36 @@ const FIX = { range: 'main...feature/refresh', issue: 'x', fix: true, maxRounds:
   check('main-worktree-reason-names-it', 'and says the run was not isolated', /main checkout|not isolated/i.test(JSON.stringify(result.fixRequest || {})), result.fixRequest)
 }
 
+// The dangerous shape, and the one a first pass at this test missed: the lane
+// reports a REAL commit and says isMain. Mutation testing found that deleting
+// the isMain guard in gateFix broke nothing, because the only case exercising
+// it also had an empty headCommit, which the no-commit branch caught first.
+{
+  const r = responder({
+    'verify fix': {
+      headCommit: 'ccc3333', containsReviewedHead: true, dirty: false, filesChanged: ['src/a.ts'],
+      commits: ['fix'], isMain: true, worktreePath: '/repo', candidates: ['ccc3333'],
+      worktrees: [{ path: '/repo', head: 'ccc3333', dirty: false, isMain: true }],
+    },
+  })
+  const { result, calls } = await runWorkflow('review-round.js', FIX, r)
+  check('main-worktree-with-a-real-commit-stops', 'a real commit in the main checkout is still refused', result.stopped === 'fix not isolated', result.stopped)
+  check('main-worktree-not-re-reviewed', 'and no second round reviews a commit on the shared branch', calls.filter((c) => c.opts.agentType === 'reviewer').length === 1, calls.filter((c) => c.opts.agentType === 'reviewer').length)
+}
+
+// A reviewer's `blocking` is not guaranteed to be a boolean. Both naive
+// readings are wrong, and one of them approves a merge.
+{
+  const r = responder({ reviewer: { verdict: 'request changes', summary: 's', findings: [{ blocking: 'true', file: 'src/a.ts', what: 'b', why: 'w' }] } })
+  const { result } = await runWorkflow('review-round.js', { range: 'main...x', issue: 'x' }, r)
+  check('string-true-is-blocking', 'the string "true" is a blocking finding, not an approval', result.stopped === 'fix handoff required', result.stopped)
+}
+{
+  const r = responder({ reviewer: { verdict: 'approve', summary: 's', findings: [{ blocking: 'false', file: 'src/a.ts', what: 'b', why: 'w' }] } })
+  const { result } = await runWorkflow('review-round.js', { range: 'main...x', issue: 'x' }, r)
+  check('string-false-is-not-blocking', 'and the string "false" is not', result.stopped === 'clean', result.stopped)
+}
+
 // --- everything else that disqualifies a fix --------------------------------
 
 const REJECTS = [
@@ -441,9 +471,18 @@ for (const reported of ['./src/a.ts', 'src/a.ts:88']) {
   // loader is unproven, and indexing into the array would settle the previous
   // fix's test claims from whatever lane happened to land third.
   const r = responder({})
+  // Deliberately mislabelled by position: the lane whose PROMPT is the tests
+  // lane reports lane 'obvious smells', and the lane sitting at input index 2
+  // reports something else entirely. Only a lookup by the `lane` field gets
+  // this right; indexing into the array settles the previous fix's test claims
+  // from whatever landed third.
+  const seen = {}
   const inner = (p, o, s) => {
     if (!o.agentType && o.schema && /Mechanical review pass/.test(p)) {
-      if (/test/.test(p)) return { lane: 'tests', ran: ['pnpm test'], findings: [] }
+      const rnd = (/Round (\d+)/.exec(p) || [])[1] || '?'
+      seen[rnd] = (seen[rnd] || 0) + 1
+      if (seen[rnd] === 1) return { lane: 'tests', ran: ['pnpm test'], findings: [] }
+      if (seen[rnd] === 3) return { lane: 'obvious smells', ran: ['x'], findings: [{ file: 'src/a.ts', what: 'smell' }] }
       return { lane: 'lint and format', ran: ['x'], findings: [] }
     }
     return r(p, o, s)

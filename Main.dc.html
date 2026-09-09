@@ -1,0 +1,317 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Fira+Code:wght@400;500;600&display=swap">
+  <style>
+    /* Tokens copied verbatim from one-dark-design-system/tokens/. */
+    :root{
+/* Base — One Dark syntax hues */
+--od-bg:#282c34;--od-bg-dark:#21252b;--od-bg-light:#2c313a;
+--od-selection:#3e4451;--od-gutter:#4b5263;--od-cursor:#528bff;
+--od-mono-1:#abb2bf;--od-mono-2:#828997;--od-mono-3:#5c6370;
+--od-cyan:#56b6c2;--od-blue:#61afef;--od-purple:#c678dd;--od-green:#98c379;
+--od-red:#e06c75;--od-red-deep:#be5046;--od-orange:#d19a66;--od-yellow:#e5c07b;
+/* Semantic — shadcn naming */
+--background:var(--od-bg-dark);--foreground:var(--od-mono-1);
+--card:var(--od-bg);--card-foreground:var(--od-mono-1);
+--popover:var(--od-bg-light);--popover-foreground:var(--od-mono-1);
+--primary:var(--od-blue);--primary-foreground:#1b2331;
+--secondary:var(--od-bg-light);--secondary-foreground:var(--od-mono-1);
+--muted:var(--od-bg-light);--muted-foreground:var(--od-mono-2);
+--accent:var(--od-selection);--accent-foreground:#dcdfe4;
+--destructive:var(--od-red);--destructive-foreground:#2b1215;
+--success:var(--od-green);--success-foreground:#17220f;
+--warning:var(--od-yellow);--warning-foreground:#2b2210;
+--info:var(--od-cyan);--info-foreground:#0f2224;
+--border:var(--od-selection);--input:var(--od-gutter);--ring:var(--od-cursor);
+--text-body:var(--od-mono-1);--text-muted:var(--od-mono-2);--text-faint:var(--od-mono-3);
+--surface-app:var(--od-bg-dark);--surface-card:var(--od-bg);--surface-raised:var(--od-bg-light);
+/* Component-level — themed alongside the semantics (see theme-light.css) */
+--primary-hover:#79bcf2;--destructive-hover:#e88790;
+--switch-thumb:#dcdfe4;--tooltip-bg:#dcdfe4;--tooltip-foreground:#21252b;
+--overlay:rgb(0 0 0/0.6);
+--font-sans:"Geist",system-ui,-apple-system,"Segoe UI",sans-serif;
+--font-mono:"Fira Code","SFMono-Regular",Consolas,monospace;
+--text-xs:0.75rem;--text-sm:0.875rem;--text-base:1rem;--text-lg:1.125rem;
+--text-xl:1.25rem;--text-2xl:1.5rem;--text-3xl:1.875rem;--text-4xl:2.25rem;
+--leading-tight:1.25;--leading-normal:1.5;--leading-relaxed:1.625;
+--tracking-tight:-0.025em;--tracking-normal:0;--tracking-wide:0.05em;
+--weight-normal:400;--weight-medium:500;--weight-semibold:600;--weight-bold:700;
+/* Tailwind 4px scale */
+--space-1:0.25rem;--space-2:0.5rem;--space-3:0.75rem;--space-4:1rem;
+--space-5:1.25rem;--space-6:1.5rem;--space-8:2rem;--space-10:2.5rem;
+--space-12:3rem;--space-16:4rem;--space-20:5rem;--space-24:6rem;
+--radius:0.5rem;--radius-sm:calc(var(--radius) - 4px);--radius-md:calc(var(--radius) - 2px);--radius-lg:var(--radius);--radius-xl:0.75rem;--radius-full:9999px;
+--shadow-sm:0 1px 2px 0 rgb(0 0 0/0.3);
+--shadow:0 1px 3px 0 rgb(0 0 0/0.35),0 1px 2px -1px rgb(0 0 0/0.35);
+--shadow-md:0 4px 6px -1px rgb(0 0 0/0.4),0 2px 4px -2px rgb(0 0 0/0.4);
+--shadow-lg:0 10px 15px -3px rgb(0 0 0/0.45),0 4px 6px -4px rgb(0 0 0/0.45);
+--ring-focus:0 0 0 2px var(--surface-app),0 0 0 4px var(--ring);
+--transition-fast:120ms cubic-bezier(0.4,0,0.2,1);/* @kind other */
+--transition:180ms cubic-bezier(0.4,0,0.2,1);/* @kind other */
+    }
+    body{margin:0;font-family:var(--font-sans);color:var(--text-body);background:var(--surface-app)}
+    *{box-sizing:border-box}
+    a{color:var(--od-blue);text-decoration:none}a:hover{color:#8cc7f5;text-decoration:underline}
+    code,pre,kbd{font-family:var(--font-mono)}
+    .od-card{background:var(--card);color:var(--foreground);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);font-family:var(--font-sans);display:flex;flex-direction:column}
+    .od-badge{display:inline-flex;align-items:center;gap:4px;border-radius:var(--radius-full);padding:2px 10px;font-family:var(--font-sans);font-size:var(--text-xs);font-weight:var(--weight-medium);border:1px solid transparent;line-height:var(--leading-normal)}
+    .od-badge--outline{background:transparent;color:var(--foreground);border-color:var(--border)}
+    .od-pick{text-align:left;cursor:pointer;font-family:var(--font-sans);transition:background var(--transition-fast),border-color var(--transition-fast)}
+    .od-pick:hover{border-color:var(--od-gutter)}
+    .od-pick:focus-visible{outline:none;box-shadow:0 0 0 2px var(--surface-app),0 0 0 4px var(--ring)}
+  </style>
+</helmet>
+
+<div style="background: var(--od-bg-dark); padding:var(--space-12) var(--space-12) var(--space-12) var(--space-12); min-height: 100%;">
+
+  <div style="display: flex; justify-content: space-between; align-items: center; padding-bottom: var(--space-5); border-bottom: 1px solid var(--od-selection);">
+    <div style="display: flex; align-items: center; gap:var(--space-3);">
+      <span style="font-family: var(--font-mono); font-size: var(--text-sm); font-weight: var(--weight-medium); color: var(--od-blue);">rzem/claude-agents</span>
+      <span class="od-badge od-badge--outline">v0.5.0</span>
+    </div>
+    <div style="font-family: var(--font-mono); font-size: var(--text-xs); color: var(--od-mono-2);">a Claude Code plugin</div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:var(--space-10); margin-top:var(--space-10); align-items: start;">
+    <div style="grid-column: span 2;">
+      <h1 style="font-size: var(--text-4xl); line-height: var(--leading-tight); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-tight); margin:0; color: var(--accent-foreground);">Nine agents, one board, and the hooks that keep them honest.</h1>
+    </div>
+    <div style="padding-top:var(--space-1);">
+      <p style="margin:0 0 var(--space-4) 0; font-size: var(--text-base); line-height: var(--leading-relaxed); color: var(--od-mono-1);">A fleet of Claude Code subagents with narrow, enforced roles. Each does a single job and reports in a fixed format. None grades its own work.</p>
+      <p style="margin:0; font-size: var(--text-sm); line-height: var(--leading-relaxed); color: var(--od-mono-2);">The interesting part is not the prompts. It is the machinery around them: a scope hook that denies calls a role forbids, a board that moves only on evidence, and a test suite that fails when a run fails.</p>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap:var(--space-3); margin-top:var(--space-10);">
+    <sc-for list="{{stats}}" as="s" hint-placeholder-count="5">
+      <div class="od-card" style="padding:var(--space-5);">
+        <div style="font-size: var(--text-4xl); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-tight); line-height: var(--leading-tight); color: {{s.tone}};">{{s.n}}</div>
+        <div style="font-family: var(--font-mono); font-size: var(--text-xs); color: var(--od-mono-2); margin-top:var(--space-1);">{{s.label}}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="display: flex; justify-content: space-between; align-items: center; margin-top:var(--space-12);">
+    <h2 style="font-size: var(--text-2xl); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-tight); margin:0; color: var(--accent-foreground);">The roster</h2>
+    <div style="display: flex; gap:var(--space-4); font-family: var(--font-mono); font-size: var(--text-xs); color: var(--od-mono-2);">
+      <div style="display: flex; align-items: center; gap:var(--space-1);"><span style="width: 8px; height: 8px; border-radius: var(--radius-full); background: var(--od-green); display: block;"></span>reads only</div>
+      <div style="display: flex; align-items: center; gap:var(--space-1);"><span style="width: 8px; height: 8px; border-radius: var(--radius-full); background: var(--od-orange); display: block;"></span>writes, scoped</div>
+      <div style="display: flex; align-items: center; gap:var(--space-1);"><span style="width: 8px; height: 8px; border-radius: var(--radius-full); background: var(--od-purple); display: block;"></span>orchestrates</div>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:var(--space-3); margin-top:var(--space-4);">
+    <sc-for list="{{roster}}" as="a" hint-placeholder-count="9">
+      <button class="od-pick" onClick="{{a.pick}}" style="{{a.style}}">
+        <span style="display: flex; align-items: center; gap:var(--space-2);">
+          <span style="width: 8px; height: 8px; border-radius: var(--radius-full); background: {{a.tone}}; display: block; flex-shrink: 0;"></span>
+          <span style="font-family: var(--font-mono); font-size: var(--text-sm); font-weight: var(--weight-medium); color: {{a.nameColor}};">{{a.name}}</span>
+        </span>
+        <span style="display: block; font-size: var(--text-xs); color: var(--od-mono-2); margin-top:var(--space-1); padding-left:var(--space-4);">{{a.kind}}</span>
+      </button>
+    </sc-for>
+  </div>
+
+  <div class="od-card" style="margin-top:var(--space-5); flex-direction: row; overflow: hidden;">
+    <div style="flex-grow: 1; flex-basis: 0; padding:var(--space-6); border-right: 1px solid var(--od-selection);">
+      <div style="display: flex; align-items: center; gap:var(--space-2);">
+        <span style="width: 10px; height: 10px; border-radius: var(--radius-full); background: {{current.tone}}; display: block;"></span>
+        <h3 style="font-family: var(--font-mono); font-size: var(--text-xl); font-weight: var(--weight-medium); margin:0; letter-spacing: var(--tracking-tight); color: var(--accent-foreground);">{{current.name}}</h3>
+        <span class="od-badge" style="background: {{current.tone}}; color: var(--primary-foreground);">{{current.kind}}</span>
+      </div>
+      <p style="margin:var(--space-4) 0 0 0; font-size: var(--text-base); line-height: var(--leading-relaxed); color: var(--od-mono-1);">{{current.line}}</p>
+      <div style="margin-top:var(--space-5); padding-top:var(--space-4); border-top: 1px solid var(--od-selection);">
+        <div style="font-family: var(--font-mono); font-size: var(--text-xs); color: var(--od-mono-3);">tools</div>
+        <div style="font-family: var(--font-mono); font-size: var(--text-sm); line-height: var(--leading-relaxed); color: var(--od-cyan); margin-top:var(--space-1);">{{current.tools}}</div>
+      </div>
+      <div style="margin-top:var(--space-4); padding-top:var(--space-4); border-top: 1px solid var(--od-selection);">
+        <div style="font-family: var(--font-mono); font-size: var(--text-xs); color: var(--od-mono-3);">enforced by</div>
+        <div style="font-size: var(--text-sm); line-height: var(--leading-normal); color: var(--od-mono-2); margin-top:var(--space-1);">{{current.enforcedBy}}</div>
+      </div>
+    </div>
+    <div style="flex-grow: 1.4; flex-basis: 0; padding:var(--space-6); background: var(--od-bg-light);">
+      <div style="font-family: var(--font-mono); font-size: var(--text-xs); color: var(--od-mono-3);">invariants</div>
+      <div style="display: flex; flex-direction: column; gap:var(--space-3); margin-top:var(--space-3);">
+        <sc-for list="{{current.invariants}}" as="line" hint-placeholder-count="3">
+          <div style="display: flex; gap:var(--space-2); align-items: flex-start;">
+            <span style="color: var(--od-red); font-family: var(--font-mono); font-size: var(--text-sm); line-height: var(--leading-normal); flex-shrink: 0;">&#8212;</span>
+            <span style="font-size: var(--text-base); line-height: var(--leading-normal); color: var(--od-mono-1);">{{line}}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="margin-top:var(--space-5); padding-top:var(--space-4); border-top: 1px solid var(--od-selection);">
+        <div style="font-family: var(--font-mono); font-size: var(--text-xs); color: var(--od-mono-3);">hands off</div>
+        <p style="margin:var(--space-2) 0 0 0; font-size: var(--text-sm); line-height: var(--leading-normal); color: var(--od-mono-2);">{{current.handsOff}}</p>
+      </div>
+    </div>
+  </div>
+
+  <p style="margin:var(--space-6) 0 0 0; font-size: var(--text-sm); line-height: var(--leading-relaxed); color: var(--od-mono-3); max-width: 760px;">Every agent ends its run with a handoff in a fixed four-heading format, and a hook refuses the run if it does not parse. That contract is what lets one agent&rsquo;s output become the next one&rsquo;s input without a human retyping it.</p>
+
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"$preview":{"width":1120,"height":1480}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { picked: 'lead' };
+  }
+
+  renderVals() {
+    var TONE = { read: 'var(--od-green)', write: 'var(--od-orange)', orch: 'var(--od-purple)' };
+
+    var AGENTS = [
+      {
+        id: 'lead', name: 'lead', kind: 'orchestrates', tone: TONE.orch,
+        line: 'Decides what happens next. Files the board item, writes the plan, spawns every other agent, and is the only one that talks to Alex mid-run.',
+        tools: 'all tools',
+        enforcedBy: 'Nothing scopes the lead away, which is the reason every other role is scoped.',
+        invariants: [
+          'Spawn only what the work needs. One agent that reads the repo once beats two that each read it whole.',
+          'Never let an agent grade its own work: the coder that wrote the diff is never the reviewer that reads it.',
+          'A question only Alex can answer is carried back as a Blocker: line, not guessed at.'
+        ],
+        handsOff: 'The lead never writes the code and never reviews it. It decides, delegates, and files what comes back.'
+      },
+      {
+        id: 'scout', name: 'scout', kind: 'reads only', tone: TONE.read,
+        line: 'Reconnaissance. Finds where something lives and answers in paths, line numbers and quoted excerpts, leaving the working tree exactly as it found it.',
+        tools: 'Read, Grep, Glob, Bash (read-only)',
+        enforcedBy: 'enforce-agent-scope.sh denies every write tool and every command outside its allowlist.',
+        invariants: [
+          'Never edit, write or create a file, and leave the working tree exactly as you found it.',
+          'Run only commands that read: ls, cat, head, tail, sed -n, wc, file, rg, grep, find, read-only git.',
+          'No redirection, no command substitution, no process substitution.'
+        ],
+        handsOff: 'If the answer needs a state change, that is a finding to hand to coder, not a thing to do.'
+      },
+      {
+        id: 'spec-writer', name: 'spec-writer', kind: 'writes, scoped', tone: TONE.write,
+        line: 'Interviews Alex about a brain dump and drafts docs/specs/<issue>.md for him to edit. The interviewer and the typist, not the author.',
+        tools: 'Read, Grep, Glob, Write, WebSearch, Notion',
+        enforcedBy: 'The scope hook resolves the write path physically and refuses anything outside this project’s docs/specs/.',
+        invariants: [
+          'Never write anywhere except under docs/specs/: not source, not config, not tests, and never a plan.',
+          'Never present a spec as interviewed when it is not. A pre-interview draft is a strawman and must read as one.',
+          'Never record an inferred requirement as an agreed one. Anything you inferred is an open question.'
+        ],
+        handsOff: 'Approval is Alex editing the file and setting its status line. Nothing downstream runs until he does.'
+      },
+      {
+        id: 'coder', name: 'coder', kind: 'writes, scoped', tone: TONE.write,
+        line: 'Implements one phase of an approved plan in its own git worktree, so parallel coders never trample each other and a bad run is one worktree remove away.',
+        tools: 'Read, Grep, Glob, Edit, Write, Bash, WebSearch',
+        enforcedBy: 'isolation: worktree in its frontmatter; the test gate then runs in the checkout that emitted the completion.',
+        invariants: [
+          'A failing test first where the finding is a defect, then the smallest change that passes it.',
+          'Commit small and often, one logical change per commit, with the tests that prove it in the same commit.',
+          'Never remove a worktree holding uncommitted changes: that destroys work existing nowhere else.'
+        ],
+        handsOff: 'Anything it could not prove goes under Unverified, generously, because the reviewer reads that as its starting list.'
+      },
+      {
+        id: 'reviewer', name: 'reviewer', kind: 'reads only', tone: TONE.read,
+        line: 'Reads a diff and reports on it. The second stage of a two-stage review, spending its effort where only judgement helps.',
+        tools: 'Read, Grep, Glob, Bash (read-only)',
+        enforcedBy: 'The scope hook holds it to an allowlist of reading commands, not a denylist of build tools.',
+        invariants: [
+          'Never edit, write or create a file. Not a fix, not a test, not a note.',
+          'Never run tests, builds or installs. If something needs running, that is a finding, not a task.',
+          'Read-only git only: no commit, checkout, stash, reset or rebase.'
+        ],
+        handsOff: 'A reviewer that edits makes the diff Alex approves a different diff from the one he read.'
+      },
+      {
+        id: 'ui-designer', name: 'ui-designer', kind: 'writes, scoped', tone: TONE.write,
+        line: 'User flows, screen designs and self-contained HTML prototypes that open in a browser, tied back to the spec’s acceptance criteria.',
+        tools: 'Read, Write, Bash, WebSearch',
+        enforcedBy: 'The scope hook confines writes to prototypes/ and a commissioned article under docs/runs/.',
+        invariants: [
+          'Never run a git command that writes, and never install anything into the product repo.',
+          'A prototype is self-contained: build it from what is already there.',
+          'Name any dependency the real thing would need in the handoff rather than adding it.'
+        ],
+        handsOff: 'It has no Figma tools and does not pretend to. It designs in HTML, and a coder builds the real thing.'
+      },
+      {
+        id: 'tech-writer', name: 'tech-writer', kind: 'writes, scoped', tone: TONE.write,
+        line: 'Documentation: the README, an ADR, the page that explains a decision to whoever arrives next.',
+        tools: 'Read, Grep, Glob, Write, WebFetch',
+        enforcedBy: 'The scope hook allows docs/ and Markdown at the project root, and refuses source files.',
+        invariants: [
+          'Write documentation, not source. A .md under docs/ or at the root, and nothing else.',
+          'Follow the existing document’s voice rather than importing a house style.',
+          'A commissioned file list can narrow the scope further, and never widens it.'
+        ],
+        handsOff: 'It documents what is there. Deciding what should be there is the lead’s job.'
+      },
+      {
+        id: 'researcher', name: 'researcher', kind: 'reads only', tone: TONE.read,
+        line: 'Fans out across several angles, fetches the primary source rather than a summary of it, and reports what it can cite.',
+        tools: 'WebSearch, WebFetch, Read, Hugging Face',
+        enforcedBy: 'It holds no Write or Edit tool at all, so the repo is out of reach by frontmatter.',
+        invariants: [
+          'Every claim carries its source: title, publisher, URL and the date you read it.',
+          'A claim you cannot cite does not go in the answer at all.',
+          'Where sources disagree, report the disagreement and the dates. Never average two numbers you cannot cite.'
+        ],
+        handsOff: 'It is the one agent besides the lead that may write to the shared memory corpus, and only when asked.'
+      },
+      {
+        id: 'fleet-steward', name: 'fleet-steward', kind: 'writes, scoped', tone: TONE.write,
+        line: 'Maintains this repository. Sweeps for drift between the docs and the fleet, then files what it found and proposes the fix.',
+        tools: 'Bash, Read, Edit, WebFetch, Notion',
+        enforcedBy: 'The scope hook confines its writes, and its shell redirections, to this working copy. A program it runs is not confined.',
+        invariants: [
+          'Never touch anything outside the claude-agents working copy.',
+          'Never merge, never push to a default branch, never write a board column a hook owns.',
+          'File and propose, then stop. Alex decides on the pull request.'
+        ],
+        handsOff: 'The hook narrows its reach; it does not contain it. Unattended runs need filesystem permissions, not a shell check.'
+      }
+    ];
+
+    var self = this;
+    var picked = this.state.picked;
+
+    var roster = AGENTS.map(function (a) {
+      var on = a.id === picked;
+      return {
+        name: a.name,
+        kind: a.kind,
+        tone: a.tone,
+        nameColor: on ? 'var(--accent-foreground)' : 'var(--od-mono-1)',
+        pick: function () { self.setState({ picked: a.id }); },
+        style: 'width: 100%; padding:var(--space-3) var(--space-4); border-radius: var(--radius-lg); border: 1px solid ' +
+          (on ? 'var(--od-gutter)' : 'var(--od-selection)') + '; background: ' + (on ? 'var(--od-bg-light)' : 'var(--od-bg)') +
+          '; box-shadow: ' + (on ? 'var(--shadow-md)' : 'var(--shadow-sm)') + ';'
+      };
+    });
+
+    var found = AGENTS.filter(function (a) { return a.id === picked; });
+    var cur = found.length ? found[0] : AGENTS[0];
+
+    return {
+      stats: [
+        { n: '9', label: 'agents', tone: 'var(--od-blue)' },
+        { n: '6', label: 'skills', tone: 'var(--od-purple)' },
+        { n: '4', label: 'hooks', tone: 'var(--od-red)' },
+        { n: '3', label: 'workflows', tone: 'var(--od-orange)' },
+        { n: '122', label: 'checks', tone: 'var(--od-green)' }
+      ],
+      roster: roster,
+      current: cur
+    };
+  }
+}
+</script>
+</body>
+</html>
