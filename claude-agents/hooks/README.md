@@ -430,8 +430,38 @@ anything into the product repo". The same read-only `git` allowlist. Installs ar
 matched on the verb rather than the command, because "use Bash only to build,
 serve or screenshot a prototype" is the job: `npx serve` and `npm run build` are
 allowed, `npm install`, `pnpm add`, `pip install`, `cargo add`, `go get` and
-`brew install` are not. Write tools are left alone - `Write` is how a prototype
-gets made, and `Edit` is already off its frontmatter.
+`brew install` are not.
+
+Write destinations go through `lib/check-write-scope.py`, which runs before the
+role dispatch for the four roles that hold `Write`. It exists because a glob on
+a lexically normalised path answered the wrong question three times over:
+`*/docs/specs/*` matched *any* project's specs directory, `..` was collapsed
+without asking the filesystem so a symlinked `docs/specs` resolved to itself,
+and `ui-designer` and `tech-writer` had no write branch at all - `Edit` was off
+their frontmatter, but `Write` replaces a source file just as completely. The
+checker resolves symlinks on the deepest existing ancestor and anchors to this
+project:
+
+| Role | May write |
+|---|---|
+| `spec-writer` | `<project>/docs/specs/**` |
+| `tech-writer` | `<project>/docs/**` (`.md`, `.mdx`, `.txt`) and a Markdown file at the project root |
+| `ui-designer` | `<project>/prototypes/**` and `<project>/docs/runs/**` |
+| `fleet-steward` | anywhere inside `$CLAUDE_AGENTS_REPO` |
+
+`docs/runs/**` is open to `ui-designer` on purpose: a commissioned run article
+is an authorised deliverable, and a gate that rejected every `docs/` write
+rejected that too. Set `CLAUDE_AGENTS_OUTPUT_FILES` in the launching
+environment - never in agent-authored content - to narrow `tech-writer` or
+`ui-designer` to an exact list of commissioned files:
+
+```json
+{"tech-writer": ["README.md", "docs/adr/001-session-refresh.md"]}
+```
+
+It only narrows. Listing a path outside the role's default scope does not grant
+it, and two agents needing different lists need a binding keyed by agent
+identity rather than one shared, widened list.
 
 This hook **fails open**. Bad input, a missing `jq`, an unexpected error: it logs
 and allows. Be clear about what that costs. For the per-agent half there is no

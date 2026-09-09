@@ -117,8 +117,41 @@ SCOUT_ALLOWED_GIT=" log show blame diff ls-files "
 
 # Removes single- and double-quoted spans so a redirection character inside a
 # search pattern (grep -R '=>' src) is not mistaken for a redirection.
+#
+# Use this for redirection and process substitution only. Those are inert inside
+# either kind of quote, so erasing both is correct for them and nothing else.
 strip_quoted() {
   printf '%s' "$1" | sed -e "s/'[^']*'/''/g" -e 's/"[^"]*"/""/g'
+}
+
+# Removes single-quoted spans only, because those are the only ones that disarm
+# a substitution. The shell expands $( ) and backticks inside double quotes:
+#
+#   echo "$(touch /tmp/proof)"   runs touch
+#   echo '$(touch /tmp/proof)'   prints the text
+#
+# Checking the fully stripped string for "$(" therefore answered the wrong
+# question, and every substitution wrapped in double quotes was waved through.
+# The two checks need different strippers; they used to share one.
+strip_single_quoted() {
+  printf '%s' "$1" | sed -e "s/'[^']*'/''/g"
+}
+
+# sed writes files without any redirection character: `w file` and `W file`
+# write, `s/x/y/w file` writes, and `e` executes a command. The script is
+# almost always quoted, so the old checks never saw it - `sed -n 'w /tmp/proof'`
+# looked like an ordinary `sed -n` read.
+#
+# Rather than parse sed, this matches a write or execute command at a position
+# where sed would take one: the start of the script, or after an address, a
+# semicolon or a brace. Addresses and regexes are left alone, so
+# `sed -n '/warning/p'` and `sed -n '1,50p'` still pass.
+# No backreference: grep here may be ugrep, which rejects them in ERE. The three
+# alternatives are a w/W command after an address terminator, an `e` command,
+# and a `w` flag on a substitution.
+SED_WRITE_RE="(^|[[:space:];{}0-9\$/,'\"])[wW]([[:space:]]|$)|(^|[[:space:];{}'\"])e([[:space:]]|$)|s[/|#,:].*[/|#,:][[:alnum:]]*w([[:space:]]|$)"
+sed_writes() {
+  printf '%s' "$1" | grep -Eq "$SED_WRITE_RE"
 }
 
 # The command a segment actually runs: leading VAR=value assignments dropped,
@@ -145,15 +178,26 @@ enforce_scout() {
   [ "$tool_name" = "Bash" ] || return 0
   [ -n "$command_str" ] || return 0
 
-  local scan seg first next tok verb
+  local scan subst_scan seg first next tok verb
   scan="$(strip_quoted "$command_str")"
   # Discarding output is not a state change, so let 2>/dev/null through before
   # looking for redirections.
   scan="$(printf '%s' "$scan" | sed -E 's/[0-9]?>>?[[:space:]]*\/dev\/null//g')"
+  # Substitution survives double quotes, so it gets its own, weaker strip.
+  subst_scan="$(strip_single_quoted "$command_str")"
+
+  # sed can write with no redirection character at all, and its script is
+  # normally quoted, so this has to look at the command as written.
+  if printf '%s' "$scan" | grep -Eq '(^|[[:space:];|&])sed([[:space:]]|$)' && sed_writes "$command_str"; then
+    deny "scout invariant: \"leave the working tree exactly as you found it.\" That sed script contains a w, W or e command, which writes a file or runs a program - a quoted script is still a script. Use sed -n with p to print, and hand any change to coder."
+  fi
+
+  case "$subst_scan" in
+    *'$('*|*'`'*)
+      deny "scout invariant: no command substitution. The command contains \$( or a backtick, which can hide a write behind a read. Note that double quotes do not disarm it - \"\$(...)\" still runs. Run the inner command on its own." ;;
+  esac
 
   case "$scan" in
-    *'$('*|*'`'*)
-      deny "scout invariant: no command substitution. The command contains \$( or a backtick, which can hide a write behind a read. Run the inner command on its own." ;;
     *'>'*)
       deny "scout invariant: \"no redirection into a file\". scout leaves the working tree exactly as it found it, so > and >> are not available. Read the file and quote it instead." ;;
     *'<('*|*'>('*)
@@ -265,8 +309,56 @@ enforce_fleet_steward() {
   [ "$tool_name" = "Bash" ] || return 0
   [ -n "$command_str" ] || return 0
 
-  local scan seg verb
+  local scan seg verb root target abs
   scan="$(strip_quoted "$command_str")"
+  scan="$(printf '%s' "$scan" | sed -E 's/[0-9]?>>?[[:space:]]*\/dev\/null//g')"
+
+  # The steward genuinely needs a shell - it runs the evals and prepares a
+  # branch - so its Bash cannot be an allowlist of readers the way scout's is.
+  # What it must not do is write outside its own working copy, and the branch
+  # below only ever inspected git verbs, so every ordinary shell write sailed
+  # past: `printf changed > /tmp/outside-repo.txt` was accepted in full.
+  #
+  # Redirection targets are therefore resolved and checked. This is a real
+  # narrowing, not a complete boundary: a program the steward runs can still
+  # write wherever the process can, and no shell-level check can see that. That
+  # limit is stated in fleet-steward.md rather than papered over.
+  if root="$(steward_repo_root)"; then :; else root=""; fi
+  while IFS= read -r target; do
+    [ -n "$target" ] || continue
+    target="$(printf '%s' "$target" | sed -E 's/^[0-9]*>>?[[:space:]]*//')"
+    [ -n "$target" ] || continue
+    case "$target" in
+      '&'*) continue ;;   # 2>&1 and friends duplicate a descriptor, not a file
+    esac
+    abs="$(lex_abs "$target" "$cwd")"
+    # The steward needs somewhere to stage a diff, so its own temporary
+    # directory is allowed - but only that one. Bare /tmp is shared with every
+    # other user and process on the box, which is the sort of "outside the
+    # working copy" the invariant is actually about.
+    case "$abs" in
+      "${TMPDIR:-/nonexistent-tmpdir}"/*|/dev/*) continue ;;
+    esac
+    if [ -n "$root" ]; then
+      case "$abs" in
+        "$root"/*) continue ;;
+      esac
+      deny "fleet-steward invariant: \"Never touch anything outside the claude-agents working copy.\" This command redirects into $abs, which is outside $root. Write inside the working copy, or into a temporary directory."
+    else
+      case "$abs" in
+        */claude-agents/*) continue ;;
+      esac
+      deny "fleet-steward invariant: \"Never touch anything outside the claude-agents working copy.\" This command redirects into $abs, which is not under a claude-agents directory. Set CLAUDE_AGENTS_REPO in ~/.config/claude-agents/board.env if the working copy lives somewhere this check cannot see."
+    fi
+  done <<< "$(printf '%s' "$scan" | grep -Eo '[0-9]?>>?[[:space:]]*[^[:space:];|&]+' || true)"
+
+  case "$(strip_single_quoted "$command_str")" in
+    *'$('*|*'`'*)
+      # Not a blanket ban: the steward writes shell. But a substitution hides
+      # its own redirections from the check above, so it has to be spelled out.
+      deny "fleet-steward invariant: \"Never touch anything outside the claude-agents working copy.\" A command substitution hides where its inner command writes, so this check cannot confirm the write stays inside the working copy. Run the inner command on its own line." ;;
+  esac
+
   scan="$(printf '%s' "$scan" | sed -E 's/(\|\||&&|;|\||&)/\n/g')"
   while IFS= read -r seg; do
     seg="$(printf '%s' "$seg" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
@@ -300,11 +392,18 @@ enforce_fleet_steward() {
 # builds or installs. If something needs running, that is a finding, not a
 # task."
 #
-# git is an allowlist because "read-only git only" is wider than the seven verbs
-# the invariant names, and a denylist would miss the eighth. Everything else is
-# a denylist: the reviewer reads the tree freely, it just never runs the suite.
+# Both lists are allowlists now. The command list used to be a denylist of build
+# tools, and a denylist of things that run code can never be finished: it named
+# forty package managers and test runners and still let `touch` create a file,
+# because `touch` is not a build tool and nobody had thought of it. The reviewer
+# needs to read a tree and its history, which is a small, closed set of commands,
+# so state that set instead of trying to enumerate its complement.
+#
+# It is scout's list plus the read-only git verbs a review actually reaches for -
+# a reviewer looks at status and rev-parse where a scout does not - and plus
+# awk/sort/uniq/comm/diff/cut/tr/column, which shape output without touching it.
 REVIEWER_ALLOWED_GIT=" log show blame diff ls-files status shortlog describe rev-parse rev-list cat-file grep whatchanged "
-REVIEWER_DENIED_CMDS=" npm pnpm yarn bun npx pnpx bunx pip pip3 pipx poetry uv gem bundle composer cargo rustc go make cmake ninja gradle mvn dotnet swift xcodebuild tsc vite webpack esbuild rollup jest vitest mocha ava karma pytest tox nox playwright cypress rspec phpunit ctest bazel docker docker-compose podman brew apt apt-get "
+REVIEWER_ALLOWED_CMDS=" ls cat head tail sed wc file rg grep find git cd pwd echo true awk sort uniq comm diff cut tr column basename dirname stat od xxd "
 
 enforce_reviewer() {
   if is_write_tool "$tool_name"; then
@@ -313,14 +412,38 @@ enforce_reviewer() {
   [ "$tool_name" = "Bash" ] || return 0
   [ -n "$command_str" ] || return 0
 
-  local scan seg tok verb
+  local scan subst_scan seg tok verb
   scan="$(strip_quoted "$command_str")"
+  scan="$(printf '%s' "$scan" | sed -E 's/[0-9]?>>?[[:space:]]*\/dev\/null//g')"
+  subst_scan="$(strip_single_quoted "$command_str")"
+
+  if printf '%s' "$scan" | grep -Eq '(^|[[:space:];|&])sed([[:space:]]|$)' && sed_writes "$command_str"; then
+    deny "reviewer invariant: \"Never edit, write or create a file. Not a fix, not a test, not a note.\" That sed script contains a w, W or e command, which writes a file or runs a program. Quote it however you like; it is still a script."
+  fi
+
+  case "$subst_scan" in
+    *'$('*|*'`'*)
+      deny "reviewer invariant: no command substitution. \$( and backticks can hide a write or a test run behind something that reads like an inspection, and double quotes do not disarm them. Run the inner command on its own." ;;
+  esac
+
+  case "$scan" in
+    *'>'*)
+      deny "reviewer invariant: \"Never edit, write or create a file. Not a fix, not a test, not a note.\" > and >> create files. The report is the whole output." ;;
+    *'<('*|*'>('*)
+      deny "reviewer invariant: no process substitution. Run the commands separately." ;;
+  esac
+
   scan="$(printf '%s' "$scan" | sed -E 's/(\|\||&&|;|\||&)/\n/g')"
   while IFS= read -r seg; do
     seg="$(printf '%s' "$seg" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
     [ -n "$seg" ] || continue
     tok="$(leading_token "$seg")"
     [ -n "$tok" ] || continue
+
+    case "$REVIEWER_ALLOWED_CMDS" in
+      *" $tok "*) ;;
+      *) deny "reviewer invariant: \"Never run tests, builds or installs. If something needs running, that is a finding, not a task.\" \"$tok\" is not one of the commands a reviewer reads with. Say in a finding what needs running and what you expect it to show, and let coder run it." ;;
+    esac
 
     case "$tok" in
       git)
@@ -330,11 +453,18 @@ enforce_reviewer() {
           *) deny "reviewer invariant: \"Never run a git command that writes: no commit, push, force-push, checkout, stash, reset or rebase. Read-only git only.\" \"git $verb\" is not a read-only verb. Read the history with git log, show, blame, diff or ls-files; anything that changes a ref belongs to coder." ;;
         esac
         ;;
-    esac
-
-    case "$REVIEWER_DENIED_CMDS" in
-      *" $tok "*)
-        deny "reviewer invariant: \"Never run tests, builds or installs. If something needs running, that is a finding, not a task.\" \"$tok\" is one of those. Say in a finding what needs running and what you expect it to show, and let coder run it." ;;
+      sed)
+        case " $seg " in
+          *" -i"*|*" --in-place"*)
+            deny "reviewer invariant: sed -i edits the file in place. The reviewer never changes the diff it is reading." ;;
+        esac
+        ;;
+      find)
+        case " $seg " in
+          *" -exec"*|*" -execdir"*|*" -ok"*|*" -okdir"*|*" -delete"*|*" -fprintf"*|*" -fls"*|*" -fprint"*)
+            deny "reviewer invariant: find -exec, -delete and the -f* actions run or write things. Locate files with find and read them separately." ;;
+        esac
+        ;;
     esac
   done <<< "$scan"
   return 0
@@ -386,6 +516,29 @@ enforce_ui_designer() {
   done <<< "$scan"
   return 0
 }
+
+# Write destinations are checked before the role dispatch, because two of the
+# roles that hold Write had no write branch at all: ui-designer's returned
+# immediately for anything that was not Bash, and tech-writer had none. Both
+# could replace a source file with Write while Edit was denied to them.
+#
+# The checker resolves symlinks and anchors to this project, which the lexical
+# glob above cannot do - `*/docs/specs/*` matched another repository's specs
+# directory just as happily as this one's.
+case "$agent" in
+  spec-writer|ui-designer|tech-writer|fleet-steward)
+    if is_write_tool "$tool_name"; then
+      if ! command -v python3 >/dev/null 2>&1; then
+        log "python3 is not installed, so write-scope checking cannot run for $agent. Allowing, consistent with this hook failing open."
+      else
+        checker="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/check-write-scope.py"
+        if [ -f "$checker" ] && ! printf '%s' "$input" | python3 "$checker"; then
+          deny "$agent invariant: that write destination is outside the role's approved output scope, or the scope could not be established. spec-writer writes only under this project's docs/specs/; tech-writer writes documentation under docs/ or a Markdown file at the project root; ui-designer writes prototypes/ and a commissioned article under docs/runs/; fleet-steward writes only inside its own working copy. Name the file you need in the handoff and let the lead commission it."
+        fi
+      fi
+    fi
+    ;;
+esac
 
 case "$agent" in
   spec-writer)   enforce_spec_writer ;;
