@@ -323,8 +323,11 @@ const FIX = { range: 'main...feature/refresh', issue: 'x', fix: true, maxRounds:
   // handoff gate, the "## Done" card comment, and the only working route to the
   // human queue. coder is the agent most likely to raise a real blocker.
   check('coder-carries-no-schema', 'and carries no schema, so its handoff still reaches the hook', coder && coder.opts.schema === undefined, coder && coder.opts.schema)
-  const gitLanes = calls.filter((c) => !c.opts.agentType && c.opts.schema)
-  check('git-lanes-have-no-agent-type', 'while the git bookkeeping runs on lanes the matcher skips', gitLanes.length > 0, gitLanes.length)
+  // Identified by phase, not by "has a schema and no agentType" - the four
+  // mechanical lanes match that too, so the loose version passed even with an
+  // agentType put back on both git lanes.
+  const gitLanes = calls.filter((c) => c.opts.phase === 'git state')
+  check('git-lanes-have-no-agent-type', 'while the git bookkeeping runs on lanes the matcher skips', gitLanes.length >= 2 && gitLanes.every((c) => !c.opts.agentType), gitLanes.map((c) => c.opts.agentType))
 }
 
 // --- pinning ----------------------------------------------------------------
@@ -434,9 +437,9 @@ const FIX = { range: 'main...feature/refresh', issue: 'x', fix: true, maxRounds:
 const REJECTS = [
   ['no-commit-stops', { headCommit: '', candidates: [], containsReviewedHead: true, dirty: false, filesChanged: [], commits: [], worktrees: [] }, /no commit/i],
   ['ambiguous-candidates-stop', { headCommit: '', candidates: ['aaa1111', 'bbb2222'], containsReviewedHead: true, dirty: false, filesChanged: [], commits: [], worktrees: [] }, /more than one/i],
-  ['not-descendant-stops', { headCommit: 'bbb2222', containsReviewedHead: false, forkPoint: 'origin1', dirty: false, filesChanged: ['src/a.ts'], commits: ['c'], isMain: false, worktrees: [] }, /reviewed commit|forks at/i],
-  ['dirty-worktree-stops', { headCommit: 'bbb2222', containsReviewedHead: true, dirty: true, filesChanged: ['src/a.ts'], commits: ['c'], isMain: false, worktrees: [] }, /uncommitted|whole fix/i],
-  ['untouched-files-stop', { headCommit: 'bbb2222', containsReviewedHead: true, dirty: false, filesChanged: ['docs/x.md'], commits: ['c'], isMain: false, worktrees: [] }, /touches none/i],
+  ['not-descendant-stops', { headCommit: 'bbb2222', containsReviewedHead: false, forkPoint: 'origin1', dirty: false, filesChanged: ['src/a.ts'], commits: ['c'], isMain: false, worktreePath: '/w/fix', worktrees: [{ path: '/w/fix', head: 'bbb2222', dirty: false, isMain: false }] }, /reviewed commit|forks at/i],
+  ['dirty-worktree-stops', { headCommit: 'bbb2222', containsReviewedHead: true, dirty: true, filesChanged: ['src/a.ts'], commits: ['c'], isMain: false, worktreePath: '/w/fix', worktrees: [{ path: '/w/fix', head: 'bbb2222', dirty: false, isMain: false }] }, /uncommitted|whole fix/i],
+  ['untouched-files-stop', { headCommit: 'bbb2222', containsReviewedHead: true, dirty: false, filesChanged: ['docs/x.md'], commits: ['c'], isMain: false, worktreePath: '/w/fix', worktrees: [{ path: '/w/fix', head: 'bbb2222', dirty: false, isMain: false }] }, /touches none/i],
 ]
 for (const [name, verify, reason] of REJECTS) {
   const r = responder({ 'verify fix': verify })
@@ -536,7 +539,11 @@ for (const reported of ['./src/a.ts', 'src/a.ts:88']) {
 {
   const r = responder({ coder: handoff({ done: ['worktree: /w/fix', 'head-commit: deadbee', 'fixed it'] }) })
   const { result } = await runWorkflow('review-round.js', FIX, r)
-  check('hint-mismatch-git-wins', 'when coder claims a different commit, git decides and the mismatch is recorded', result.fixes && result.fixes[0] && result.fixes[0].headCommit === 'bbb2222' && String(JSON.stringify(result.fixes[0])).includes('deadbee'), result.fixes && result.fixes[0])
+  // The claimed sha appears in coderSaid verbatim whatever happens, so assert
+  // on claimMismatch itself or this passes with the disagreement discarded.
+  const mismatch = (result.fixes[0] || {}).claimMismatch || []
+  check('hint-mismatch-git-wins', 'when coder claims a different commit, git decides', result.fixes[0] && result.fixes[0].headCommit === 'bbb2222', result.fixes[0])
+  check('hint-mismatch-recorded', 'and the disagreement is recorded rather than discarded', mismatch.some((m) => /headCommit/.test(m) && /deadbee/.test(m)), mismatch)
 }
 
 // --- the tests lane is found by name, never by position ----------------------
@@ -586,7 +593,9 @@ for (const reported of ['./src/a.ts', 'src/a.ts:88']) {
 {
   const r = responder({ reviewer: { verdict: 'lgtm', summary: 's', findings: [{ blocking: true, file: 'src/a.ts', what: 'b', why: 'w' }] } })
   const { result } = await runWorkflow('review-round.js', { range: 'main...x', issue: 'x' }, r)
-  check('unknown-verdict-is-not-approval', 'an unrecognised verdict is read as the strict end', result.stopped !== 'clean', result.stopped)
+  // This case's blocking finding is what stops it; the coercion is pinned by
+  // unrecognised-verdict-is-not-approved, which has no blocking finding at all.
+  check('unknown-verdict-with-blockers-stops', 'an unrecognised verdict with blocking findings is not an approval', result.stopped !== 'clean' && result.approved === false, [result.stopped, result.approved])
 }
 
 // --- coder failures ----------------------------------------------------------
@@ -640,6 +649,143 @@ for (const reported of ['./src/a.ts', 'src/a.ts:88']) {
   }
   const generic = [...seen].filter((s) => /The review is incomplete/.test(s))
   check('nextStep-covers-every-stop', 'no stop reason falls through to the generic next step', generic.length === 0, generic)
+}
+
+console.log('\nreview-round: what the caller reads, and what bounds the spend')
+
+// `approved` is the field a caller gates a merge on, and until now nothing
+// asserted it: hard-coding it true left all 65 checks green. Every stop reason
+// gets pinned, not just the clean one.
+{
+  const cases = [
+    [{ range: 'main...x', issue: 'x' }, {}, false, 'a blocking handoff'],
+    [{ range: 'main...x', issue: 'x', fix: true }, { coder: null }, false, 'a fix run that returned nothing'],
+    [{ range: 'main...x', issue: 'x', fix: true, maxRounds: 2 }, { reviewer: { verdict: 'request changes', summary: 's', findings: [{ blocking: true, file: 'src/a.ts', what: 'b', why: 'w' }] } }, false, 'the round cap'],
+    [{ range: 'main...x', issue: 'x', fix: true }, { reviewer: null }, false, 'a silent reviewer'],
+  ]
+  for (const [args, over, want, why] of cases) {
+    const { result } = await runWorkflow('review-round.js', args, responder(over))
+    check('approved-false-on-' + result.stopped.replace(/\s+/g, '-'), 'approved is false after ' + why, result.approved === want, [result.stopped, result.approved])
+  }
+  const { result: clean } = await runWorkflow('review-round.js', { range: 'main...x', issue: 'x' }, responder({ reviewer: { verdict: 'approve', summary: 'fine', findings: [] } }))
+  check('approved-true-only-when-approved', 'and true only when a reviewer actually approved', clean.approved === true, [clean.stopped, clean.approved])
+}
+
+// A verdict nobody recognises is coerced to the strict end, so the run must not
+// then report itself approved. The output object contradicting itself is worse
+// than either answer.
+{
+  const r = responder({ reviewer: { verdict: 'looks fine to me', summary: 's', findings: [] } })
+  const { result } = await runWorkflow('review-round.js', { range: 'main...x', issue: 'x' }, r)
+  check('unrecognised-verdict-is-not-approved', 'an unrecognised verdict does not come back as an approval', result.approved === false, [result.verdict, result.approved])
+}
+
+// The cap is the only thing bounding what this workflow spends. `|| 3` accepts
+// any truthy value, so a string made every comparison NaN-false and the loop
+// commissioned coder for ever.
+{
+  // A fresh commit every round, so nothing but the cap can end this loop.
+  let n = 0
+  const r = responder({
+    reviewer: { verdict: 'request changes', summary: 's', findings: [{ blocking: true, file: 'src/a.ts', what: 'b', why: 'w' }] },
+    'verify fix': () => {
+      n += 1
+      return { headCommit: 'abc' + String(n).padStart(4, '0'), containsReviewedHead: true, dirty: false, filesChanged: ['src/a.ts'], commits: ['c'], isMain: false, worktreePath: '/w/' + n, candidates: ['x'], worktrees: [] }
+    },
+  })
+  const { result, calls } = await runWorkflow('review-round.js', { range: 'main...x', issue: 'x', fix: true, maxRounds: 'three' }, r)
+  check('non-numeric-cap-refused', 'a cap that is not a number stops the run rather than removing the bound', /cap/i.test(result.stopped || '') || result.roundsRun <= 3, [result.stopped, result.roundsRun])
+  check('non-numeric-cap-is-bounded', 'and nothing runs away', calls.length < 40, calls.length)
+}
+{
+  const r = responder()
+  const { result } = await runWorkflow('review-round.js', { range: 'main...x', issue: 'x', round: '2' }, r)
+  check('string-round-is-a-number', 'a round number arriving as a string is still a number', typeof result.roundsRun === 'number' && (result.history[0] || {}).round === 2, result.history && result.history[0])
+}
+
+console.log('\nreview-round: the gate believes git, or it stops')
+
+// Each of these is a well-formed verify result that the gate accepted.
+const GATE_HOLES = [
+  ['no-worktree-path-stops', { headCommit: 'bbb2222', containsReviewedHead: true, dirty: false, filesChanged: ['src/a.ts'], commits: ['c'], isMain: false, candidates: ['bbb2222'], worktrees: [] },
+    'a fix with no known location cannot be re-reviewed in the checkout that holds it'],
+  ['ambiguous-with-a-sha-stops', { headCommit: 'bbb2222', containsReviewedHead: true, dirty: false, filesChanged: ['src/a.ts'], commits: ['c'], isMain: false, worktreePath: '/w/fix', candidates: ['bbb2222', 'ccc3333'], worktrees: [] },
+    'a lane that names three candidates and then picks one is still guessing'],
+  ['string-dirty-stops', { headCommit: 'bbb2222', containsReviewedHead: true, dirty: 'true', filesChanged: ['src/a.ts'], commits: ['c'], isMain: false, worktreePath: '/w/fix', candidates: ['bbb2222'], worktrees: [] },
+    'a boolean that arrived as a string is not a licence to read it as false'],
+]
+for (const [name, verify, why] of GATE_HOLES) {
+  const { result } = await runWorkflow('review-round.js', FIX, responder({ 'verify fix': verify }))
+  check(name, why, /unverified fix|not isolated/.test(result.stopped || ''), result.stopped)
+}
+
+// A blocking finding that names no file removed the file-touch rule entirely,
+// so an empty commit satisfied it. "Each of those stops the run on its own" has
+// to be true of this one too.
+{
+  const r = responder({
+    reviewer: (p, o, s) => {
+      s.round += 1
+      return s.round === 1
+        ? { verdict: 'request changes', summary: 's', findings: [{ blocking: true, what: 'something is wrong', why: 'w' }] }
+        : { verdict: 'approve', summary: 'fixed', findings: [] }
+    },
+    'verify fix': { headCommit: 'bbb2222', containsReviewedHead: true, dirty: false, filesChanged: [], commits: [], isMain: false, worktreePath: '/w/fix', candidates: ['bbb2222'], worktrees: [] },
+  })
+  const { result } = await runWorkflow('review-round.js', FIX, r)
+  check('nameless-finding-stops', 'a fix cannot be checked against findings that name no file, so it is not adopted', result.stopped === 'unverified fix', result.stopped)
+}
+
+// The blocker path recorded the commit before the gate ran, so a dirty,
+// non-descendant commit in the main checkout was reported as a fix and Alex was
+// pointed at it.
+{
+  const r = responder({
+    coder: handoff({ done: HINTS, decisions: ['Blocker: which TTL?'] }),
+    'verify fix': { headCommit: 'ccc3333', containsReviewedHead: false, dirty: true, filesChanged: ['docs/unrelated.md'], commits: ['c'], isMain: true, worktreePath: '/repo', candidates: ['ccc3333'], worktrees: [] },
+  })
+  const { result } = await runWorkflow('review-round.js', FIX, r)
+  check('blocker-does-not-bless-a-commit', 'a blocker run does not report an ungated commit as a fix', (result.history[0] || {}).fixed !== true, result.history)
+}
+
+// The design's central claim: everything the loop decides on comes from lanes
+// the SubagentStop matcher skips. Asserting "some call has a schema and no
+// agentType" was satisfied by the four mechanical lanes alone.
+{
+  const { calls } = await runWorkflow('review-round.js', FIX, responder())
+  const gitLanes = calls.filter((c) => c.opts.phase === 'git state')
+  check('git-lanes-are-the-ones-deciding', 'the pin and verify lanes both exist', gitLanes.length >= 2, gitLanes.length)
+  check('git-lanes-carry-no-agent-type', 'and neither carries an agentType, so the handoff gate never fires on them', gitLanes.every((c) => !c.opts.agentType), gitLanes.map((c) => c.opts.agentType))
+}
+
+// coder writes paths the way a model writes paths.
+{
+  const r = responder({
+    reviewer: (p, o, s) => {
+      s.round += 1
+      return s.round === 1
+        ? { verdict: 'request changes', summary: 's', findings: [{ blocking: true, file: 'src/a.ts', what: 'a', why: 'w' }, { blocking: true, file: 'src/b.ts', what: 'b', why: 'w' }] }
+        : { verdict: 'approve', summary: 'fixed', findings: [] }
+    },
+    coder: handoff({ done: HINTS, notDone: ['rejected as wrong: `src/b.ts` - the finding misreads the guard'] }),
+  })
+  const { result } = await runWorkflow('review-round.js', FIX, r)
+  const b = (result.fixes[0] || {}).unresolvedFindings || []
+  check('backticked-path-is-still-a-path', 'a disposition naming a backticked path is read as the refusal it is', b.length === 1 && b[0].disposition === 'rejected as wrong', b)
+}
+{
+  const r = responder({
+    reviewer: (p, o, s) => {
+      s.round += 1
+      return s.round === 1
+        ? { verdict: 'request changes', summary: 's', findings: [{ blocking: true, file: 'src/a.ts', what: 'a', why: 'w' }, { blocking: true, file: 'src/b.ts', what: 'b', why: 'w' }] }
+        : { verdict: 'approve', summary: 'fixed', findings: [] }
+    },
+    coder: handoff({ done: HINTS, notDone: ['rejected as wrong: src/a.ts - it is fine, unlike src/b.ts which I did fix'] }),
+  })
+  const { result } = await runWorkflow('review-round.js', FIX, r)
+  const b = (result.fixes[0] || {}).unresolvedFindings || []
+  check('disposition-does-not-bleed', 'a file mentioned in passing does not inherit another finding’s disposition', b.every((f) => f.file !== 'src/b.ts' || f.disposition === 'not attempted'), b)
 }
 
 console.log(`\n${passed} passed, ${failed} failed`)

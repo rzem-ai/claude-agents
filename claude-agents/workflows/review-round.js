@@ -109,11 +109,27 @@ function sameCommit(a, b) {
 // makes the string "true" a passing one - and that second failure approves a
 // merge. So a reviewer's flag is read to FAIL CLOSED: anything that is not
 // recognisably a no counts as blocking.
-const NOT_BLOCKING = new Set(['false', 'no', '0', ''])
+const NO_WORDS = new Set(['false', 'no', '0', ''])
+// One reading for every flag that arrives from a model, used in both
+// directions. A truthy test makes the string "false" a yes; a strict `=== true`
+// makes the string "true" a no. Parse the word instead.
+function saysYes(v) {
+  if (typeof v === 'string') return !NO_WORDS.has(v.trim().toLowerCase())
+  return Boolean(v)
+}
 function isBlocking(f) {
-  const b = f && f.blocking
-  if (typeof b === 'string') return !NOT_BLOCKING.has(b.trim().toLowerCase())
-  return Boolean(b)
+  return saysYes(f && f.blocking)
+}
+
+// The cap is the only thing bounding what this workflow spends, and `|| 3`
+// accepted any truthy value - so a maxRounds of "three" made every comparison
+// NaN-false and the loop commissioned coder until the process died. Numbers
+// that bound spend get the same suspicion as the flag that authorises it.
+function positiveInt(v, fallback, name) {
+  if (v === undefined || v === null || v === '') return fallback
+  const n = Number(v)
+  if (!Number.isFinite(n) || Math.floor(n) !== n || n < 1) return { bad: String(v), name }
+  return n
 }
 const VERDICTS = ['approve', 'approve with follow-ups', 'request changes']
 const DISPOSITIONS = ['not attempted', 'attempted and failed', 'rejected as wrong']
@@ -121,7 +137,7 @@ const DISPOSITIONS = ['not attempted', 'attempted and failed', 'rejected as wron
 const input = typeof args === 'string' ? { range: args } : args || {}
 const rawRange = input.range || (input.base && input.head ? input.base + '...' + input.head : 'HEAD~1...HEAD')
 const issue = input.issue || null
-const maxRounds = input.maxRounds || 3
+const maxRounds = positiveInt(input.maxRounds, 3, 'maxRounds')
 const intentPath = issue ? 'docs/plans/' + issue + '.md' : input.plan || null
 // Opt-in, and read strictly. `input.fix` arrives from a slash command's JSON,
 // so anything other than a real `true` is not consent.
@@ -198,11 +214,20 @@ function readHandoff(msg) {
 function dispositionOf(said, file) {
   const want = normalisePath(file)
   for (const item of said.notDone || []) {
-    const m = /^([a-z ]+):\s*(.+)$/i.exec(item)
+    // The shape asked for is "<disposition>: <file> - <why>", so only the FIRST
+    // word after the colon is the file. Scanning the whole line let a file
+    // mentioned in the reasoning inherit another finding's disposition -
+    // "rejected as wrong: src/a.ts - unlike src/b.ts which I did fix" marked
+    // src/b.ts rejected, which is the opposite of what it says.
+    const m = /^([a-z ]+):\s*(\S+)/i.exec(item)
     if (!m) continue
     const disposition = m[1].trim().toLowerCase()
     if (!DISPOSITIONS.includes(disposition)) continue
-    if (m[2].split(/\s+/).some((tok) => pathsMatch(normalisePath(tok.replace(/[),.]+$/, '')), want))) return disposition
+    // A model writes a path in backticks or bold as often as bare, and reading
+    // `src/b.ts` as a different file from src/b.ts turns a reasoned refusal
+    // into a silent omission.
+    const named = normalisePath(m[2].replace(/^[`*_'"(\[]+|[`*_'"),.\]]+$/g, ''))
+    if (pathsMatch(named, want) || named === want) return disposition
   }
   return 'not attempted'
 }
@@ -281,10 +306,11 @@ const GIT_STATE_SCHEMA = {
 
 const FIX_VERIFY_SCHEMA = {
   type: 'object',
-  // `worktrees` is required, not optional. Without it the before-snapshot is
-  // never refreshed, so round three sees round two's worktree as still new,
-  // finds two candidates and stops as ambiguous - and the loop could never run
-  // past two rounds.
+  // `worktrees` is required, not optional, so the before-snapshot can be
+  // refreshed between rounds. Left stale, round three would see round two's
+  // worktree as still new, find two candidates and stop as ambiguous. That is
+  // a contract with the lane rather than something the stubbed suite can
+  // demonstrate - the lanes are stubs here, so nothing below proves it.
   required: ['headCommit', 'containsReviewedHead', 'dirty', 'filesChanged', 'commits', 'worktrees'],
   properties: {
     headCommit: { type: 'string' },
@@ -338,7 +364,26 @@ const ends = splitRange(rawRange)
 
 // The cap is checked before anything spawns. A round past the cap has nothing
 // to do, and resolving refs for a review that will not happen is just spend.
-const startRound = input.round || 1
+const startRound = positiveInt(input.round, 1, 'round')
+
+// Refuse an unusable bound rather than running without one.
+const badNumber = [maxRounds, startRound].find((v) => v && typeof v === 'object')
+if (badNumber) {
+  return {
+    range: rawRange,
+    issue,
+    roundsRun: 0,
+    stopped: 'unusable ' + badNumber.name,
+    approved: false,
+    verdict: 'no verdict',
+    rounds: [],
+    history: [],
+    fixes: [],
+    nextStep:
+      badNumber.name + ' was "' + badNumber.bad + '", which is not a whole number of rounds. Nothing ran, because that value is the only thing bounding what this workflow spends.',
+  }
+}
+
 if (startRound > maxRounds) {
   return {
     range: rawRange,
@@ -347,6 +392,9 @@ if (startRound > maxRounds) {
     stopped: 'round cap',
     verdict: 'no verdict',
     rounds: [],
+    approved: false,
+    history: [],
+    fixes: [],
     nextStep:
       'Round ' + startRound + ' is past the cap of ' + maxRounds + '. This is not an approval and nothing was reviewed. Decide whether the change needs a different approach rather than another round.',
   }
@@ -380,6 +428,9 @@ if (!SHA_RE.test(reviewBase) || !SHA_RE.test(reviewedHead)) {
     stopped: 'the reviewed head does not resolve',
     verdict: 'no verdict',
     rounds: [],
+    approved: false,
+    history: [],
+    fixes: [],
     pinned: { base: reviewBase, head: reviewedHead, reported: (pinned && pinned.resolved) || [] },
     nextStep:
       'Neither end of ' + rawRange + ' could be pinned to a commit, so there is nothing to review and nothing to compare a later round against. Check the refs exist in this checkout and run again.',
@@ -473,37 +524,49 @@ function gateFix(v, blocking, head) {
   if (!v) return 'the fix verification returned nothing'
 
   if (!SHA_RE.test(String(v.headCommit || ''))) {
-    if (v.isMain === true) return NOT_ISOLATED
+    if (saysYes(v.isMain)) return NOT_ISOLATED
     if ((v.candidates || []).length > 1)
       return 'more than one worktree could be the fix (' + v.candidates.join(', ') + '), so which commit to review would be a guess'
     return 'the fix run produced no commit'
   }
+  // Ambiguity disqualifies whether or not the lane went on to pick one. A lane
+  // that reports three candidates and then names a winner has guessed, and the
+  // check used to sit inside the no-commit branch where it never saw this.
+  if ((v.candidates || []).length > 1)
+    return 'the verification named ' + v.candidates.length + ' candidate worktrees (' + v.candidates.join(', ') + ') and then chose one, so the commit to review is a guess'
+  // A commit whose location is unknown cannot be re-reviewed, because every
+  // later lane is told to work in that checkout. Adopting it sends round two to
+  // read the original code and call the result verified.
+  if (!v.worktreePath) return 'the verification found a commit but not the checkout holding it, so a later round has nowhere to read it'
   if (sameCommit(v.headCommit, head)) return 'the fix commit is the reviewed commit, so nothing was committed'
   // Isolation has to be CONFIRMED, not merely unmentioned. `isMain` is optional
   // in the schema, so a lane that omits it would otherwise prove isolation by
   // saying nothing - and in the probe both agents ran in the main checkout, so
   // silence is the shape this failure actually takes. Confirmation is an
   // explicit isMain: false, or the worktree list saying so about this path.
-  if (v.isMain === true) return NOT_ISOLATED
-  if (v.isMain !== false) {
+  if (saysYes(v.isMain)) return NOT_ISOLATED
+  if (v.isMain !== false && String(v.isMain).toLowerCase() !== 'false') {
     const entry = (v.worktrees || []).find((w) => w && w.path && w.path === v.worktreePath)
     if (!entry) return NOT_CONFIRMED_ISOLATED
     if (entry.isMain !== false) return entry.isMain === true ? NOT_ISOLATED : NOT_CONFIRMED_ISOLATED
   }
-  if (v.containsReviewedHead !== true)
+  if (!saysYes(v.containsReviewedHead))
     return (
       'the fix is not built on the reviewed commit ' + head + (v.forkPoint ? ' - it forks at ' + v.forkPoint : '')
     )
-  if (v.dirty === true) return 'the fix worktree has uncommitted changes, so the commit is not the whole fix'
+  if (saysYes(v.dirty)) return 'the fix worktree has uncommitted changes, so the commit is not the whole fix'
 
+  // The file-touch rule used to be skipped entirely when no finding named a
+  // file, which meant an empty commit satisfied it. If there is nothing to
+  // check the fix against, that is a reason to stop, not a reason to pass.
   const named = (blocking || []).map((f) => normalisePath(f.file)).filter(Boolean)
-  if (named.length) {
-    const changed = (v.filesChanged || []).map(normalisePath).filter(Boolean)
-    const hit = named.filter((n) => changed.some((c) => pathsMatch(c, n)))
-    if (!hit.length)
-      return 'the fix commit touches none of the files the blocking findings name (' + named.join(', ') + ')'
-    if (hit.length < named.length) log('The fix touches ' + hit.length + ' of ' + named.length + ' named files; the rest go back to the reviewer by name.')
-  }
+  if (!named.length)
+    return 'no blocking finding names a file, so there is nothing to check the fix commit against'
+  const changed = (v.filesChanged || []).map(normalisePath).filter(Boolean)
+  const hit = named.filter((n) => changed.some((c) => pathsMatch(c, n)))
+  if (!hit.length)
+    return 'the fix commit touches none of the files the blocking findings name (' + named.join(', ') + ')'
+  if (hit.length < named.length) log('The fix touches ' + hit.length + ' of ' + named.length + ' named files; the rest go back to the reviewer by name.')
   return null
 }
 
@@ -824,7 +887,11 @@ while (true) {
   const record = {
     round,
     requested: blocking,
-    worktreePath: (verify && verify.worktreePath) || said.hints.worktreePath || '',
+    // git's answer only. Falling back to coder's claim here meant that when the
+    // lane omitted the path, the location reported to Alex was the very thing
+    // this design refuses to trust - and claimMismatch stayed empty, because
+    // there was nothing left to disagree with.
+    worktreePath: (verify && verify.worktreePath) || '',
     baseCommit: reviewedHead,
     headCommit: (verify && verify.headCommit) || '',
     commits: (verify && verify.commits) || [],
@@ -837,6 +904,8 @@ while (true) {
     },
     unresolvedFindings: [],
     claimMismatch: [],
+    proposals: said.proposals,
+    accepted: false,
   }
 
   // coder's hints are a cross-check, never a source. Where git disagrees, git
@@ -851,6 +920,12 @@ while (true) {
   if (record.claimMismatch.length) log(tag + ': coder\'s handoff disagrees with git - ' + record.claimMismatch.join('; ') + '. Git decides.')
 
   if (said.blockers.length) {
+    // Recorded so Alex is told where to look, but never as an accepted fix: the
+    // gate has not run, and on this path it would often refuse. Marking it
+    // accepted put a dirty non-descendant commit in the main checkout into the
+    // history as `fixed: true`.
+    record.accepted = false
+    record.ungatedReason = gateFix(verify, blocking, reviewedHead) || 'the run stopped on a blocker before the fix was gated'
     stopped = 'coder raised a blocker'
     fixRequest = {
       range: reviewRange,
@@ -882,10 +957,13 @@ while (true) {
   }
 
   record.unresolvedFindings = unresolvedFrom(verify, blocking, said)
+  record.accepted = true
   fixes.push(record)
 
-  // Accept: the review moves to the fix, and the stale request goes.
-  fixRequest = null
+  // Accept: the review moves to the fix. fixRequest is not cleared here because
+  // it cannot be set on this path - every branch that assigns it breaks out of
+  // the loop immediately - and a line that clears an unreachable state reads
+  // like it is guarding against something.
   reviewedHead = verify.headCommit
   reviewRange = reviewBase + '...' + reviewedHead
   checkoutPath = verify.worktreePath || checkoutPath
@@ -928,7 +1006,7 @@ const lastFix = fixes[fixes.length - 1] || null
 // generic line is a run that tells Alex nothing he did not already know.
 const NEXT_STEP = {
   clean:
-    'No blocking findings. Read the unverified checks and follow-ups above before deciding whether to merge; they are Propose item: lines for the lead to file, not merge blockers.' +
+    'No blocking findings. Read the unverified checks and the non-blocking follow-ups above before deciding whether to merge: they are the reviewer\'s own words, not merge blockers, and it is the lead\'s job to decide which become items. Anything coder proposed is under proposals.' +
     (fixes.length
       ? ' ' +
         fixes.length +
@@ -976,14 +1054,30 @@ return {
   sensitiveFiles,
   roundsRun: rounds.length,
   stopped,
-  approved: stopped === 'clean',
+  // A run that ends with no blocking findings but a verdict nobody recognised -
+  // coerced to "request changes" above - is not an approval, and reporting one
+  // beside the other made the return contradict itself.
+  approved: stopped === 'clean' && /^approve/i.test(lastVerdict.verdict || ''),
   verdict: lastVerdict.verdict || (stopped === 'nothing to review' ? 'nothing to review' : 'no verdict'),
   summary: lastVerdict.summary || '',
   blocking: stillBlocking,
   followUps: (lastVerdict.findings || []).filter((f) => !isBlocking(f)),
   unverified: (lastVerdict.unverified || []).concat(
-    fixes.filter((f) => !f.testResults.verified).map((f) => 'Round ' + f.round + ' fix: ' + f.testResults.verifiedBy),
+    fixes
+      .filter((f) => !f.testResults.verified)
+      .map((f) =>
+        'Round ' +
+        f.round +
+        ' fix: ' +
+        (stopped === 'clean'
+          ? f.testResults.verifiedBy
+          : 'its test claims were never settled, because the run stopped at "' + stopped + '" and no later round re-ran them'),
+      ),
   ),
+  // coder's own Propose lines. Parsed and carried rather than dropped: it
+  // cannot file them itself, and nothing downstream sees its handoff except
+  // the card comment.
+  proposals: fixes.flatMap((f) => f.proposals || []),
   // Non-null only when the loop declined to fix, or could not.
   fixRequest,
   fixes,
@@ -993,7 +1087,7 @@ return {
     mechanical: (r.mechanical || []).reduce((n, m) => n + (m.findings || []).length, 0),
     verdict: (r.verdict || {}).verdict || 'none',
     blocking: ((r.verdict || {}).findings || []).filter(isBlocking).length,
-    fixed: fixes.some((f) => f.round === r.round && SHA_RE.test(f.headCommit)),
+    fixed: fixes.some((f) => f.round === r.round && f.accepted === true && SHA_RE.test(f.headCommit)),
   })),
   nextStep: NEXT_STEP[stopped] || 'The review is incomplete. Read the stop reason above and resolve it; this run is not an approval.',
 }

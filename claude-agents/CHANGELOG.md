@@ -117,6 +117,33 @@ replaced the message" from "the hook never fired".
 
 ### Changed
 
+- **The cap is the only thing bounding what this workflow spends, and it was
+  not read as a number.** `input.maxRounds || 3` accepted any truthy value, so a
+  `maxRounds` of `"three"` made every round comparison NaN-false and the loop
+  commissioned coder until the process ran out of memory. The same reasoning
+  this file already applied to `fix` - it arrives from a slash command's JSON,
+  so anything but a real value is not consent - now applies to the two numbers
+  that bound the spend. An unusable one stops the run and says so.
+- **`approved` was a field nothing tested.** Every check asserted on `stopped`,
+  so hard-coding `approved: true` left the whole suite green - and it is the one
+  field a caller would gate a merge on. It is now asserted for every stop
+  reason, and it means what it says: a run whose verdict was coerced to
+  "request changes" no longer reports itself approved alongside it.
+- **Five more ways the fix gate could be told a comfortable story.** A commit
+  whose location the lane did not report was adopted, which sent the next round
+  to re-read the original checkout and call the result verified. A lane that
+  named several candidates and then picked one was trusted, because the
+  ambiguity check sat inside the no-commit branch. `dirty` and `isMain` were
+  read strictly while `blocking` had already been taught not to be, so
+  `dirty: "true"` passed. A blocking finding naming no file removed the
+  file-touch rule entirely, so an empty commit satisfied it. And the blocker
+  path recorded its commit before the gate ran, so a dirty non-descendant commit
+  in the main checkout was reported as a fix and Alex was pointed at it.
+- **`dispositionOf` inverted the refusal it exists to carry.** A path in
+  backticks - the ordinary way a model writes one - read as a different file, so
+  coder's reasoned "rejected as wrong" reached the next reviewer as a silent
+  omission. It also scanned the whole line, so a file mentioned in the reasoning
+  inherited another finding's disposition.
 - **Three more ways the fix gate could be told a comfortable story**, all found
   by working through what a verify lane could return rather than by a test
   failing. `pathsMatch` suffix-matched with no floor, so a finding named
@@ -136,9 +163,9 @@ replaced the message" from "the hook never fired".
   blocking, pinned from both sides. Mutation testing found this; three of the
   new cases turned out to survive having the behaviour they named deleted, and
   were replaced with ones that do not.
-- The suite runs 318 numbered checks across five suites, plus the 28 handoff
-  fixtures the two parity checks drive - 346 against 122 before this round.
-  `workflow-logic` 16 to 65, `scope-hook-contract` 60 to 98,
+- The suite runs 337 numbered checks across five suites, plus the 28 handoff
+  fixtures the two parity checks drive - 365 against 122 before this round.
+  `workflow-logic` 16 to 84, `scope-hook-contract` 60 to 98,
   `board-hook-contract` 13 to 22, and `handoff-extractor-parity` new at 128.
 - `hooks/README.md` records what the probe measured beyond item 15's table:
   `SubagentStop` also sends `cwd`, `effort`, `permission_mode`, `prompt_id`,
