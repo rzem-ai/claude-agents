@@ -371,6 +371,44 @@ if [ -d "$WT" ]; then
     allow_bash coder 'python3 -m pytest' "$MAINCO"
 fi
 
+printf '\nWrappers are transparent; sudo is not a wrapper\n'
+
+# Making a wrapper transparent is asymmetric. For a denylist role it is a strict
+# improvement - the forbidden verb stops hiding behind `command`. For an
+# allowlist role it REMOVES the requirement that the wrapper itself be allowed,
+# and `sudo` is not transparent in the sense that matters: running cat as root
+# is a different act from running cat. permissions.deny backstops it, but the
+# per-agent layer is exactly the half permissions.deny cannot express.
+deny_bash  scout    'sudo cat /etc/shadow'
+deny_bash  scout    'sudo ls /root'
+deny_bash  reviewer 'sudo cat /etc/shadow'
+# Not asserted for ui-designer, whose Bash is otherwise open: with sudo no
+# longer transparent, the command here IS sudo, and `Bash(sudo *)` in
+# home/settings.json is what stops it. That is the correct division - this hook
+# expresses the half permissions.deny cannot, and sudo is squarely the half it
+# can.
+
+# The wrappers that ARE transparent stay so, including by absolute path.
+deny_bash_saying fleet-steward '/usr/bin/env git merge main' 'git merge'
+deny_bash_saying fleet-steward 'env -i git merge main' 'git merge'
+deny_bash_saying fleet-steward 'xargs -n1 git merge' 'git merge'
+deny_bash_saying fleet-steward 'nohup git reset --hard HEAD~1' 'git reset'
+allow_bash scout 'env -i git log --oneline'
+
+printf '\nAn option that takes a value does not have to be a long one\n'
+
+# `npm -C <dir>` is a documented alias for --prefix and takes a separate value,
+# so scanning past a non-verb word only after a LONG option ended the scan one
+# word early and the install verb was never reached.
+deny_bash_saying ui-designer 'npm -C /tmp/proto install react' 'npm install'
+deny_bash_saying ui-designer 'npm -C /tmp/proto i react' 'npm i'
+deny_bash_saying ui-designer 'npm -w packages/ui install react' 'npm install'
+# ...and the controls that make the rule worth having rather than a blanket ban.
+allow_bash ui-designer 'npm run link'
+allow_bash ui-designer 'npm run install-deps'
+deny_bash_saying ui-designer 'npm -g install react' 'npm install'
+allow_bash ui-designer 'npx serve prototypes/'
+
 printf '\n%s passed, %s failed\n' "$PASSED" "$FAILED"
 if [ "$FAILED" -ne 0 ]; then
     printf 'The scope hook admits something a role forbids, or blocks work the role exists to do.\n'

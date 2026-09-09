@@ -70,6 +70,21 @@ replaced the message" from "the hook never fired".
   `StructuredOutput` block is a run that owed no handoff and passes, a final
   `text` block is recovered and validated like any other, and a transcript it
   cannot read passes and says so. Both shapes were read off real transcripts.
+- **`sudo` is not a wrapper.** Making wrappers transparent is asymmetric: for a
+  denylist role it stops a forbidden verb hiding behind one, but for an
+  allowlist role it removes the requirement that the wrapper itself be
+  permitted - and `sudo cat` is not the same act as `cat`. Taking a wrapper list
+  wholesale let `sudo cat /etc/shadow` past `scout`, which had refused it purely
+  because sudo was not on its list. `Bash(sudo *)` in `home/settings.json`
+  backstops sudo, and that is the right division of labour: this hook expresses
+  the half `permissions.deny` cannot. A wrapper's own options are part of the
+  wrapper now, so `env -i git merge` and `xargs -n1 git merge` are the git
+  command that follows them.
+- **An option that takes a value need not be a long one.** The install ban
+  scanned past a non-verb word only after a `--` option, so `npm -C <dir>
+  install` - a documented alias for `--prefix` - ended the scan a word early and
+  never reached the verb. `npm run link` stays allowed because nothing precedes
+  `run`.
 - **The two parsers now agree about which word is the command, by
   construction.** `leading_token` stripped `VAR=val` to find `npm`, while
   `sub_verb` dropped position one - which *was* the assignment - and returned
@@ -206,9 +221,9 @@ replaced the message" from "the hook never fired".
   blocking, pinned from both sides. Mutation testing found this; three of the
   new cases turned out to survive having the behaviour they named deleted, and
   were replaced with ones that do not.
-- The suite runs 398 numbered checks across five suites, plus the 28 handoff
-  fixtures the two parity checks drive - 426 against 122 before this round.
-  `workflow-logic` 16 to 103, `scope-hook-contract` 60 to 135,
+- The suite runs 413 numbered checks across five suites, plus the 28 handoff
+  fixtures the two parity checks drive - 441 against 122 before this round.
+  `workflow-logic` 16 to 103, `scope-hook-contract` 60 to 150,
   `board-hook-contract` 13 to 27, and `handoff-extractor-parity` new at 128.
 - `hooks/README.md` records what the probe measured beyond item 15's table:
   `SubagentStop` also sends `cwd`, `effort`, `permission_mode`, `prompt_id`,

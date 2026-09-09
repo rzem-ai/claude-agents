@@ -227,7 +227,14 @@ sed_writes() {
 # Wrappers the shell runs straight through: the real command is what follows.
 # A closed list, because it costs no false denies - unlike treating any token
 # that matches a forbidden verb as one.
-COMMAND_WRAPPERS=" command env builtin exec nohup time sudo xargs "
+# NOT sudo. Transparency is asymmetric: for a denylist role it stops a forbidden
+# verb hiding behind the wrapper, but for an allowlist role it removes the
+# requirement that the wrapper itself be permitted - and `sudo cat` is not the
+# same act as `cat`. Listing it here let `sudo cat /etc/shadow` past scout's
+# allowlist, which had refused it purely because sudo was not on the list.
+# permissions.deny backstops sudo, but the per-agent layer is precisely the half
+# permissions.deny cannot express, so it should not be the looser of the two.
+COMMAND_WRAPPERS=" command env builtin exec nohup time xargs "
 
 # The segment with leading assignments and wrapper commands removed. Both
 # parsers below start from this, so they cannot disagree about which word is the
@@ -236,15 +243,22 @@ COMMAND_WRAPPERS=" command env builtin exec nohup time sudo xargs "
 # the verb. `NODE_ENV=production npm install react` walked past the install ban
 # on that disagreement alone.
 command_words() {
-  local seg="$1" first next
+  local seg="$1" first next after_wrapper=no
   while :; do
     first="$(printf '%s' "$seg" | awk '{print $1}')"
     case "$first" in
       "") break ;;
       *=*) ;;
+      # A wrapper's own options belong to the wrapper, so `env -i git merge` and
+      # `xargs -n1 git merge` are still the git command that follows. Only
+      # consumed straight after a wrapper, so an ordinary command's options are
+      # never mistaken for something to skip.
+      -*)
+        if [ "$after_wrapper" = yes ]; then :; else break; fi
+        ;;
       *)
         case "$COMMAND_WRAPPERS" in
-          *" ${first##*/} "*) ;;
+          *" ${first##*/} "*) after_wrapper=yes ;;
           *) break ;;
         esac
         ;;
@@ -660,8 +674,12 @@ install_verb() {
     case "$UI_DESIGNER_INSTALL_VERBS" in
       *" $tok "*) printf '%s' "$tok"; return 0 ;;
     esac
+    # Any option may carry a separate value, not just a long one: `npm -C <dir>`
+    # is a documented alias for --prefix and takes one, so requiring `--` ended
+    # the scan a word early and the install verb was never reached. `npm run
+    # link` is still allowed, because nothing preceded `run`.
     case "$prev" in
-      --*) prev="" ; continue ;;
+      -*) prev="" ; continue ;;
       *) printf ''; return 0 ;;
     esac
   done
