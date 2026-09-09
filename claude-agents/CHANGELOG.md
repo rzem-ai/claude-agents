@@ -100,9 +100,9 @@ replaced the message" from "the hook never fired".
   blocking, pinned from both sides. Mutation testing found this; three of the
   new cases turned out to survive having the behaviour they named deleted, and
   were replaced with ones that do not.
-- The suite runs 283 numbered checks across five suites, plus the 28 handoff
-  fixtures the two parity checks drive - 311 against 122 before this round.
-  `workflow-logic` 16 to 59, `scope-hook-contract` 60 to 75,
+- The suite runs 285 numbered checks across five suites, plus the 28 handoff
+  fixtures the two parity checks drive - 313 against 122 before this round.
+  `workflow-logic` 16 to 61, `scope-hook-contract` 60 to 75,
   `board-hook-contract` 13 to 16, and `handoff-extractor-parity` new at 128.
 - `hooks/README.md` records what the probe measured beyond item 15's table:
   `SubagentStop` also sends `cwd`, `effort`, `permission_mode`, `prompt_id`,
