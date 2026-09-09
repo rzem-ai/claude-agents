@@ -709,3 +709,106 @@ layer had to make on its own:
     ```
 
     `evals/lib/board-hook-contract.sh` pins all of it.
+
+16. **Structured output carries no handoff - settled, September 2026.** A
+    subagent spawned from a workflow with `agent(prompt, {agentType, schema})`
+    is forced through StructuredOutput, and its `SubagentStop` payload **omits
+    `last_assistant_message` entirely**. Not the JSON in that field, not an
+    empty string: the key is absent.
+
+    This was measured, not read. A probe spawned one agent definition twice,
+    identical but for the schema, and dumped both payloads:
+
+    | Spawn | `last_assistant_message` | Gate before the fix |
+    |---|---|---|
+    | with `schema` | key absent | `exit 2`, "the final message is empty" |
+    | without `schema` | the Markdown handoff | `exit 0` |
+
+    The hook read `.last_assistant_message // ""`, which erased the difference
+    between *absent* and *empty*, treated the absent `status` as success, and
+    failed `validate_handoff`. Since the `SubagentStop` matcher covers all nine
+    fleet names, and every workflow spawns fleet agents with schemas -
+    `scout` and `reviewer` in `review-round.js`, `researcher` at five sites in
+    `deep-research.js`, `scout` and `spec-writer` in `spec-to-plan.js` - the
+    gate had been refusing to let those runs stop and telling them to re-emit a
+    handoff they were never asked for. Item 12 scoped the matcher away from the
+    built-in `Plan` and `general-purpose` lanes; that fix cannot reach a
+    schema-carrying agent which is itself a fleet agent.
+
+    The hook now separates the two cases and does it once, at the read:
+
+    ```sh
+    has_message="$(printf '%s' "$input" \
+      | jq -r 'if has("last_assistant_message") and .last_assistant_message != null
+               then "yes" else "no" end')"
+    ```
+
+    Absent, or JSON `null`, means no handoff was ever asked for, so the gate does
+    not fire and the column is left alone - `TaskCompleted` owns Done, and a card
+    that invents a comment out of structured output nobody parsed is worse than a
+    card that says nothing. Present-but-empty still fails, because that is an
+    agent which was asked and said nothing, and it is the thing the gate exists
+    to catch. `evals/lib/board-hook-contract.sh` pins all three cases -
+    `stop-structured-run-passes`, `stop-empty-message-blocks`,
+    `stop-prose-blocks` - so a future softening of the gate has to walk past two
+    tests that say no.
+
+    The same probe recorded fields item 15's table does not list, all present on
+    a real event:
+
+    | Event | Additional fields observed |
+    |---|---|
+    | `SubagentStart` | `cwd`, `prompt_id`, `session_id`, `transcript_path` |
+    | `SubagentStop` | `cwd`, `effort`, `permission_mode`, `prompt_id`, `session_crons`, `transcript_path` |
+
+    `agent_type` arrived bare (`probe-worker`), unprefixed. `cwd` is worth
+    noting: it is a supported route to the directory a subagent actually worked
+    in, which is the thing `review-round.js` had no way to learn.
+
+    To re-derive after a CLI upgrade, spawn one agent twice from a workflow -
+    once with a `schema`, once without - behind a `SubagentStop` hook that dumps
+    its stdin, and diff the two payloads. The control spawn is the point: an
+    empty dump alone cannot distinguish "StructuredOutput ate the message" from
+    "the hook never fired".
+
+17. **Git global options hid the verb - fixed, September 2026.** Every per-agent
+    git check read the subcommand as the second whitespace-separated token, so
+    `git -C /path log` resolved to a verb of `-C`. The parser and the shell
+    disagreed about where the verb was, which is the same family of defect as
+    the quote-stripping hole, and it broke in both directions at once depending
+    on how each role's check is written:
+
+    | Role | Check shape | Unrecognised verb | Result |
+    |---|---|---|---|
+    | `scout`, `reviewer`, `ui-designer` | allowlist | denies | **false deny** - `git -C <worktree> diff` refused |
+    | `fleet-steward` | denylist | allows | **false allow** - a real hole |
+
+    The false deny was invisible, because nobody blames a reviewer that cannot
+    read. The false allow was not: `git -C /path push --force`,
+    `git -C /path merge` and `git -C /path reset --hard` all sailed past the
+    three git operations the steward is explicitly forbidden to perform, and it
+    is the one agent meant to run unattended on a schedule.
+
+    `git_verb()` now finds the real verb. Every git global option is dashed and
+    a verb never is, so it skips dashed tokens and skips the value of the eight
+    that take a separate argument (`-C`, `-c`, `--git-dir`, `--work-tree`,
+    `--namespace`, `--exec-path`, `--super-prefix`, `--config-env`). A segment
+    with no undashed token yields the empty string, which matches no allowlist
+    and no denylist entry, so `git -C /path` on its own is not a read.
+
+    It also collapses backslash-escaped pairs before splitting. Quoted paths
+    never arrive unsplit - the quote stripper runs first - but escapes do, and
+    `git -C /tmp/a\ b reset --hard` otherwise resolved its verb to `b`. Nothing
+    downstream reads the path, only the verb, so replacing each escaped pair
+    with one ordinary character keeps the path a single token without
+    pretending to know what it says.
+
+    `evals/lib/scope-hook-contract.sh` pins both directions: the reads that must
+    now work, and every forbidden verb that must stay forbidden when a `-C`, a
+    `-c`, a `--no-pager` or an escaped space is put in front of it. Fixing the
+    false deny without those denial cases would have widened the hole rather
+    than closed it.
+
+    This does not make the scope hook a containment boundary, and nothing here
+    changes that. A program run through Bash still writes wherever the process
+    can, and no shell-level check sees inside it.

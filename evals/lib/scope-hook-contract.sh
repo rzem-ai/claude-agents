@@ -150,6 +150,45 @@ allow_write ui-designer "$PROJECT/prototypes/session-refresh.html"
 # A commissioned run article is an authorised deliverable, not a docs violation.
 allow_write ui-designer "$PROJECT/docs/runs/2026-09-09-ui-designer.md"
 
+printf '\nGit global options must not hide the verb\n'
+
+# The verb parser read the second whitespace-separated token, so for
+# "git -C <path> log" it decided the verb was "-C" and denied a read. That is
+# the same family of hole as the quote-stripper (R01): the parser disagreeing
+# with the shell about where the verb is. Here it fails closed rather than open,
+# which made it invisible - a reviewer that cannot read is just a reviewer
+# nobody blamed.
+#
+# It matters now because review-round has to read the worktree coder fixed in,
+# and "git -C <worktree> diff" is the shape that does that without a chdir.
+allow_bash scout    'git -C /tmp/wt log --oneline -5'
+allow_bash scout    'git --no-pager -C /tmp/wt diff HEAD~1'
+allow_bash reviewer 'git -C /tmp/wt diff main...HEAD'
+allow_bash reviewer 'git -c core.pager=cat -C /tmp/wt show HEAD'
+
+# The point of finding the real verb is that the allowlist still applies to it.
+# A global option must not become a way to smuggle a writing verb past the
+# check, which is exactly what a laxer fix would buy.
+deny_bash  scout    'git -C /tmp/wt reset --hard HEAD~1'
+deny_bash  reviewer 'git -C /tmp/wt commit -m x'
+deny_bash  reviewer 'git --no-pager -C /tmp/wt checkout main'
+deny_bash  fleet-steward 'git -C /tmp/wt push --force origin main'
+deny_bash  fleet-steward 'git -C /tmp/wt merge main'
+
+# A -C with no verb after it is not a read. Nothing to allow.
+deny_bash  scout    'git -C /tmp/wt'
+
+# A quoted path is already collapsed by the quote stripper before the verb scan
+# sees it, but a backslash-escaped space is not, and word splitting treats it as
+# a token boundary. That turns the first fragment of the path into the "verb",
+# which for a denylist agent means the real verb is never examined at all. This
+# is the -C hole again wearing a different hat.
+deny_bash  fleet-steward 'git -C /tmp/a\ b reset --hard HEAD~1'
+deny_bash  fleet-steward 'git -C /tmp/a\ b merge main'
+deny_bash  fleet-steward 'git -C /tmp/a\ b push --force origin main'
+allow_bash scout         'git -C /tmp/a\ b log --oneline'
+allow_bash reviewer      'git -C /tmp/a\ b diff HEAD'
+
 printf '\n%s passed, %s failed\n' "$PASSED" "$FAILED"
 if [ "$FAILED" -ne 0 ]; then
     printf 'The scope hook admits something a role forbids, or blocks work the role exists to do.\n'

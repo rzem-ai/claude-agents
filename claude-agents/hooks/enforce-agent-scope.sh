@@ -103,6 +103,47 @@ enforce_spec_writer() {
   deny "spec-writer invariant: \"Never write anywhere except under docs/specs/: not source, not config, not tests, and never a plan under docs/plans/.\" $tool_name targeted $abs. Write the spec to docs/specs/<issue>.md instead. Anything else belongs to the lead."
 }
 
+# Extracts the git subcommand from a command line, skipping the global options
+# that may sit between "git" and the verb.
+#
+# The parser used to read the second whitespace-separated token, so
+# "git -C /path log" resolved to a verb of "-C". That disagreed with the shell
+# about where the verb is, which is the same family of hole as the quote
+# stripper, and it broke in both directions at once. Against an allowlist
+# (scout, reviewer, ui-designer) an unrecognised verb denies, so reading a
+# worktree with "git -C" was refused - a false deny, invisible because nobody
+# blames a reviewer that cannot read. Against a denylist (fleet-steward) an
+# unrecognised verb ALLOWS, so "git -C /path push --force", "git -C /path merge"
+# and "git -C /path reset --hard" all sailed past the three git operations that
+# agent is explicitly forbidden to perform.
+#
+# Every git global option is dashed and the verb never is, so: skip dashed
+# tokens, and skip the value of the ones that take a separate argument. A line
+# with no undashed token has no verb, and callers must treat the empty string as
+# "not a read" rather than as a match.
+git_verb() {
+  local rest="${1#*git}" tok skip_next=no
+  # A backslash-escaped space does not end a token, but word splitting believes
+  # it does, so "git -C /tmp/a\ b reset --hard" would resolve its verb to "b".
+  # Quoted paths never reach here unsplit - the quote stripper collapses them
+  # first - but escapes do. Every escaped pair is replaced with a single
+  # ordinary character, which keeps the path one token without pretending to
+  # know what the path says. Nothing downstream reads the path, only the verb.
+  rest="$(printf '%s' "$rest" | sed 's/\\./x/g')"
+  # shellcheck disable=SC2086 # deliberate word splitting: this is a verb scan
+  set -- $rest
+  for tok in "$@"; do
+    if [ "$skip_next" = yes ]; then skip_next=no; continue; fi
+    case "$tok" in
+      -C|-c|--git-dir|--work-tree|--namespace|--exec-path|--super-prefix|--config-env)
+        skip_next=yes; continue ;;
+      -*) continue ;;
+      *) printf '%s' "$tok"; return 0 ;;
+    esac
+  done
+  printf ''
+}
+
 # ----------------------------------------------------------------------- scout
 # Invariants: "Never edit, write or create a file", and a Bash allowlist -
 # "run only commands that read - ls, cat, head, tail, sed -n, wc, file, rg,
@@ -251,7 +292,7 @@ enforce_scout() {
         esac
         ;;
       git)
-        verb="$(printf '%s' "$first" | awk '{print $2}')"
+        verb="$(git_verb "${first}")"
         case "$SCOUT_ALLOWED_GIT" in
           *" $verb "*) ;;
           *) deny "scout invariant: read-only git only - log, show, blame, diff, ls-files. \"git $verb\" is not one of them." ;;
@@ -366,7 +407,7 @@ enforce_fleet_steward() {
       git|*/git) ;;
       *) continue ;;
     esac
-    verb="$(printf '%s' "$seg" | awk '{print $2}')"
+    verb="$(git_verb "${seg}")"
     case "$verb" in
       merge|rebase|reset|filter-branch|filter-repo)
         deny "fleet-steward invariant: \"Never merge\" and \"never run a git command that rewrites shared history: no force-push, no reset, no rebase onto a shared branch.\" \"git $verb\" is one of those. File it and propose it; Alex decides on the pull request." ;;
@@ -447,7 +488,7 @@ enforce_reviewer() {
 
     case "$tok" in
       git)
-        verb="$(printf '%s' "$seg" | awk '{print $2}')"
+        verb="$(git_verb "${seg}")"
         case "$REVIEWER_ALLOWED_GIT" in
           *" $verb "*) ;;
           *) deny "reviewer invariant: \"Never run a git command that writes: no commit, push, force-push, checkout, stash, reset or rebase. Read-only git only.\" \"git $verb\" is not a read-only verb. Read the history with git log, show, blame, diff or ls-files; anything that changes a ref belongs to coder." ;;
@@ -494,7 +535,7 @@ enforce_ui_designer() {
     [ -n "$seg" ] || continue
     tok="$(leading_token "$seg")"
     [ -n "$tok" ] || continue
-    verb="$(printf '%s' "$seg" | awk '{print $2}')"
+    verb="$(git_verb "${seg}")"
 
     case "$tok" in
       git)
