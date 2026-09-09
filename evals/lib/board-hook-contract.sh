@@ -182,6 +182,46 @@ run_hook board-subagent-stop.sh \
                 last_assistant_message:"## Done\n- x\n\n## Not done\n- none\n\n## Unverified\n- none\n\n## Decisions needed\n- none\n"}')"
 log_has "no status field on SubagentStop"; check stop-status-honest "the hook records that no status field is sent" $?
 
+printf '\nSubagentStop: a structured-output run carries no handoff\n'
+
+# Measured against Claude Code 2.1.236 with a live probe, not read from docs: a
+# subagent spawned from a workflow with a schema is forced through
+# StructuredOutput, and its SubagentStop payload OMITS last_assistant_message
+# entirely. Not JSON in that field, not an empty string - the key is absent.
+#
+# The hook read it as `// ""`, treated the absent status as success, and failed
+# validate_handoff with "the final message is empty", exiting 2. Every workflow
+# spawns fleet agents with schemas - scout and reviewer in review-round,
+# researcher in deep-research, scout and spec-writer in spec-to-plan - and the
+# SubagentStop matcher covers all nine fleet names, so the gate had been
+# refusing to let those runs stop. Scoping the matcher (README item 12) fixed
+# this for the built-in Plan and general-purpose lanes; it cannot help when the
+# schema-carrying agent is itself a fleet agent.
+#
+# A run with no handoff field is not a malformed handoff. It is a run that was
+# never asked for one.
+run_hook board-subagent-stop.sh \
+    "$(jq -nc '{session_id:"s11",agent_id:"a4",agent_type:"claude-agents:scout",
+                stop_hook_active:false,agent_transcript_path:"/dev/null"}')"
+[ "$RC" -eq 0 ]; check stop-structured-run-passes "a schema-spawned run with no handoff field is not a malformed handoff" $?
+
+# The line the fix must not cross. A message that is present and empty is a
+# fleet agent that was asked for a handoff and produced nothing, which is
+# exactly what the gate exists to catch.
+run_hook board-subagent-stop.sh \
+    "$(jq -nc '{session_id:"s12",agent_id:"a5",agent_type:"claude-agents:scout",
+                stop_hook_active:false,agent_transcript_path:"/dev/null",
+                last_assistant_message:""}')"
+[ "$RC" -eq 2 ]; check stop-empty-message-blocks "an empty final message is still a malformed handoff" $?
+
+# And prose in place of the four headings stays refused, so the fix cannot be a
+# blanket softening of the gate.
+run_hook board-subagent-stop.sh \
+    "$(jq -nc '{session_id:"s13",agent_id:"a6",agent_type:"claude-agents:scout",
+                stop_hook_active:false,agent_transcript_path:"/dev/null",
+                last_assistant_message:"I fixed it. Looks good to me."}')"
+[ "$RC" -eq 2 ]; check stop-prose-blocks "prose in place of a handoff is still refused" $?
+
 printf '\n%s passed, %s failed\n' "$PASSED" "$FAILED"
 if [ "$FAILED" -ne 0 ]; then
     printf 'A board hook is reading a field the runtime does not send, or moving a card without evidence.\n'

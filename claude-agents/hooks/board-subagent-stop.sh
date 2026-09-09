@@ -211,6 +211,14 @@ session_id="$(printf '%s' "$input" | jq -r '.session_id // ""')"
 agent_id="$(printf '%s' "$input" | jq -r '.agent_id // ""')"
 agent_type="$(printf '%s' "$input" | jq -r '.agent_type // ""')"
 message="$(printf '%s' "$input" | jq -r '.last_assistant_message // ""')"
+# Absent is not empty. A subagent spawned with a schema is forced through
+# StructuredOutput and the runtime omits last_assistant_message entirely - the
+# key is not there, rather than holding "" or the JSON. Measured against Claude
+# Code 2.1.236 with a live probe; see hooks/README.md item 16. `// ""` erases
+# that distinction, so the two cases are separated here and nowhere else.
+# A JSON null counts as absent for the same reason: it is no message, not an
+# empty one.
+has_message="$(printf '%s' "$input" | jq -r 'if has("last_assistant_message") and .last_assistant_message != null then "yes" else "no" end')"
 # Neither of these fields exists. The SubagentStop schema in the shipped CLI is
 # stop_hook_active, agent_id, agent_transcript_path, agent_type,
 # last_assistant_message and background_tasks; `status` is not in it and
@@ -273,6 +281,28 @@ if [ "$status" = "failure" ] || [ "$status" = "cancelled" ]; then
 fi
 
 # 2. Successful run: the handoff must parse before anything is trusted from it.
+#
+# Unless no handoff was ever asked for. Every workflow spawns fleet agents with
+# schemas - scout and reviewer in review-round, researcher in deep-research,
+# scout and spec-writer in spec-to-plan - and the matcher covers all nine fleet
+# names, so this gate had been exiting 2 on those runs and telling them to
+# re-emit a handoff they were never asked to write. Scoping the matcher (item
+# 12) fixed the built-in Plan and general-purpose lanes; it cannot help when the
+# schema-carrying agent is itself a fleet agent.
+#
+# A run with no message field is not a malformed handoff, so it passes. A
+# message that is present and empty is an agent that was asked and said nothing,
+# and that still fails - the distinction is the whole fix, and softening it any
+# further would retire the gate.
+#
+# The column is left alone either way: TaskCompleted owns Done, there are no
+# Blocker: lines to read, and a card that invents a comment out of structured
+# output nobody parsed is worse than a card that says nothing.
+if [ "$has_message" = no ]; then
+  board_log "$HOOK" "${agent_type:-agent} returned structured output and no handoff, so there is nothing to validate; leaving the column alone"
+  exit 0
+fi
+
 if ! validate_handoff "$message"; then
   trap - ERR
   {
