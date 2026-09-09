@@ -117,6 +117,18 @@ replaced the message" from "the hook never fired".
 
 ### Changed
 
+- **Three more ways the fix gate could be told a comfortable story**, all found
+  by working through what a verify lane could return rather than by a test
+  failing. `pathsMatch` suffix-matched with no floor, so a finding named
+  `index.ts` matched every `index.ts` in the tree and a fix touching an
+  unrelated one satisfied the gate that checks it touched the right one.
+  `isMain` is optional in the schema, so a lane that omitted it proved isolation
+  by saying nothing - which is the shape the failure actually takes, since in
+  the probe both agents ran in the main checkout and nothing announced it.
+  And `v.headCommit === head` missed that git prints whatever sha length it
+  likes, so the reviewed head abbreviated read as a different commit and would
+  have been adopted - re-pointing round two at the code round one had already
+  reviewed, which is exactly the failure this loop was deleted for.
 - A reviewer's `blocking` flag is read to fail closed. Both obvious readings
   are wrong: a truthy test makes the string `"false"` a blocking finding, and a
   strict `=== true` makes the string `"true"` a passing one - and that second
@@ -124,9 +136,9 @@ replaced the message" from "the hook never fired".
   blocking, pinned from both sides. Mutation testing found this; three of the
   new cases turned out to survive having the behaviour they named deleted, and
   were replaced with ones that do not.
-- The suite runs 314 numbered checks across five suites, plus the 28 handoff
-  fixtures the two parity checks drive - 342 against 122 before this round.
-  `workflow-logic` 16 to 61, `scope-hook-contract` 60 to 98,
+- The suite runs 318 numbered checks across five suites, plus the 28 handoff
+  fixtures the two parity checks drive - 346 against 122 before this round.
+  `workflow-logic` 16 to 65, `scope-hook-contract` 60 to 98,
   `board-hook-contract` 13 to 22, and `handoff-extractor-parity` new at 128.
 - `hooks/README.md` records what the probe measured beyond item 15's table:
   `SubagentStop` also sends `cwd`, `effort`, `permission_mode`, `prompt_id`,
