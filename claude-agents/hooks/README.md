@@ -312,6 +312,23 @@ The cost is that a non-fleet subagent no longer moves a bound board item to
 Blocked when it fails. That only matters for a spawn carrying a `Board-Item:`
 line, and the lead only binds those to fleet agents.
 
+A second cost, worth stating plainly because two things now depend on it: an
+`agentType`-less lane is outside *both* hooks. The `SubagentStop` matcher skips
+it, and no branch of `enforce-agent-scope.sh` claims it either, since every
+branch there keys on an agent name. So when `review-round.js` tells its git and
+mechanical lanes "read-only git only", that sentence is an instruction to a
+model and not a boundary anything enforces. It is the position the four
+mechanical lanes have always been in - they run the project's test suite - and
+`review-round`'s git lanes now join them. The trade is deliberate: those lanes
+need `git worktree list`, `merge-base` and `rev-parse`, and widening `scout`'s
+or `reviewer`'s allowlist to cover them would weaken a role boundary for every
+run rather than for the one workflow that needs it.
+
+The rule that falls out of all this, worth keeping whenever a workflow is
+written: **give a fleet agent a schema only where its handoff is worth
+nothing.** A spawn's `schema` decides whether the gate, the `## Done` card
+comment and the `Blocker:` route to the human queue exist for that run at all.
+
 ### What it checks
 
 `board-subagent-stop.sh` validates `last_assistant_message` against

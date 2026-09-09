@@ -9,6 +9,102 @@ The version in `.claude-plugin/plugin.json` is load-bearing. Clients keep the
 cached copy of the plugin until that number changes, so every change that should
 reach a machine needs a version bump and an entry below.
 
+## [0.6.0] - 2026-09-10
+
+The round that came out of the first live probe. Every finding below was
+measured against a running Claude Code 2.1.236 before it was fixed, because the
+deterministic suite stubs the model out and could not see any of it.
+
+The probe itself was two spawns of one agent definition, identical but for a
+`schema`, behind a hook that dumped its stdin. Keeping the control spawn is what
+made it evidence: an empty dump on its own cannot distinguish "StructuredOutput
+replaced the message" from "the hook never fired".
+
+### Fixed
+
+- **The handoff gate had been refusing every schema-carrying fleet agent.** A
+  subagent spawned with a `schema` is forced through StructuredOutput, and the
+  runtime then sends `SubagentStop` no `last_assistant_message` at all - the key
+  is absent, not empty, and not the JSON. `board-subagent-stop.sh` read it as
+  `// ""`, could not tell a run that was never asked for a handoff from one that
+  produced an empty one, treated the absent `status` as success, failed
+  `validate_handoff` and exited 2 - telling the agent to re-emit a handoff
+  nobody had asked it to write. That is nine spawn sites across all three
+  workflows: `scout` and `reviewer` in `review-round`, `researcher` at five
+  sites in `deep-research`, `scout` and `spec-writer` in `spec-to-plan`. Item 12
+  scoped the matcher away from the built-in `Plan` and `general-purpose` lanes
+  last round; that fix could never reach a schema-carrying agent which is itself
+  a fleet agent. Absent or null now means there is nothing to validate; present
+  and empty still fails. `hooks/README.md` item 16.
+- **`git -C` hid the verb from every per-agent git check.** The subcommand was
+  read as the second whitespace-separated token, so `git -C /path log` resolved
+  its verb to `-C`. Against an allowlist that denies, which made `scout` and
+  `reviewer` unable to read a worktree - invisible, because nobody blames a
+  reviewer that cannot read. Against a **denylist it allows**, and
+  `fleet-steward` uses a denylist: `git -C /path push --force`,
+  `git -C /path merge` and `git -C /path reset --hard` all walked past the three
+  git operations that agent is explicitly forbidden to perform, and it is the
+  one agent meant to run unattended on a schedule. A backslash-escaped space in
+  the path did the same by another route. `git_verb()` now skips dashed tokens
+  and the values of the eight global options that take a separate argument, and
+  collapses escaped pairs before splitting. Both directions are pinned:
+  the reads that must now work, and every forbidden verb that must stay
+  forbidden with a `-C`, a `-c`, a `--no-pager` or an escaped space in front of
+  it. `hooks/README.md` item 17.
+- **`skills/handoff/SKILL.md` told every fleet agent that `SubagentStop`
+  receives a `status` field.** It does not; item 15 settled that last round and
+  the sentence survived. The instruction it justified was right and is kept -
+  all four sections on a failed run, what went wrong under Not done - but the
+  premise is now stated correctly: the handoff is the only account of the run
+  anything downstream gets, and a `Blocker:` line is the one route to the human
+  queue that works.
+- **The stop hook stated an inference as a fact.** Its log line said the agent
+  "returned structured output"; the probe proved a schema spawn produces an
+  absent message, never the converse. It now says the message was absent and
+  that the event does not say why.
+
+### Added
+
+- **`review-round` carries fixes back, behind `fix: true`.** The loop was
+  removed last round because `coder` fixes in an isolated worktree and the
+  script had no supported way to learn that worktree's path or commit. It is
+  back, and nothing it branches on is `coder`'s word for it: a schema-carrying,
+  `agentType`-less git lane reports what git says, and before a fix is adopted
+  git has to show a commit, in a worktree that is **not the main checkout**,
+  built on the reviewed commit, clean, and touching at least one file the
+  blocking findings name. Each of those stops the run. Both ends of the range
+  are pinned to SHAs before any round runs, so a moving `main` cannot change
+  what round two reviews, and round N+1 runs its mechanical lanes inside the fix
+  worktree - without which the tests lane re-runs the original code and
+  "verified" means nothing. `coder` is spawned **without** a schema, so its
+  handoff still reaches the gate, the card and the human queue.
+
+  Opt-in, and the default path keeps today's exact behaviour and stop string.
+  Worktree isolation for a workflow-spawned `coder` has never once been observed
+  against a live Claude, and a run that commissions code by default is a run
+  that surprises somebody.
+- **`evals/lib/handoff-extractor-parity.sh`**, 128 checks. `review-round` is now
+  a third reader of the handoff format, so it is pinned to the hook's
+  `extract_section` the way `handoff-check.sh` already is. Both implementations
+  are sliced out of the files they ship in, so this compares shipping code
+  rather than a copy. It caught two real divergences on the way in: the hook
+  strips every carriage return, and its heading match is exact, so `## Done `
+  with a trailing space opens nothing.
+
+### Changed
+
+- The suite runs 279 numbered checks across five suites, plus the 28 handoff
+  fixtures the two parity checks drive - 307 against 122 before this round.
+  `workflow-logic` 16 to 55, `scope-hook-contract` 60 to 75,
+  `board-hook-contract` 13 to 16, and `handoff-extractor-parity` new at 128.
+- `hooks/README.md` records what the probe measured beyond item 15's table:
+  `SubagentStop` also sends `cwd`, `effort`, `permission_mode`, `prompt_id`,
+  `session_crons` and `transcript_path`; `SubagentStart` also sends `cwd`,
+  `prompt_id`, `session_id` and `transcript_path`; `agent_type` arrives
+  unprefixed. It also names two things plainly: the gap the gate fix accepts,
+  and that an `agentType`-less lane is governed by neither hook, so "read-only
+  git only" in a lane prompt is an instruction rather than a boundary.
+
 ## [0.5.0] - 2026-09-09
 
 The fix round for the 9 September fleet review
@@ -270,7 +366,8 @@ Initial scaffolding. The repo became a plugin marketplace with one plugin in it.
   `templates/rules/` and `home/` in the repo.
 - This changelog.
 
-[Unreleased]: https://github.com/rzem-ai/claude-agents/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/rzem-ai/claude-agents/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/rzem-ai/claude-agents/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/rzem-ai/claude-agents/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/rzem-ai/claude-agents/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/rzem-ai/claude-agents/compare/v0.2.0...v0.3.0
