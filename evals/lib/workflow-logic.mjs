@@ -447,6 +447,41 @@ for (const reported of ['./src/a.ts', 'src/a.ts:88']) {
   check('sensitive-reported-honestly', 'and the run reports that it did, naming the file', result.sensitive === true && (result.sensitiveFiles || []).includes('src/session-token.ts'), [result.sensitive, result.sensitiveFiles])
 }
 
+// A suffix match is how an absolute path from a reviewer meets a repo-relative
+// one from git. It must not become a licence to match on a bare basename: the
+// gate's job is to check the fix touched the files the findings NAME, and
+// "index.ts" matching every index.ts in the tree defeats exactly that.
+{
+  const r = responder({
+    reviewer: (p, o, s) => {
+      s.round += 1
+      return s.round === 1
+        ? { verdict: 'request changes', summary: 's', findings: [{ blocking: true, file: 'index.ts', what: 'bug', why: 'w' }] }
+        : { verdict: 'approve', summary: 'fixed', findings: [] }
+    },
+    'verify fix': {
+      headCommit: 'bbb2222', containsReviewedHead: true, dirty: false,
+      filesChanged: ['packages/totally/unrelated/index.ts'], commits: ['c'], isMain: false,
+      worktreePath: '/w/fix', candidates: ['bbb2222'], worktrees: [],
+    },
+  })
+  const { result } = await runWorkflow('review-round.js', FIX, r)
+  check('bare-basename-does-not-match-anywhere', 'a finding named only by basename does not match an unrelated file of that name', result.stopped === 'unverified fix', result.stopped)
+}
+
+// ...while the form it exists for still works.
+{
+  const r = responder({
+    'verify fix': {
+      headCommit: 'bbb2222', containsReviewedHead: true, dirty: false,
+      filesChanged: ['/Users/alex/repo/src/a.ts'], commits: ['c'], isMain: false,
+      worktreePath: '/w/fix', candidates: ['bbb2222'], worktrees: [],
+    },
+  })
+  const { result } = await runWorkflow('review-round.js', FIX, r)
+  check('absolute-path-still-matches', 'an absolute path from one side still matches a repo-relative one from the other', result.stopped === 'clean', result.stopped)
+}
+
 // --- the loop actually closes ------------------------------------------------
 
 {

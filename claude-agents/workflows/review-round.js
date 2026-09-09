@@ -212,6 +212,14 @@ function normalisePath(p) {
 function pathsMatch(a, b) {
   if (!a || !b) return false
   if (a === b) return true
+  // A suffix match is how an absolute path from a reviewer meets a
+  // repo-relative one from git. It is not a licence to match on a bare
+  // basename: "index.ts" would otherwise match every index.ts in the tree, and
+  // a fix that touched an unrelated file of that name would satisfy the very
+  // gate that exists to check it touched the right one. So the shorter side has
+  // to carry at least one directory of its own before a suffix counts.
+  const shorter = a.length < b.length ? a : b
+  if (!shorter.includes('/')) return false
   return a.endsWith('/' + b) || b.endsWith('/' + a)
 }
 
