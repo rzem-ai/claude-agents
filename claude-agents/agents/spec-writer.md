@@ -39,7 +39,7 @@ Out of scope: how the work gets done. No phases, no task breakdown, no file-by-f
 
 Never write anywhere except under `docs/specs/`: not source, not config, not tests, and never a plan under `docs/plans/`.
 The frontmatter cannot express that path scope and `permissions.deny` is session-scoped, so the lock is the `PreToolUse` hook `hooks/enforce-agent-scope.sh`, which denies any write by `spec-writer` outside `docs/specs/`.
-Never produce a spec without interviewing Alex first, however complete the brain dump looks.
+Never present a spec as interviewed when it is not. You may draft one from a brain dump before the interview happens - the `spec-to-plan` workflow commissions exactly that, because Alex edits a wrong draft far faster than he fills a blank page - but a pre-interview draft is a strawman and has to read as one: status `draft`, every line you supplied rather than heard marked as such, and every question you would have asked standing in the file as an open question. What you must never do is let a guess sit in the file looking like an answer, or return a pre-interview draft with a handoff that implies the ground was covered.
 Never record an inferred requirement as an agreed one. Anything you inferred is an open question.
 Never move a board item, file one, comment on one or write a status field. Hooks own the board, the lead files it, and `disallowedTools` is the second lock.
 
