@@ -73,6 +73,11 @@ tool_name="$(printf '%s' "$input" | jq -r '.tool_name // ""')"
 cwd="$(printf '%s' "$input" | jq -r '.cwd // ""')"
 file_path="$(printf '%s' "$input" | jq -r '.tool_input.file_path // .tool_input.notebook_path // .tool_input.path // ""')"
 command_str="$(printf '%s' "$input" | jq -r '.tool_input.command // ""')"
+# A line continuation is a backslash and the newline after it, and the shell
+# deletes both, joining the words either side. The callers below split segments
+# on newlines, so without this the verb was stranded on a second segment whose
+# leading token was not the command - and was skipped entirely.
+command_str="${command_str//\\$'\n'/}"
 
 # A plugin agent can arrive as "scout" or as "plugin-name:scout".
 agent="${agent_type##*:}"
@@ -101,6 +106,69 @@ enforce_spec_writer() {
     */docs/specs/*) return 0 ;;
   esac
   deny "spec-writer invariant: \"Never write anywhere except under docs/specs/: not source, not config, not tests, and never a plan under docs/plans/.\" $tool_name targeted $abs. Write the spec to docs/specs/<issue>.md instead. Anything else belongs to the lead."
+}
+
+# The subcommand a segment would actually run: the first word after the command
+# word that is not an option, and not an option's value.
+#
+# Two roles need it and neither is only about git - fleet-steward asks which git
+# verb, ui-designer asks that AND which package-manager verb, since its
+# invariant bans installing rather than bans npm. So the command word is dropped
+# BY POSITION, because the shell's first word is the command whatever it is
+# called.
+#
+# Three ways this has been got wrong, all of them live at some point:
+#
+#   awk '{print $2}'      read "-C" as the verb of `git -C /path log`. Against
+#                         an allowlist that denies (scout, reviewer,
+#                         ui-designer); against fleet-steward's denylist it
+#                         ALLOWS, so `git -C /path push --force` walked past a
+#                         ban. Fixed, item 17.
+#   "${1#*git}"           strips to the first literal "git" in the string, so
+#                         `/opt/git/bin/git merge` had a verb of "/bin/git", and
+#                         `npm install react` - which contains no "git" at all -
+#                         had a verb of "npm", silently retiring ui-designer's
+#                         entire install ban.
+#   collapsing every \.   fixed escapes in the path and broke them in the verb:
+#                         `git \merge` runs merge, and read as "xerge".
+#
+# What it is not: a shell. `command git merge`, `env git merge` and
+# `x=m; git ${x}erge` all defeat it, because a denylist over unexpanded text
+# always loses to expansion. See the note in this file's header - the scope hook
+# is a role reminder, not a containment boundary.
+sub_verb() {
+  local seg tok skip_next=no
+  seg="$(command_words "$1")"
+  # Undo what a backslash does, in the shell's own order: a trailing one
+  # continues the line and vanishes; one before whitespace joins that
+  # whitespace into the word; any other quotes the next character and
+  # disappears. The placeholder keeps an escaped space from splitting a path
+  # into two words without pretending to know what the path says.
+  # What a backslash does, in the shell's order: before whitespace it makes that
+  # whitespace part of the word; anywhere else it quotes the next character and
+  # disappears. The line-continuation case is NOT handled here - it is joined
+  # out of command_str before anything splits on newlines, because deleting the
+  # backslash without joining is what stranded the verb on a second segment.
+  seg="$(printf '%s' "$seg" | sed -e 's/\\\([[:space:]]\)/_/g' -e 's/\\\(.\)/\1/g')"
+  # shellcheck disable=SC2086 # deliberate word splitting: this is a word scan
+  set -- $seg
+  [ "$#" -gt 0 ] || { printf ''; return 0; }
+  shift
+  for tok in "$@"; do
+    if [ "$skip_next" = yes ]; then skip_next=no; continue; fi
+    case "$tok" in
+      # git's global options that take a SEPARATE value, checked against the
+      # installed git rather than recalled. --attr-source does take one.
+      # --exec-path does NOT - it prints the path and exits - so listing it
+      # here made it swallow the verb that followed. --super-prefix was
+      # removed in git 2.49 and is gone from this list with it.
+      -C|-c|--git-dir|--work-tree|--namespace|--attr-source|--config-env)
+        skip_next=yes; continue ;;
+      -*) continue ;;
+      *) printf '%s' "$tok"; return 0 ;;
+    esac
+  done
+  printf ''
 }
 
 # ----------------------------------------------------------------------- scout
@@ -156,18 +224,55 @@ sed_writes() {
 
 # The command a segment actually runs: leading VAR=value assignments dropped,
 # then the basename of the first word. Empty if the segment is only assignments.
-leading_token() {
-  local seg="$1" tok next
+# Wrappers the shell runs straight through: the real command is what follows.
+# A closed list, because it costs no false denies - unlike treating any token
+# that matches a forbidden verb as one.
+# NOT sudo. Transparency is asymmetric: for a denylist role it stops a forbidden
+# verb hiding behind the wrapper, but for an allowlist role it removes the
+# requirement that the wrapper itself be permitted - and `sudo cat` is not the
+# same act as `cat`. Listing it here let `sudo cat /etc/shadow` past scout's
+# allowlist, which had refused it purely because sudo was not on the list.
+# permissions.deny backstops sudo, but the per-agent layer is precisely the half
+# permissions.deny cannot express, so it should not be the looser of the two.
+COMMAND_WRAPPERS=" command env builtin exec nohup time xargs "
+
+# The segment with leading assignments and wrapper commands removed. Both
+# parsers below start from this, so they cannot disagree about which word is the
+# command - and they did: leading_token stripped VAR=val to find "npm" while
+# sub_verb dropped position one, which WAS the assignment, and returned "npm" as
+# the verb. `NODE_ENV=production npm install react` walked past the install ban
+# on that disagreement alone.
+command_words() {
+  local seg="$1" first next after_wrapper=no
   while :; do
-    tok="$(printf '%s' "$seg" | awk '{print $1}')"
-    case "$tok" in
+    first="$(printf '%s' "$seg" | awk '{print $1}')"
+    case "$first" in
+      "") break ;;
       *=*) ;;
-      *) break ;;
+      # A wrapper's own options belong to the wrapper, so `env -i git merge` and
+      # `xargs -n1 git merge` are still the git command that follows. Only
+      # consumed straight after a wrapper, so an ordinary command's options are
+      # never mistaken for something to skip.
+      -*)
+        if [ "$after_wrapper" = yes ]; then :; else break; fi
+        ;;
+      *)
+        case "$COMMAND_WRAPPERS" in
+          *" ${first##*/} "*) after_wrapper=yes ;;
+          *) break ;;
+        esac
+        ;;
     esac
     next="$(printf '%s' "$seg" | sed -E 's/^[^[:space:]]+[[:space:]]+//')"
-    if [ "$next" = "$seg" ]; then tok=""; break; fi
+    if [ "$next" = "$seg" ]; then seg=""; break; fi
     seg="$next"
   done
+  printf '%s' "$seg"
+}
+
+leading_token() {
+  local tok
+  tok="$(printf '%s' "$(command_words "$1")" | awk '{print $1}')"
   printf '%s\n' "${tok##*/}"
 }
 
@@ -251,7 +356,7 @@ enforce_scout() {
         esac
         ;;
       git)
-        verb="$(printf '%s' "$first" | awk '{print $2}')"
+        verb="$(sub_verb "${first}")"
         case "$SCOUT_ALLOWED_GIT" in
           *" $verb "*) ;;
           *) deny "scout invariant: read-only git only - log, show, blame, diff, ls-files. \"git $verb\" is not one of them." ;;
@@ -362,11 +467,13 @@ enforce_fleet_steward() {
   scan="$(printf '%s' "$scan" | sed -E 's/(\|\||&&|;|\||&)/\n/g')"
   while IFS= read -r seg; do
     seg="$(printf '%s' "$seg" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
-    case "$(printf '%s' "$seg" | awk '{print $1}')" in
-      git|*/git) ;;
+    # leading_token, not the raw first word: an assignment or a wrapper in front
+    # of git is transparent to the shell and has to be transparent here.
+    case "$(leading_token "$seg")" in
+      git) ;;
       *) continue ;;
     esac
-    verb="$(printf '%s' "$seg" | awk '{print $2}')"
+    verb="$(sub_verb "${seg}")"
     case "$verb" in
       merge|rebase|reset|filter-branch|filter-repo)
         deny "fleet-steward invariant: \"Never merge\" and \"never run a git command that rewrites shared history: no force-push, no reset, no rebase onto a shared branch.\" \"git $verb\" is one of those. File it and propose it; Alex decides on the pull request." ;;
@@ -447,7 +554,7 @@ enforce_reviewer() {
 
     case "$tok" in
       git)
-        verb="$(printf '%s' "$seg" | awk '{print $2}')"
+        verb="$(sub_verb "${seg}")"
         case "$REVIEWER_ALLOWED_GIT" in
           *" $verb "*) ;;
           *) deny "reviewer invariant: \"Never run a git command that writes: no commit, push, force-push, checkout, stash, reset or rebase. Read-only git only.\" \"git $verb\" is not a read-only verb. Read the history with git log, show, blame, diff or ls-files; anything that changes a ref belongs to coder." ;;
@@ -470,6 +577,71 @@ enforce_reviewer() {
   return 0
 }
 
+# ----------------------------------------------------------------------- coder
+# Invariants: "Confirm you are in your worktree and that it is clean before you
+# touch anything", and out of scope is "anything on a shared branch - no
+# merging, no releasing, no touching main".
+#
+# This is the only place that can PREVENT a fix landing in the main checkout.
+# review-round can detect it afterwards - by then coder has already branched and
+# committed - and the fix prompt asks coder to check first, but an instruction
+# is not a boundary. coder carries an agentType, so this hook governs its Bash
+# calls, and git itself answers the question: a linked worktree's git dir is
+# under `.git/worktrees/`, a main checkout's is not.
+#
+# Reads are untouched. So is everything that is not git. What is refused is a
+# git command that writes, in a directory that cannot be shown to be a worktree
+# - including a directory that is not a repository at all, where such a command
+# would fail anyway. Not being able to tell is not permission: the whole point
+# is the case where isolation silently did not happen, which is exactly when
+# nothing announces itself.
+CODER_WRITING_GIT=" commit switch checkout branch reset merge rebase push stash cherry-pick revert am apply tag clean rm mv restore worktree "
+
+# The directory a git command actually targets: its -C if it has one, else the
+# directory the tool call runs in.
+git_target_dir() {
+  local seg="$1" tok want=no
+  # shellcheck disable=SC2086 # deliberate word splitting: this is a word scan
+  set -- $(command_words "$seg")
+  for tok in "$@"; do
+    if [ "$want" = yes ]; then printf '%s' "$tok"; return 0; fi
+    [ "$tok" = "-C" ] && want=yes
+  done
+  printf '%s' "$cwd"
+}
+
+enforce_coder() {
+  [ "$tool_name" = "Bash" ] || return 0
+  [ -n "$command_str" ] || return 0
+  command -v git >/dev/null 2>&1 || return 0
+
+  local scan seg verb target gitdir
+  scan="$(strip_quoted "$command_str")"
+  scan="$(printf '%s' "$scan" | sed -E 's/(\|\||&&|;|\||&)/\n/g')"
+  while IFS= read -r seg; do
+    seg="$(printf '%s' "$seg" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+    [ -n "$seg" ] || continue
+    [ "$(leading_token "$seg")" = "git" ] || continue
+    verb="$(sub_verb "$seg")"
+    case "$CODER_WRITING_GIT" in
+      *" $verb "*) ;;
+      *) continue ;;
+    esac
+
+    target="$(git_target_dir "$seg")"
+    [ -n "$target" ] || target="."
+    gitdir="$(git -C "$target" rev-parse --absolute-git-dir 2>/dev/null)" || gitdir=""
+    case "$gitdir" in
+      */worktrees/*) continue ;;
+    esac
+    if [ -z "$gitdir" ]; then
+      deny "coder invariant: \"Confirm you are in your worktree and that it is clean before you touch anything.\" \"git $verb\" writes, and $target is not a git repository at all, so it cannot be the worktree you were given. Find the worktree you were handed, or stop and say so in a \"Blocker: \" line."
+    fi
+    deny "coder invariant: \"Confirm you are in your worktree and that it is clean before you touch anything\", and out of scope is \"anything on a shared branch\". \"git $verb\" writes, and $target is not a linked worktree - git reports its git dir as $gitdir, which is a main checkout. Committing there puts your work on somebody else's branch. Work in the worktree you were given; if you have not got one, change nothing and raise a \"Blocker: \" line saying so."
+  done <<< "$scan"
+  return 0
+}
+
 # ----------------------------------------------------------------- ui-designer
 # Invariant: "Never run a git command that writes, and never install anything
 # into the product repo."
@@ -481,6 +653,38 @@ enforce_reviewer() {
 UI_DESIGNER_ALLOWED_GIT=" log show blame diff ls-files status shortlog describe rev-parse rev-list cat-file grep whatchanged "
 UI_DESIGNER_INSTALLERS=" npm pnpm yarn bun pip pip3 pipx poetry uv gem bundle composer cargo go brew apt apt-get "
 UI_DESIGNER_INSTALL_VERBS=" install i ci add require get remove uninstall update upgrade link "
+
+# The install verb is the first word that IS one, not merely the first word that
+# is not an option: `npm --prefix /tmp/x install react` is an ordinary idiom and
+# put the path where the verb was looked for. Scanning past a non-verb word only
+# when a LONG option preceded it keeps `npm run link` allowed - long options
+# commonly take a separate value, short flags usually do not, so `npm -g install`
+# still reads `install`.
+install_verb() {
+  local seg tok prev=""
+  seg="$(command_words "$1")"
+  # shellcheck disable=SC2086 # deliberate word splitting: this is a word scan
+  set -- $seg
+  [ "$#" -gt 0 ] || { printf ''; return 0; }
+  shift
+  for tok in "$@"; do
+    case "$tok" in
+      -*) prev="$tok"; continue ;;
+    esac
+    case "$UI_DESIGNER_INSTALL_VERBS" in
+      *" $tok "*) printf '%s' "$tok"; return 0 ;;
+    esac
+    # Any option may carry a separate value, not just a long one: `npm -C <dir>`
+    # is a documented alias for --prefix and takes one, so requiring `--` ended
+    # the scan a word early and the install verb was never reached. `npm run
+    # link` is still allowed, because nothing preceded `run`.
+    case "$prev" in
+      -*) prev="" ; continue ;;
+      *) printf ''; return 0 ;;
+    esac
+  done
+  printf ''
+}
 
 enforce_ui_designer() {
   [ "$tool_name" = "Bash" ] || return 0
@@ -494,7 +698,7 @@ enforce_ui_designer() {
     [ -n "$seg" ] || continue
     tok="$(leading_token "$seg")"
     [ -n "$tok" ] || continue
-    verb="$(printf '%s' "$seg" | awk '{print $2}')"
+    verb="$(sub_verb "${seg}")"
 
     case "$tok" in
       git)
@@ -507,6 +711,7 @@ enforce_ui_designer() {
 
     case "$UI_DESIGNER_INSTALLERS" in
       *" $tok "*)
+        verb="$(install_verb "$seg")"
         case "$UI_DESIGNER_INSTALL_VERBS" in
           *" $verb "*)
             deny "ui-designer invariant: \"Never run a git command that writes, and never install anything into the product repo.\" \"$tok $verb\" installs into the repo. A prototype is self-contained: build it from what is already there, and name any dependency the real thing would need in the handoff." ;;
@@ -546,6 +751,7 @@ case "$agent" in
   fleet-steward) enforce_fleet_steward ;;
   reviewer)      enforce_reviewer ;;
   ui-designer)   enforce_ui_designer ;;
+  coder)         enforce_coder ;;
   *)             ;;
 esac
 

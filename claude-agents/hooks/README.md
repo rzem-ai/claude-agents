@@ -312,6 +312,23 @@ The cost is that a non-fleet subagent no longer moves a bound board item to
 Blocked when it fails. That only matters for a spawn carrying a `Board-Item:`
 line, and the lead only binds those to fleet agents.
 
+A second cost, worth stating plainly because two things now depend on it: an
+`agentType`-less lane is outside *both* hooks. The `SubagentStop` matcher skips
+it, and no branch of `enforce-agent-scope.sh` claims it either, since every
+branch there keys on an agent name. So when `review-round.js` tells its git and
+mechanical lanes "read-only git only", that sentence is an instruction to a
+model and not a boundary anything enforces. It is the position the four
+mechanical lanes have always been in - they run the project's test suite - and
+`review-round`'s git lanes now join them. The trade is deliberate: those lanes
+need `git worktree list`, `merge-base` and `rev-parse`, and widening `scout`'s
+or `reviewer`'s allowlist to cover them would weaken a role boundary for every
+run rather than for the one workflow that needs it.
+
+The rule that falls out of all this, worth keeping whenever a workflow is
+written: **give a fleet agent a schema only where its handoff is worth
+nothing.** A spawn's `schema` decides whether the gate, the `## Done` card
+comment and the `Blocker:` route to the human queue exist for that run at all.
+
 ### What it checks
 
 `board-subagent-stop.sh` validates `last_assistant_message` against
@@ -709,3 +726,183 @@ layer had to make on its own:
     ```
 
     `evals/lib/board-hook-contract.sh` pins all of it.
+
+16. **Structured output carries no handoff - settled, September 2026.** A
+    subagent spawned from a workflow with `agent(prompt, {agentType, schema})`
+    is forced through StructuredOutput, and its `SubagentStop` payload **omits
+    `last_assistant_message` entirely**. Not the JSON in that field, not an
+    empty string: the key is absent.
+
+    This was measured, not read. A probe spawned one agent definition twice,
+    identical but for the schema, and dumped both payloads:
+
+    | Spawn | `last_assistant_message` | Gate before the fix |
+    |---|---|---|
+    | with `schema` | key absent | `exit 2`, "the final message is empty" |
+    | without `schema` | the Markdown handoff | `exit 0` |
+
+    The hook read `.last_assistant_message // ""`, which erased the difference
+    between *absent* and *empty*, treated the absent `status` as success, and
+    failed `validate_handoff`. Since the `SubagentStop` matcher covers all nine
+    fleet names, and every workflow spawns fleet agents with schemas -
+    `scout` and `reviewer` in `review-round.js`, `researcher` at five sites in
+    `deep-research.js`, `scout` and `spec-writer` in `spec-to-plan.js` - the
+    gate had been refusing to let those runs stop and telling them to re-emit a
+    handoff they were never asked for. Item 12 scoped the matcher away from the
+    built-in `Plan` and `general-purpose` lanes; that fix cannot reach a
+    schema-carrying agent which is itself a fleet agent.
+
+    The hook now separates the two cases and does it once, at the read:
+
+    ```sh
+    has_message="$(printf '%s' "$input" \
+      | jq -r 'if has("last_assistant_message") and .last_assistant_message != null
+               then "yes" else "no" end')"
+    ```
+
+    Absent, or JSON `null`, means there is no handoff to check, so the gate does
+    not fire and the column is left alone - `TaskCompleted` owns Done, and a card
+    that invents a comment out of structured output nobody parsed is worse than a
+    card that says nothing. Present-but-empty still fails, because that is an
+    agent which was asked and said nothing, and it is the thing the gate exists
+    to catch. `evals/lib/board-hook-contract.sh` pins all three cases -
+    `stop-structured-run-passes`, `stop-empty-message-blocks`,
+    `stop-prose-blocks` - so a future softening of the gate has to walk past two
+    tests that say no.
+
+    The same probe recorded fields item 15's table does not list, all present on
+    a real event:
+
+    | Event | Additional fields observed |
+    |---|---|
+    | `SubagentStart` | `cwd`, `prompt_id`, `session_id`, `transcript_path` |
+    | `SubagentStop` | `cwd`, `effort`, `permission_mode`, `prompt_id`, `session_crons`, `transcript_path` |
+
+    `agent_type` arrived bare (`probe-worker`), unprefixed. `cwd` is worth
+    noting: it is a supported route to the directory a subagent actually worked
+    in, which is the thing `review-round.js` had no way to learn.
+
+    **Absent does not prove why, so the hook asks the transcript.** The first
+    version of this fix passed any run with an absent field and said in its log
+    that it could not tell why. That was not good enough, and the reason is in
+    the runtime: `SubagentStop` builds the field as
+
+    ```js
+    let p = findLast(m => m.type === "assistant"),
+        f = p ? textOf(p.message.content).trim() || void 0 : void 0
+    ```
+
+    `.trim() || void 0` turns an empty *or whitespace-only* final message into
+    `undefined`, and undefined properties drop out of the payload. So
+    `last_assistant_message: ""` is **unreachable** - and a fleet agent that was
+    asked for a handoff and produced nothing sends a byte-identical payload to a
+    schema spawn. Passing every absent field therefore retired the gate for
+    exactly the case it exists to catch, while a test pinning the empty string
+    made the coverage look complete.
+
+    `agent_transcript_path` tells them apart, and both shapes were read off real
+    probe transcripts rather than assumed:
+
+    | Last assistant content block | Means | Hook does |
+    |---|---|---|
+    | `tool_use` named `StructuredOutput` | a schema run, never asked for a handoff | passes, column untouched |
+    | `text` | the runtime dropped a message the transcript still holds | recovers it and validates it like any other |
+    | unreadable, oversized, absent, or no assistant content | cannot tell | passes, and says so |
+
+    Read `agent_transcript_path`, never `transcript_path`: the event sends both
+    and only the first is scoped to the subagent. The third row is the residual
+    gap and it is deliberate - a transcript this hook cannot read is not a
+    reason to refuse to let a subagent stop, because deadlocking a run is worse
+    than a rare silent pass. `CLAUDE_AGENTS_TRANSCRIPT_MAX_BYTES` caps the read
+    at 20 MB.
+
+    To re-derive after a CLI upgrade, spawn one agent twice from a workflow -
+    once with a `schema`, once without - behind a `SubagentStop` hook that dumps
+    its stdin, and diff the two payloads. The control spawn is the point: an
+    empty dump alone cannot distinguish "StructuredOutput ate the message" from
+    "the hook never fired".
+
+17. **Git global options hid the verb - fixed, September 2026.** Every per-agent
+    git check read the subcommand as the second whitespace-separated token, so
+    `git -C /path log` resolved to a verb of `-C`. The parser and the shell
+    disagreed about where the verb was, which is the same family of defect as
+    the quote-stripping hole, and it broke in both directions at once depending
+    on how each role's check is written:
+
+    | Role | Check shape | Unrecognised verb | Result |
+    |---|---|---|---|
+    | `scout`, `reviewer`, `ui-designer` | allowlist | denies | **false deny** - `git -C <worktree> diff` refused |
+    | `fleet-steward` | denylist | allows | **false allow** - a real hole |
+
+    The false deny was invisible, because nobody blames a reviewer that cannot
+    read. The false allow was not: `git -C /path push --force`,
+    `git -C /path merge` and `git -C /path reset --hard` all sailed past the
+    three git operations the steward is explicitly forbidden to perform, and it
+    is the one agent meant to run unattended on a schedule.
+
+    `git_verb()` now finds the real verb. Every git global option is dashed and
+    a verb never is, so it skips dashed tokens and skips the value of the eight
+    that take a separate argument (`-C`, `-c`, `--git-dir`, `--work-tree`,
+    `--namespace`, `--exec-path`, `--super-prefix`, `--config-env`). A segment
+    with no undashed token yields the empty string, which matches no allowlist
+    and no denylist entry, so `git -C /path` on its own is not a read.
+
+    It also collapses backslash-escaped pairs before splitting. Quoted paths
+    never arrive unsplit - the quote stripper runs first - but escapes do, and
+    `git -C /tmp/a\ b reset --hard` otherwise resolved its verb to `b`. Nothing
+    downstream reads the path, only the verb, so replacing each escaped pair
+    with one ordinary character keeps the path a single token without
+    pretending to know what it says.
+
+    `evals/lib/scope-hook-contract.sh` pins both directions: the reads that must
+    now work, and every forbidden verb that must stay forbidden when a `-C`, a
+    `-c`, a `--no-pager` or an escaped space is put in front of it. Fixing the
+    false deny without those denial cases would have widened the hole rather
+    than closed it.
+
+    This does not make the scope hook a containment boundary, and nothing here
+    changes that. A program run through Bash still writes wherever the process
+    can, and no shell-level check sees inside it.
+
+18. **coder writes in its own worktree, or it does not write - September 2026.**
+    The one preventive check in the fleet, and the only answer to a limit
+    `review-round` cannot fix from inside a workflow.
+
+    `coder` carries `isolation: worktree`, and everything downstream assumes it
+    holds. Nothing checked. `review-round` can only *detect* a fix that landed in
+    the main checkout - by the time its verification runs, coder has already
+    branched and committed - and the fix prompt asking coder to check first is an
+    instruction, not a boundary. But `coder` has an `agentType`, so this hook
+    governs its Bash calls, and git answers the question directly: a linked
+    worktree's git dir sits under `.git/worktrees/`, a main checkout's does not.
+
+    ```
+    $ git -C <linked worktree> rev-parse --absolute-git-dir
+    /repo/.git/worktrees/fix-r1
+    $ git -C <main checkout> rev-parse --absolute-git-dir
+    /repo/.git
+    ```
+
+    So a git command that **writes** - the verbs in `CODER_WRITING_GIT` - is
+    refused unless its target directory can be shown to be a linked worktree.
+    The target is the command's own `-C` where it has one, otherwise the tool
+    call's `cwd`. Reads are untouched, and so is everything that is not git:
+    `git log`, `git diff`, `npm test` and `pytest` all run in a main checkout
+    exactly as before. This enforces `coder.md`'s own second step, which already
+    says to confirm the worktree before touching anything.
+
+    **Not being able to tell is not permission.** A directory that is not a
+    repository at all is refused too, on the grounds that a git write there would
+    fail anyway and that the case this exists for - isolation silently not
+    happening - is precisely the case where nothing announces itself.
+
+    **Know what this costs.** Worktree isolation for a workflow-spawned `coder`
+    has never been observed against a live Claude (see "Still open"). If it turns
+    out not to hold, `coder` will now be **blocked from every writing git
+    command** rather than quietly committing to the checkout it happens to be
+    in. That is the intended failure and the right one, but it is a stop rather
+    than a slow leak: if coder starts raising blockers about worktrees, this hook
+    is why, and the answer is to fix isolation rather than to remove the check.
+    `worktree.baseRef` defaults to `fresh`, which branches from
+    `origin/<default-branch>`, so a repository with no remote cannot cut one at
+    all - that is what the 10 September probe hit.

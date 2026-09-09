@@ -41,6 +41,21 @@ mkdir -p "$TMP/other/docs/specs"
 mkdir -p "$TMP/redirected/docs"
 ln -sfn "$PROJECT/src" "$TMP/redirected/docs/specs"
 
+# A real repository and a real linked worktree, because the coder guard below
+# asks git which of the two it is in rather than trusting a path shape.
+MAINCO="$TMP/repo-main"
+WT="$TMP/repo-wt"
+if command -v git >/dev/null 2>&1; then
+    mkdir -p "$MAINCO"
+    git -C "$MAINCO" init -q . 2>/dev/null
+    git -C "$MAINCO" config user.email t@t
+    git -C "$MAINCO" config user.name t
+    printf 'x\n' > "$MAINCO/a.txt"
+    git -C "$MAINCO" add -A 2>/dev/null
+    git -C "$MAINCO" commit -qm base 2>/dev/null
+    git -C "$MAINCO" worktree add -q "$WT" -b wt-branch HEAD 2>/dev/null
+fi
+
 PASSED=0
 FAILED=0
 
@@ -68,6 +83,44 @@ expect() {
     else
         FAILED=$((FAILED + 1))
         printf '  FAIL  wanted %-5s got %-5s  %s\n' "$1" "$got" "$2"
+    fi
+    return 0
+}
+
+# Why a deny happened, not just that it did. Four cases in this file denied for
+# the right answer and the wrong reason - the pre-fix parser read the verb of
+# `git -C /path reset` as "-C", which missed the allowlist and denied by
+# accident. Asserting the message names the real verb turns those from
+# coincidence into coverage, and would have caught the -C bug on its own.
+deny_reason() {
+    printf '%s' "$1" | CLAUDE_PROJECT_DIR="$2" CLAUDE_AGENTS_REPO="$REPO_ROOT" "$HOOK" 2>/dev/null \
+        | jq -r '.hookSpecificOutput.permissionDecisionReason // ""'
+}
+
+deny_bash_saying() {
+    # $1 agent, $2 command, $3 substring the reason must contain
+    local reason
+    reason=$(deny_reason "$(bash_event "$1" "$2" "$PROJECT")" "$PROJECT")
+    if printf '%s' "$reason" | grep -qF -- "$3"; then
+        PASSED=$((PASSED + 1))
+        [ "$VERBOSE" -eq 1 ] && printf '  ok    deny  %s: %s\n' "$1" "$2"
+    else
+        FAILED=$((FAILED + 1))
+        printf '  FAIL  %s: %s\n        denied, but not for "%s": %s\n' "$1" "$2" "$3" "${reason:0:110}"
+    fi
+    return 0
+}
+
+deny_bash_saying_in() {
+    # $1 agent, $2 command, $3 substring the reason must contain, $4 cwd
+    local reason
+    reason=$(deny_reason "$(bash_event "$1" "$2" "$4")" "$4")
+    if printf '%s' "$reason" | grep -qF -- "$3"; then
+        PASSED=$((PASSED + 1))
+        [ "$VERBOSE" -eq 1 ] && printf '  ok    deny  %s: %s\n' "$1" "$2"
+    else
+        FAILED=$((FAILED + 1))
+        printf '  FAIL  %s: %s\n        denied, but not for "%s": %s\n' "$1" "$2" "$3" "${reason:0:110}"
     fi
     return 0
 }
@@ -149,6 +202,212 @@ allow_write tech-writer "$PROJECT/README.md"
 allow_write ui-designer "$PROJECT/prototypes/session-refresh.html"
 # A commissioned run article is an authorised deliverable, not a docs violation.
 allow_write ui-designer "$PROJECT/docs/runs/2026-09-09-ui-designer.md"
+
+printf '\nGit global options must not hide the verb\n'
+
+# The verb parser read the second whitespace-separated token, so for
+# "git -C <path> log" it decided the verb was "-C" and denied a read. That is
+# the same family of hole as the quote-stripper (R01): the parser disagreeing
+# with the shell about where the verb is. Here it fails closed rather than open,
+# which made it invisible - a reviewer that cannot read is just a reviewer
+# nobody blamed.
+#
+# It matters now because review-round has to read the worktree coder fixed in,
+# and "git -C <worktree> diff" is the shape that does that without a chdir.
+allow_bash scout    'git -C /tmp/wt log --oneline -5'
+allow_bash scout    'git --no-pager -C /tmp/wt diff HEAD~1'
+allow_bash reviewer 'git -C /tmp/wt diff main...HEAD'
+allow_bash reviewer 'git -c core.pager=cat -C /tmp/wt show HEAD'
+
+# The point of finding the real verb is that the allowlist still applies to it.
+# A global option must not become a way to smuggle a writing verb past the
+# check, which is exactly what a laxer fix would buy.
+deny_bash_saying scout    'git -C /tmp/wt reset --hard HEAD~1' 'git reset'
+deny_bash_saying reviewer 'git -C /tmp/wt commit -m x' 'git commit'
+deny_bash_saying reviewer 'git --no-pager -C /tmp/wt checkout main' 'git checkout'
+deny_bash  fleet-steward 'git -C /tmp/wt push --force origin main'
+deny_bash  fleet-steward 'git -C /tmp/wt merge main'
+
+# A -C with no verb after it is not a read. Nothing to allow.
+deny_bash  scout    'git -C /tmp/wt'
+
+# A quoted path is already collapsed by the quote stripper before the verb scan
+# sees it, but a backslash-escaped space is not, and word splitting treats it as
+# a token boundary. That turns the first fragment of the path into the "verb",
+# which for a denylist agent means the real verb is never examined at all. This
+# is the -C hole again wearing a different hat.
+deny_bash  fleet-steward 'git -C /tmp/a\ b reset --hard HEAD~1'
+deny_bash  fleet-steward 'git -C /tmp/a\ b merge main'
+deny_bash  fleet-steward 'git -C /tmp/a\ b push --force origin main'
+allow_bash scout         'git -C /tmp/a\ b log --oneline'
+allow_bash reviewer      'git -C /tmp/a\ b diff HEAD'
+
+printf '\nThe verb is the one the shell would run\n'
+
+# ui-designer had three cases in this file and all three were write_event, so
+# the role's entire Bash invariant - "never install anything into the product
+# repo" - was uncovered. A refactor of the verb scanner broke it outright and
+# the suite stayed green. The hook is the only thing enforcing this: nothing in
+# home/settings.json denies an installer.
+deny_bash  ui-designer 'npm install react'
+deny_bash  ui-designer 'npm i react'
+deny_bash  ui-designer 'npm ci'
+deny_bash  ui-designer 'pnpm add zod'
+deny_bash  ui-designer 'yarn add lodash'
+deny_bash  ui-designer 'pip3 install requests'
+deny_bash  ui-designer 'brew install jq'
+deny_bash  ui-designer 'cargo add serde'
+# ...while the job itself stays possible. That is the whole reason installers
+# are matched on their verbs rather than denied outright.
+allow_bash ui-designer 'npx serve prototypes/'
+allow_bash ui-designer 'npm run build'
+allow_bash ui-designer 'python3 -m http.server 8000'
+
+# The command is the FIRST token, not the first place the string says "git".
+# A prefix-strip finds the "git" in the directory name and reads the rest of
+# the path as the verb, which denies a read and - worse - allows a write for
+# the one role whose check is a denylist.
+deny_bash  fleet-steward '/opt/git/bin/git merge main'
+deny_bash  fleet-steward '/usr/local/Cellar/git/2.49.0/bin/git reset --hard HEAD~1'
+allow_bash scout         '/opt/git/bin/git log --oneline'
+allow_bash reviewer      '/opt/git/bin/git diff main...HEAD'
+
+# Global options that take a separate value, checked against the git actually
+# installed rather than against a remembered list. --attr-source consumes its
+# value; --exec-path does NOT (it prints the path and exits), so listing it as
+# value-taking makes it swallow the real verb.
+deny_bash  fleet-steward 'git --attr-source HEAD merge main'
+deny_bash  fleet-steward 'git --attr-source HEAD reset --hard HEAD~1'
+deny_bash  fleet-steward 'git --exec-path merge main'
+allow_bash reviewer      'git --attr-source HEAD diff main...HEAD'
+
+# A backslash quotes the next character and then disappears, so `git \merge`
+# runs merge. Collapsing every escaped pair to a placeholder fixed escapes in
+# the path and broke them in the verb.
+deny_bash  fleet-steward 'git \merge main'
+deny_bash  fleet-steward 'git m\erge main'
+deny_bash  fleet-steward 'git re\set --hard HEAD~1'
+allow_bash scout         'git \log --oneline'
+
+printf '\nThe two parsers agree about which word is the command\n'
+
+# leading_token strips VAR=val to find the command; sub_verb dropped position 1,
+# which IS the assignment. So the two disagreed and the verb came back as the
+# command name. This is the commonest way anyone types an npm install.
+deny_bash_saying ui-designer 'NODE_ENV=production npm install react' 'npm install'
+deny_bash_saying ui-designer 'FOO=1 BAR=2 pip3 install requests' 'pip3 install'
+deny_bash_saying fleet-steward 'GIT_AUTHOR_NAME=x git merge main' 'git merge'
+allow_bash ui-designer 'NODE_ENV=production npm run build'
+
+# A wrapper is transparent to the shell, so it has to be transparent here too.
+# A closed list, because it costs no false denies - unlike matching any token.
+deny_bash_saying fleet-steward 'command git merge main' 'git merge'
+deny_bash_saying fleet-steward 'env git reset --hard HEAD~1' 'git reset'
+deny_bash_saying fleet-steward 'env GIT_DIR=/x git merge main' 'git merge'
+deny_bash_saying ui-designer 'command npm install react' 'npm install'
+allow_bash scout 'command git log --oneline'
+allow_bash reviewer 'env git diff main...HEAD'
+
+# A line continuation joins two lines into one command. Deleting the backslash
+# without joining stranded the verb on a second segment whose leading token was
+# not git, so it was skipped entirely.
+deny_bash_saying fleet-steward 'git -C /tmp/wt \
+merge main' 'git merge'
+deny_bash_saying fleet-steward 'git \
+reset --hard HEAD~1' 'git reset'
+allow_bash scout 'git \
+log --oneline'
+
+# The install ban asks whether an installer is installing, so the verb it looks
+# for is the first INSTALL VERB among the words - not the first word that is not
+# an option. `npm --prefix <path> install` is an ordinary CI idiom.
+deny_bash_saying ui-designer 'npm --prefix /tmp/proto install react' 'npm install'
+deny_bash_saying ui-designer 'npm --registry https://r.example.com install react' 'npm install'
+deny_bash_saying ui-designer 'pip3 --log /tmp/l.txt install requests' 'pip3 install'
+allow_bash ui-designer 'npm --prefix /tmp/proto run build'
+allow_bash ui-designer 'npx --yes serve prototypes/'
+
+# Every entry in the value-taking option list, held there by a test. The list
+# has been wrong twice; four of its entries had nothing pinning them.
+deny_bash_saying fleet-steward 'git --git-dir /tmp/x/.git merge main' 'git merge'
+deny_bash_saying fleet-steward 'git --work-tree /tmp/x reset --hard' 'git reset'
+deny_bash_saying fleet-steward 'git --namespace ns merge main' 'git merge'
+deny_bash_saying fleet-steward 'git --config-env k=V merge main' 'git merge'
+deny_bash_saying fleet-steward 'git -c user.name=x rebase main' 'git rebase'
+
+printf '\ncoder writes in its own worktree, or it does not write\n'
+
+# The fix loop can only ever DETECT that a fix landed in the main checkout,
+# because coder has already branched and committed by the time anything
+# verifies. This is the one place that can prevent it: coder carries an
+# agentType, so this hook governs its Bash calls, and git itself can say which
+# checkout a directory belongs to. Its own body already requires the check
+# ("Confirm you are in your worktree ... before you touch anything"); this is
+# that invariant with something behind it.
+if [ -d "$WT" ]; then
+    allow_bash coder 'git commit -m "fix the thing"' "$WT"
+    allow_bash coder 'git switch -c fix/r1 HEAD' "$WT"
+    allow_bash coder 'git add -A && git commit -m x' "$WT"
+
+    deny_bash_saying_in coder 'git commit -m "fix the thing"' 'not a linked worktree' "$MAINCO"
+    deny_bash_saying_in coder 'git switch -c fix/r1 HEAD' 'not a linked worktree' "$MAINCO"
+    deny_bash_saying_in coder 'git reset --hard HEAD~1' 'not a linked worktree' "$MAINCO"
+
+    # Reading is always fine; the invariant is about writing to a shared branch.
+    allow_bash coder 'git log --oneline -5' "$MAINCO"
+    allow_bash coder 'git diff HEAD' "$MAINCO"
+    allow_bash coder 'git status' "$MAINCO"
+
+    # An explicit -C targets that directory, so that is the one to ask about.
+    deny_bash_saying_in coder "git -C $MAINCO commit -m x" 'not a linked worktree' "$WT"
+    allow_bash coder "git -C $WT commit -m x" "$MAINCO"
+
+    # Cannot tell is not permission. A directory that is not a repository at all
+    # cannot be a worktree, and a git write there would fail anyway.
+    deny_bash_saying_in coder 'git commit -m x' 'not a git repository' "$TMP"
+
+    # Everything else coder does is untouched.
+    allow_bash coder 'npm test' "$MAINCO"
+    allow_bash coder 'python3 -m pytest' "$MAINCO"
+fi
+
+printf '\nWrappers are transparent; sudo is not a wrapper\n'
+
+# Making a wrapper transparent is asymmetric. For a denylist role it is a strict
+# improvement - the forbidden verb stops hiding behind `command`. For an
+# allowlist role it REMOVES the requirement that the wrapper itself be allowed,
+# and `sudo` is not transparent in the sense that matters: running cat as root
+# is a different act from running cat. permissions.deny backstops it, but the
+# per-agent layer is exactly the half permissions.deny cannot express.
+deny_bash  scout    'sudo cat /etc/shadow'
+deny_bash  scout    'sudo ls /root'
+deny_bash  reviewer 'sudo cat /etc/shadow'
+# Not asserted for ui-designer, whose Bash is otherwise open: with sudo no
+# longer transparent, the command here IS sudo, and `Bash(sudo *)` in
+# home/settings.json is what stops it. That is the correct division - this hook
+# expresses the half permissions.deny cannot, and sudo is squarely the half it
+# can.
+
+# The wrappers that ARE transparent stay so, including by absolute path.
+deny_bash_saying fleet-steward '/usr/bin/env git merge main' 'git merge'
+deny_bash_saying fleet-steward 'env -i git merge main' 'git merge'
+deny_bash_saying fleet-steward 'xargs -n1 git merge' 'git merge'
+deny_bash_saying fleet-steward 'nohup git reset --hard HEAD~1' 'git reset'
+allow_bash scout 'env -i git log --oneline'
+
+printf '\nAn option that takes a value does not have to be a long one\n'
+
+# `npm -C <dir>` is a documented alias for --prefix and takes a separate value,
+# so scanning past a non-verb word only after a LONG option ended the scan one
+# word early and the install verb was never reached.
+deny_bash_saying ui-designer 'npm -C /tmp/proto install react' 'npm install'
+deny_bash_saying ui-designer 'npm -C /tmp/proto i react' 'npm i'
+deny_bash_saying ui-designer 'npm -w packages/ui install react' 'npm install'
+# ...and the controls that make the rule worth having rather than a blanket ban.
+allow_bash ui-designer 'npm run link'
+allow_bash ui-designer 'npm run install-deps'
+deny_bash_saying ui-designer 'npm -g install react' 'npm install'
+allow_bash ui-designer 'npx serve prototypes/'
 
 printf '\n%s passed, %s failed\n' "$PASSED" "$FAILED"
 if [ "$FAILED" -ne 0 ]; then

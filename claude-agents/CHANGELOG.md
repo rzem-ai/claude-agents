@@ -9,6 +9,230 @@ The version in `.claude-plugin/plugin.json` is load-bearing. Clients keep the
 cached copy of the plugin until that number changes, so every change that should
 reach a machine needs a version bump and an entry below.
 
+## [0.6.0] - 2026-09-10
+
+The round that came out of the first live probe. Every finding below was
+measured against a running Claude Code 2.1.236 before it was fixed, because the
+deterministic suite stubs the model out and could not see any of it.
+
+The probe itself was two spawns of one agent definition, identical but for a
+`schema`, behind a hook that dumped its stdin. Keeping the control spawn is what
+made it evidence: an empty dump on its own cannot distinguish "StructuredOutput
+replaced the message" from "the hook never fired".
+
+### Fixed
+
+- **The handoff gate had been refusing every schema-carrying fleet agent.** A
+  subagent spawned with a `schema` is forced through StructuredOutput, and the
+  runtime then sends `SubagentStop` no `last_assistant_message` at all - the key
+  is absent, not empty, and not the JSON. `board-subagent-stop.sh` read it as
+  `// ""`, could not tell a run that was never asked for a handoff from one that
+  produced an empty one, treated the absent `status` as success, failed
+  `validate_handoff` and exited 2 - telling the agent to re-emit a handoff
+  nobody had asked it to write. That is nine spawn sites across all three
+  workflows: `scout` and `reviewer` in `review-round`, `researcher` at five
+  sites in `deep-research`, `scout` and `spec-writer` in `spec-to-plan`. Item 12
+  scoped the matcher away from the built-in `Plan` and `general-purpose` lanes
+  last round; that fix could never reach a schema-carrying agent which is itself
+  a fleet agent. Absent or null now means there is nothing to validate; present
+  and empty still fails. `hooks/README.md` item 16.
+- **`git -C` hid the verb from every per-agent git check.** The subcommand was
+  read as the second whitespace-separated token, so `git -C /path log` resolved
+  its verb to `-C`. Against an allowlist that denies, which made `scout` and
+  `reviewer` unable to read a worktree - invisible, because nobody blames a
+  reviewer that cannot read. Against a **denylist it allows**, and
+  `fleet-steward` uses a denylist: `git -C /path push --force`,
+  `git -C /path merge` and `git -C /path reset --hard` all walked past the three
+  git operations that agent is explicitly forbidden to perform, and it is the
+  one agent meant to run unattended on a schedule. A backslash-escaped space in
+  the path did the same by another route. `git_verb()` now skips dashed tokens
+  and the values of the eight global options that take a separate argument, and
+  collapses escaped pairs before splitting. Both directions are pinned:
+  the reads that must now work, and every forbidden verb that must stay
+  forbidden with a `-C`, a `-c`, a `--no-pager` or an escaped space in front of
+  it. `hooks/README.md` item 17.
+- **`skills/handoff/SKILL.md` told every fleet agent that `SubagentStop`
+  receives a `status` field.** It does not; item 15 settled that last round and
+  the sentence survived. The instruction it justified was right and is kept -
+  all four sections on a failed run, what went wrong under Not done - but the
+  premise is now stated correctly: the handoff is the only account of the run
+  anything downstream gets, and a `Blocker:` line is the one route to the human
+  queue that works.
+- **An absent final message is now diagnosed rather than assumed.** The first
+  version of this fix passed every run whose message was absent and logged that
+  it could not tell why. An adversarial review found why that was not good
+  enough: the runtime builds the field as `.trim() || void 0`, so
+  `last_assistant_message: ""` is **unreachable** - a fleet agent that was asked
+  for a handoff and produced nothing sends a byte-identical payload to a schema
+  spawn. Passing every absent field therefore retired the gate for exactly the
+  case it exists to catch, and the test pinning the empty string made the
+  coverage look complete. The hook now reads `agent_transcript_path`: a final
+  `StructuredOutput` block is a run that owed no handoff and passes, a final
+  `text` block is recovered and validated like any other, and a transcript it
+  cannot read passes and says so. Both shapes were read off real transcripts.
+- **`sudo` is not a wrapper.** Making wrappers transparent is asymmetric: for a
+  denylist role it stops a forbidden verb hiding behind one, but for an
+  allowlist role it removes the requirement that the wrapper itself be
+  permitted - and `sudo cat` is not the same act as `cat`. Taking a wrapper list
+  wholesale let `sudo cat /etc/shadow` past `scout`, which had refused it purely
+  because sudo was not on its list. `Bash(sudo *)` in `home/settings.json`
+  backstops sudo, and that is the right division of labour: this hook expresses
+  the half `permissions.deny` cannot. A wrapper's own options are part of the
+  wrapper now, so `env -i git merge` and `xargs -n1 git merge` are the git
+  command that follows them.
+- **An option that takes a value need not be a long one.** The install ban
+  scanned past a non-verb word only after a `--` option, so `npm -C <dir>
+  install` - a documented alias for `--prefix` - ended the scan a word early and
+  never reached the verb. `npm run link` stays allowed because nothing precedes
+  `run`.
+- **The two parsers now agree about which word is the command, by
+  construction.** `leading_token` stripped `VAR=val` to find `npm`, while
+  `sub_verb` dropped position one - which *was* the assignment - and returned
+  `npm` as the verb, so `NODE_ENV=production npm install react` walked past the
+  install ban on that disagreement alone. Both now start from `command_words`,
+  which also makes shell wrappers transparent: `command git merge`,
+  `env GIT_DIR=/x git merge` and `sudo git reset` are the command that follows
+  them, as they are to the shell. A closed list of wrappers, because it costs no
+  false denies - unlike treating any token matching a forbidden verb as one,
+  which would stall the one agent that runs unattended on `git log --grep=merge`.
+- **A line continuation stranded the verb.** Deleting the trailing backslash
+  without joining the lines left `merge main` as its own segment, whose leading
+  token was not git, so it was skipped entirely and
+  `git -C /tmp/wt \<newline>merge main` was allowed. Continuations are joined
+  out of the command before anything splits on newlines, and the rule that
+  merely deleted the backslash is gone rather than left looking load-bearing.
+- **The install ban looked in the wrong place for the verb.** It required the
+  install verb to be the first non-option word, so `npm --prefix /tmp/x install`
+  put a path where the verb was looked for. It now scans for the first word that
+  *is* an install verb, continuing past a non-verb only when a long option
+  preceded it - which keeps `npm run link` allowed and `npm -g install` denied.
+- **The transcript reader reported on a stale block.** It took `last` of a list
+  already filtered to StructuredOutput-or-text, so a final block that was
+  neither - an ordinary tool call with no closing prose - was invisible and it
+  reached back to an earlier text block and called that the final message. That
+  re-created the original failure: exit 2 telling an agent to re-emit a handoff,
+  quoting text that was never one. It now takes the last block and classifies it
+  after, which also makes the discriminator testable: nothing had proved that a
+  non-StructuredOutput tool call is not structured output.
+- **`sub_verb` replaces `git_verb`, which was three kinds of wrong.** Reading
+  the verb by stripping to the literal text `"git"` broke two things the first
+  attempt did not cover. `ui-designer`'s entire install ban - the only
+  enforcement, since nothing in `home/settings.json` denies an installer - went
+  dead, because `npm install react` contains no `"git"` and so resolved to a
+  verb of `npm`; the suite missed it because all three `ui-designer` cases were
+  write events and the role had no Bash coverage at all. And a git binary at a
+  path containing `git` (`/opt/homebrew/opt/git/bin/git merge`) resolved to
+  `/bin/git`, allowing a merge for `fleet-steward` and denying a read for
+  `scout`. The command word is now dropped by position. Three further fixes in
+  the same pass: `--attr-source` takes a separate value and was missing;
+  `--exec-path` does not take one and was wrongly listed, so it swallowed the
+  verb after it; `--super-prefix` was removed in git 2.49. And escape
+  collapsing, which fixed escapes in the path, mangled them in the verb -
+  `git \merge main` runs merge and read as `xerge`. Backslashes now follow the
+  shell's own rules.
+
+### Added
+
+- **`coder` writes in its own worktree, or it does not write.** The only
+  preventive check in the fleet. `review-round` can detect a fix that landed in
+  the main checkout but never prevent it - by the time verification runs, coder
+  has already branched and committed - and asking coder to check first is an
+  instruction, not a boundary. `coder` has an `agentType`, so
+  `enforce-agent-scope.sh` governs its Bash calls, and git answers directly: a
+  linked worktree's git dir sits under `.git/worktrees/`. A writing git verb is
+  refused unless its target - the command's own `-C`, else the call's `cwd` -
+  can be shown to be one. Reads and non-git commands are untouched. Not being
+  able to tell is not permission, because the case this exists for is isolation
+  silently not happening. Know the cost: if isolation does not hold, coder now
+  stops rather than leaking commits into whatever checkout it is in. See
+  `hooks/README.md` item 18.
+
+- **`review-round` carries fixes back, behind `fix: true`.** The loop was
+  removed last round because `coder` fixes in an isolated worktree and the
+  script had no supported way to learn that worktree's path or commit. It is
+  back, and nothing it branches on is `coder`'s word for it: a schema-carrying,
+  `agentType`-less git lane reports what git says, and before a fix is adopted
+  git has to show a commit, in a worktree that is **not the main checkout**,
+  built on the reviewed commit, clean, and touching at least one file the
+  blocking findings name. Each of those stops the run. Both ends of the range
+  are pinned to SHAs before any round runs, so a moving `main` cannot change
+  what round two reviews, and round N+1 runs its mechanical lanes inside the fix
+  worktree - without which the tests lane re-runs the original code and
+  "verified" means nothing. `coder` is spawned **without** a schema, so its
+  handoff still reaches the gate, the card and the human queue.
+
+  Opt-in, and the default path keeps today's exact behaviour and stop string.
+  Worktree isolation for a workflow-spawned `coder` has never once been observed
+  against a live Claude, and a run that commissions code by default is a run
+  that surprises somebody.
+- **`evals/lib/handoff-extractor-parity.sh`**, 128 checks. `review-round` is now
+  a third reader of the handoff format, so it is pinned to the hook's
+  `extract_section` the way `handoff-check.sh` already is. Both implementations
+  are sliced out of the files they ship in, so this compares shipping code
+  rather than a copy. It caught two real divergences on the way in: the hook
+  strips every carriage return, and its heading match is exact, so `## Done `
+  with a trailing space opens nothing.
+
+### Changed
+
+- **The cap is the only thing bounding what this workflow spends, and it was
+  not read as a number.** `input.maxRounds || 3` accepted any truthy value, so a
+  `maxRounds` of `"three"` made every round comparison NaN-false and the loop
+  commissioned coder until the process ran out of memory. The same reasoning
+  this file already applied to `fix` - it arrives from a slash command's JSON,
+  so anything but a real value is not consent - now applies to the two numbers
+  that bound the spend. An unusable one stops the run and says so.
+- **`approved` was a field nothing tested.** Every check asserted on `stopped`,
+  so hard-coding `approved: true` left the whole suite green - and it is the one
+  field a caller would gate a merge on. It is now asserted for every stop
+  reason, and it means what it says: a run whose verdict was coerced to
+  "request changes" no longer reports itself approved alongside it.
+- **Five more ways the fix gate could be told a comfortable story.** A commit
+  whose location the lane did not report was adopted, which sent the next round
+  to re-read the original checkout and call the result verified. A lane that
+  named several candidates and then picked one was trusted, because the
+  ambiguity check sat inside the no-commit branch. `dirty` and `isMain` were
+  read strictly while `blocking` had already been taught not to be, so
+  `dirty: "true"` passed. A blocking finding naming no file removed the
+  file-touch rule entirely, so an empty commit satisfied it. And the blocker
+  path recorded its commit before the gate ran, so a dirty non-descendant commit
+  in the main checkout was reported as a fix and Alex was pointed at it.
+- **`dispositionOf` inverted the refusal it exists to carry.** A path in
+  backticks - the ordinary way a model writes one - read as a different file, so
+  coder's reasoned "rejected as wrong" reached the next reviewer as a silent
+  omission. It also scanned the whole line, so a file mentioned in the reasoning
+  inherited another finding's disposition.
+- **Three more ways the fix gate could be told a comfortable story**, all found
+  by working through what a verify lane could return rather than by a test
+  failing. `pathsMatch` suffix-matched with no floor, so a finding named
+  `index.ts` matched every `index.ts` in the tree and a fix touching an
+  unrelated one satisfied the gate that checks it touched the right one.
+  `isMain` is optional in the schema, so a lane that omitted it proved isolation
+  by saying nothing - which is the shape the failure actually takes, since in
+  the probe both agents ran in the main checkout and nothing announced it.
+  And `v.headCommit === head` missed that git prints whatever sha length it
+  likes, so the reviewed head abbreviated read as a different commit and would
+  have been adopted - re-pointing round two at the code round one had already
+  reviewed, which is exactly the failure this loop was deleted for.
+- A reviewer's `blocking` flag is read to fail closed. Both obvious readings
+  are wrong: a truthy test makes the string `"false"` a blocking finding, and a
+  strict `=== true` makes the string `"true"` a passing one - and that second
+  failure approves a merge. Anything not recognisably a no now counts as
+  blocking, pinned from both sides. Mutation testing found this; three of the
+  new cases turned out to survive having the behaviour they named deleted, and
+  were replaced with ones that do not.
+- The suite runs 413 numbered checks across five suites, plus the 28 handoff
+  fixtures the two parity checks drive - 441 against 122 before this round.
+  `workflow-logic` 16 to 103, `scope-hook-contract` 60 to 150,
+  `board-hook-contract` 13 to 27, and `handoff-extractor-parity` new at 128.
+- `hooks/README.md` records what the probe measured beyond item 15's table:
+  `SubagentStop` also sends `cwd`, `effort`, `permission_mode`, `prompt_id`,
+  `session_crons` and `transcript_path`; `SubagentStart` also sends `cwd`,
+  `prompt_id`, `session_id` and `transcript_path`; `agent_type` arrives
+  unprefixed. It also names two things plainly: the gap the gate fix accepts,
+  and that an `agentType`-less lane is governed by neither hook, so "read-only
+  git only" in a lane prompt is an instruction rather than a boundary.
+
 ## [0.5.0] - 2026-09-09
 
 The fix round for the 9 September fleet review
@@ -270,7 +494,8 @@ Initial scaffolding. The repo became a plugin marketplace with one plugin in it.
   `templates/rules/` and `home/` in the repo.
 - This changelog.
 
-[Unreleased]: https://github.com/rzem-ai/claude-agents/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/rzem-ai/claude-agents/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/rzem-ai/claude-agents/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/rzem-ai/claude-agents/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/rzem-ai/claude-agents/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/rzem-ai/claude-agents/compare/v0.2.0...v0.3.0
