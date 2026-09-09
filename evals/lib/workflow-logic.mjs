@@ -388,6 +388,34 @@ const FIX = { range: 'main...feature/refresh', issue: 'x', fix: true, maxRounds:
   check('main-worktree-not-re-reviewed', 'and no second round reviews a commit on the shared branch', calls.filter((c) => c.opts.agentType === 'reviewer').length === 1, calls.filter((c) => c.opts.agentType === 'reviewer').length)
 }
 
+// isMain is optional in the verify schema, so a lane that simply omits it must
+// not thereby prove isolation. The check is not "did anyone say main" but "can
+// this run confirm the commit is NOT in the main checkout".
+{
+  const r = responder({
+    'verify fix': {
+      headCommit: 'bbb2222', containsReviewedHead: true, dirty: false, filesChanged: ['src/a.ts'],
+      commits: ['c'], worktreePath: '/w/fix', candidates: ['bbb2222'], worktrees: [],
+    },
+  })
+  const { result } = await runWorkflow('review-round.js', FIX, r)
+  check('unconfirmed-isolation-stops', 'a lane that never says whether the worktree is the main one does not get the benefit of the doubt', result.stopped === 'fix not isolated', result.stopped)
+}
+
+// The reviewed head abbreviated is still the reviewed head. Adopting it would
+// re-point round two at the code round one already reviewed - the original bug
+// this whole loop was removed for.
+{
+  const r = responder({
+    'verify fix': {
+      headCommit: 'facef00', containsReviewedHead: true, dirty: false, filesChanged: ['src/a.ts'],
+      commits: [], isMain: false, worktreePath: '/w/fix', candidates: ['facef00'], worktrees: [],
+    },
+  })
+  const { result } = await runWorkflow('review-round.js', FIX, r)
+  check('abbreviated-reviewed-head-is-not-a-fix', 'an abbreviation of the reviewed commit is not a new commit', result.stopped === 'unverified fix', result.stopped)
+}
+
 // A reviewer's `blocking` is not guaranteed to be a boolean. Both naive
 // readings are wrong, and one of them approves a merge.
 {

@@ -93,6 +93,16 @@ const SENSITIVE =
   /(auth|authz|authn|login|logout|session|token|jwt|oauth|saml|oidc|password|passkey|credential|secret|crypto|cipher|hash|permission|entitlement|\.env|keychain|vault)/i
 
 const SHA_RE = /^[0-9a-f]{7,40}$/i
+// git prints whatever length it feels like, so the reviewed head abbreviated is
+// still the reviewed head. Comparing with === would let it be adopted as the
+// fix, and round two would re-review the code round one already read - which is
+// the exact failure this loop was deleted for in the first place.
+function sameCommit(a, b) {
+  const x = String(a || '').toLowerCase()
+  const y = String(b || '').toLowerCase()
+  if (!x || !y) return false
+  return x === y || x.startsWith(y) || y.startsWith(x)
+}
 // The eval harness has never applied a schema, and neither has anything else
 // this script's booleans arrive from. Two readings are both wrong: a truthy
 // test makes the string "false" a blocking finding, and a strict `=== true`
@@ -468,11 +478,18 @@ function gateFix(v, blocking, head) {
       return 'more than one worktree could be the fix (' + v.candidates.join(', ') + '), so which commit to review would be a guess'
     return 'the fix run produced no commit'
   }
-  if (v.headCommit === head) return 'the fix commit is the reviewed commit, so nothing was committed'
-  // Belt and braces: a lane that reports a sha alongside isMain is still the
-  // main checkout, and a commit on Alex's own working branch is not a fix this
-  // workflow may adopt.
+  if (sameCommit(v.headCommit, head)) return 'the fix commit is the reviewed commit, so nothing was committed'
+  // Isolation has to be CONFIRMED, not merely unmentioned. `isMain` is optional
+  // in the schema, so a lane that omits it would otherwise prove isolation by
+  // saying nothing - and in the probe both agents ran in the main checkout, so
+  // silence is the shape this failure actually takes. Confirmation is an
+  // explicit isMain: false, or the worktree list saying so about this path.
   if (v.isMain === true) return NOT_ISOLATED
+  if (v.isMain !== false) {
+    const entry = (v.worktrees || []).find((w) => w && w.path && w.path === v.worktreePath)
+    if (!entry) return NOT_CONFIRMED_ISOLATED
+    if (entry.isMain !== false) return entry.isMain === true ? NOT_ISOLATED : NOT_CONFIRMED_ISOLATED
+  }
   if (v.containsReviewedHead !== true)
     return (
       'the fix is not built on the reviewed commit ' + head + (v.forkPoint ? ' - it forks at ' + v.forkPoint : '')
@@ -489,6 +506,9 @@ function gateFix(v, blocking, head) {
   }
   return null
 }
+
+const NOT_CONFIRMED_ISOLATED =
+  'the fix run could not be confirmed isolated: nothing in the verification says whether that worktree is the main checkout, and an unconfirmed fix is not adopted'
 
 const NOT_ISOLATED =
   'the fix run was not isolated: the only worktree whose HEAD moved is the main checkout, so the commit is on the shared working branch rather than in a worktree this run may re-review'
@@ -847,7 +867,7 @@ while (true) {
 
   const refusal = gateFix(verify, blocking, reviewedHead)
   if (refusal) {
-    stopped = refusal === NOT_ISOLATED ? 'fix not isolated' : 'unverified fix'
+    stopped = refusal === NOT_ISOLATED || refusal === NOT_CONFIRMED_ISOLATED ? 'fix not isolated' : 'unverified fix'
     fixRequest = {
       range: reviewRange,
       plan: intentPath,
