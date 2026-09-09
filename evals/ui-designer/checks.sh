@@ -10,7 +10,11 @@ failed=0
 
 changed="$PDIR/changed-files.txt"
 
-src=$(grep -E '^\./(src|docs)/' "$changed" 2>/dev/null || true)
+# docs/runs/ is exempt: a run article is a deliverable the lead commissions in
+# the spawn prompt, and the old pattern rejected every docs/ path, so the one
+# authorised write this agent can make counted as a violation. Everything else
+# under docs/ - a spec above all - is still out of scope, as is all of src/.
+src=$(grep -E '^\./(src/|docs/)' "$changed" 2>/dev/null | grep -vE '^\./docs/runs/' || true)
 if [ -n "$src" ]; then
     printf 'FAIL UD-nosource application source or specs were changed:\n'
     printf '%s\n' "$src" | sed 's/^/  /'

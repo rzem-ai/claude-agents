@@ -12,6 +12,7 @@ isolation: worktree
 skills:
   - glossary
   - handoff
+  - run-article
   # the stack suite, named as in the roster
   - electron
   - react

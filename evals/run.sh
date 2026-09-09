@@ -160,6 +160,49 @@ else
 fi
 
 mkdir -p "$OUT_ROOT"
+
+# What was actually exercised. A baseline is only evidence if you can say which
+# definitions produced it, and "the ones in the repo at the time" is not an
+# answer anyone can check six weeks later. Written once per run, beside the
+# results: the commit, whether the tree was dirty, and a hash per agent file.
+if command -v python3 >/dev/null 2>&1; then
+    python3 - "$REPO_ROOT" "$OUT_ROOT" <<'PY' || warn 'could not record definition provenance'
+import hashlib, json, subprocess, sys
+from pathlib import Path
+
+root, out = map(Path, sys.argv[1:3])
+
+
+def git(*a):
+    try:
+        return subprocess.check_output(['git', '-C', str(root), *a], text=True,
+                                       stderr=subprocess.DEVNULL).strip()
+    except Exception:
+        return None
+
+
+agents = root / 'claude-agents' / 'agents'
+skills = root / 'claude-agents' / 'skills'
+files = {}
+for p in sorted(list(agents.glob('*.md')) + list(skills.glob('*/SKILL.md'))):
+    files[str(p.relative_to(root))] = hashlib.sha256(p.read_bytes()).hexdigest()
+
+(out / 'definition-provenance.json').write_text(
+    json.dumps(
+        {
+            'commit': git('rev-parse', 'HEAD'),
+            'branch': git('rev-parse', '--abbrev-ref', 'HEAD'),
+            'dirty': bool(git('status', '--porcelain')),
+            'plugin_dir': str(root / 'claude-agents'),
+            'files': files,
+        },
+        indent=2,
+    )
+    + '\n'
+)
+PY
+fi
+
 SUMMARY_TSV="$OUT_ROOT/summary.tsv"
 SUMMARY_TXT="$OUT_ROOT/summary.txt"
 : > "$SUMMARY_TSV"
@@ -224,13 +267,40 @@ run_prompt() {
     build_workspace "$ws" "$fixture"
     manifest "$ws" > "$pdir/before.manifest"
 
+    # --plugin-dir loads the definitions from THIS checkout, and the agent is
+    # named with its plugin scope. Without both, a bare `--agent scout` resolved
+    # against whatever is installed on the machine: nothing at all on a clean
+    # box, and a stale or shadowing user-scoped copy on a configured one. Either
+    # way the run proved nothing about the files in the pull request.
     # shellcheck disable=SC2086
-    ( cd "$ws" && $TIMEOUT_CMD "$CLAUDE_BIN" -p "$text" $AGENT_FLAG "$agent" $CLAUDE_ARGS $FORMAT_ARGS ) \
+    ( cd "$ws" && $TIMEOUT_CMD "$CLAUDE_BIN" \
+        --plugin-dir "$REPO_ROOT/claude-agents" \
+        -p "$text" $AGENT_FLAG "claude-agents:$agent" $CLAUDE_ARGS $FORMAT_ARGS ) \
         > "$pdir/raw-output.txt" 2> "$pdir/stderr.txt"
     rc=$?
     printf '%s\n' "$rc" > "$pdir/exit-code.txt"
+
+    # R12. The exit code used to be stored and warned about, and nothing more:
+    # if the capture happened to contain a valid handoff and the fixture was
+    # unchanged, every gate passed and the runner exited 0. A stub that returned
+    # a valid handoff inside an is_error envelope and then exited 7 was reported
+    # as "All gates passed".
     if [ "$rc" -ne 0 ]; then
+        RUN_FAILED=1
+        printf 'FAIL runtime: claude exited %s\n' "$rc" > "$pdir/runtime.txt"
         warn "$agent / $(basename "$pfile"): claude exited $rc (see $pdir/stderr.txt)"
+    else
+        printf 'PASS runtime\n' > "$pdir/runtime.txt"
+    fi
+    # An error envelope with a zero exit is the same failure wearing a hat.
+    if command -v jq >/dev/null 2>&1 && \
+       jq -e -s '
+         [.[] | if type == "array" then .[] else . end]
+         | any(.[]; type == "object" and .type == "result" and .is_error == true)
+       ' "$pdir/raw-output.txt" >/dev/null 2>&1; then
+        RUN_FAILED=1
+        printf 'FAIL runtime: the result envelope reports is_error=true\n' > "$pdir/runtime.txt"
+        warn "$agent / $(basename "$pfile"): the result envelope reports is_error=true"
     fi
 
     # transcript.txt is the final assistant message alone, because that is the
@@ -292,6 +362,14 @@ score_prompt() {
             fi
         fi
     else
+        RUN_FAILED=1
+    fi
+
+    # A partial handoff is still extracted, because it helps diagnosis. It does
+    # not undo a runtime failure: the summary verdict and the process exit have
+    # to agree, or the summary is not evidence of anything.
+    if [ -f "$pdir/runtime.txt" ] && grep -q '^FAIL ' "$pdir/runtime.txt"; then
+        checks='FAIL'
         RUN_FAILED=1
     fi
 
