@@ -743,7 +743,7 @@ layer had to make on its own:
                then "yes" else "no" end')"
     ```
 
-    Absent, or JSON `null`, means no handoff was ever asked for, so the gate does
+    Absent, or JSON `null`, means there is no handoff to check, so the gate does
     not fire and the column is left alone - `TaskCompleted` owns Done, and a card
     that invents a comment out of structured output nobody parsed is worse than a
     card that says nothing. Present-but-empty still fails, because that is an
@@ -764,6 +764,20 @@ layer had to make on its own:
     `agent_type` arrived bare (`probe-worker`), unprefixed. `cwd` is worth
     noting: it is a supported route to the directory a subagent actually worked
     in, which is the thing `review-round.js` had no way to learn.
+
+    **The accepted gap.** The probe proved that a schema-carrying spawn produces
+    an absent field. It did not prove the converse, and the hook cannot tell the
+    two apart from the event alone: any other cause of an absent final message
+    now lands in the same branch and exits 0 silently, where before it exited 2.
+    That is a deliberate trade - a false pass on a rare unknown beats deadlocking
+    every workflow in the fleet - but it is a gap, not a diagnosis, and the log
+    line says so rather than naming a cause it cannot see.
+
+    What would close it: `SubagentStop` carries `agent_transcript_path`, and the
+    final assistant content block in that transcript is a `StructuredOutput`
+    `tool_use` for a schema run and a `text` block otherwise. Reading it turns
+    the discriminator into evidence. That is real work against an undocumented
+    on-disk format, so it is written down here rather than done.
 
     To re-derive after a CLI upgrade, spawn one agent twice from a workflow -
     once with a `schema`, once without - behind a `SubagentStop` hook that dumps

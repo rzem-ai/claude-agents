@@ -7,6 +7,7 @@
 # model evals under evals/run.sh are separate and cost money.
 #
 #   handoff-parity        the two handoff validators agree, 28 fixtures
+#   handoff-extractor     review-round reads a handoff exactly as the hook does
 #   board-hook-contract   the board hooks read fields the runtime sends
 #   scope-hook-contract   each role is held to its invariants, and can still work
 #   workflow-logic        the workflow branches decide on evidence
@@ -51,6 +52,7 @@ done
 if [ "$syntax_failed" -eq 0 ]; then printf 'syntax: ok\n'; else FAILED+=("syntax"); fi
 
 run handoff-parity      "$LIB_DIR/handoff-parity.sh"
+run handoff-extractor   "$LIB_DIR/handoff-extractor-parity.sh"
 run board-hook-contract "$LIB_DIR/board-hook-contract.sh"
 run scope-hook-contract "$LIB_DIR/scope-hook-contract.sh"
 run workflow-logic      node "$LIB_DIR/workflow-logic.mjs"

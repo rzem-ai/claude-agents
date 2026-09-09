@@ -295,11 +295,18 @@ fi
 # and that still fails - the distinction is the whole fix, and softening it any
 # further would retire the gate.
 #
+# Note what is and is not known here. The probe proved that a schema-carrying
+# spawn produces an absent field; it did not prove the converse. Any other cause
+# of an absent final message lands in this branch too and exits 0 silently, and
+# this hook cannot tell the cases apart from the event alone. That is an
+# accepted gap, not a diagnosis - see hooks/README.md item 16 for the evidence
+# that would close it.
+#
 # The column is left alone either way: TaskCompleted owns Done, there are no
 # Blocker: lines to read, and a card that invents a comment out of structured
 # output nobody parsed is worse than a card that says nothing.
 if [ "$has_message" = no ]; then
-  board_log "$HOOK" "${agent_type:-agent} returned structured output and no handoff, so there is nothing to validate; leaving the column alone"
+  board_log "$HOOK" "${agent_type:-agent} sent no final message, so there is no handoff to validate; leaving the column alone. The event does not say why - a schema-carrying spawn is the known cause, but this hook cannot tell that from any other reason the field is absent"
   exit 0
 fi
 

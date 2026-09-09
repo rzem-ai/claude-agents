@@ -54,7 +54,7 @@ Both parsers anchor on the start of a line, so naming a prefix mid-sentence in p
 
 ## Do not signal status in the text
 
-`SubagentStop` receives a `status` field of `success`, `failure` or `cancelled` from the harness, independently of anything you write. Do not try to signal failure through the handoff: no status line, no "FAILED", no truncated message. A run that failed still emits all four sections, and what went wrong goes under Not done.
+The harness sends `SubagentStop` no status field - not `success`, not `failure`, not `cancelled`; the shipped CLI's own schema has no such field, and the hooks were reading one that never arrived (see `hooks/README.md` item 15). So this handoff is the only account of the run that anything downstream gets. That does not mean inventing a status line, a "FAILED" banner or a truncated message: the four sections already say it. What went wrong goes under Not done, what you could not prove goes under Unverified, and anything that needs Alex before the work can continue is a `Blocker:` line - which is the one route to the human queue that actually works.
 
 ## Example
 
