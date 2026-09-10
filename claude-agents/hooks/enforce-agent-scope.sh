@@ -79,6 +79,77 @@ command_str="$(printf '%s' "$input" | jq -r '.tool_input.command // ""')"
 # leading token was not the command - and was skipped entirely.
 command_str="${command_str//\\$'\n'/}"
 
+# --------------------------------------------------------- quoting the command
+# Quoting a word does not change which command the shell runs. Adjacent quoted
+# and unquoted pieces are joined into ONE word before the shell decides what to
+# execute, so `""git`, `''git`, `g""it`, `"g"it`, `gi''t` and `"git"` are all
+# the word `git` - verified by running each of them, not assumed - and so is
+# `b""ash`. Two characters were enough to retire the refuter's git rule,
+# coder's worktree guard, ui-designer's install ban and fleet-steward's merge
+# ban at once, because every one of those is a targeted check rather than a
+# command allowlist: `bash -c "\"\"git commit -m x"` recovered a payload whose
+# leading token read as `""git`, which matches no branch, and a real shell ran
+# git commit.
+#
+# The quotes come off here, before anything else reads the string, because that
+# is the one place that serves leading_token, sub_verb and install_verb at the
+# same time - and because strip_quoted, further down, ERASES a quoted span, so
+# by the time a segment exists the `g` of `"g"it` is already gone and no
+# per-parser fix could get it back.
+#
+# Only INERT quotes go: a span whose content is empty or is made entirely of
+# the characters a command name or a plain path can hold. Everything else keeps
+# its quotes, because for everything else the quotes are load-bearing -
+# `grep -R '=>' src`, `find . -name "*.ts"` and `git commit -m "a message"` all
+# depend on strip_quoted still erasing that span, and unquoting them would hand
+# a redirection, a glob or a word split to a check that would then deny honest
+# work.
+#
+# The backslash-escaped forms go first and in the same pass, because that is
+# how the shape arrives from an interpreter payload: the recovery below appends
+# a payload exactly as written, backslashes intact, so the pair to remove in
+# `bash -c "\"\"git commit"` is `\"\"` rather than `""`.
+#
+# A lone escaped quote that is left over then has to be hidden from the plain
+# rules, or they pair it with the real quote that follows and eat the payload's
+# terminator: `bash -c "git commit -m \"a b\""` would lose its closing quote,
+# the recovery would find no terminated payload, and a command that denies
+# today would allow. Hence the two placeholders. A guard on the pattern instead
+# (`(^|[^\\])"`) was tried and is wrong for a different reason: consuming the
+# preceding character stops adjacent pairs matching, so `""""git` collapsed one
+# pair per pass and stayed `""git`.
+#
+# The placeholders are two control bytes, and a command that already contains
+# one has it handed back as `\"` or `\'`. That is not a way through: the shell
+# has no meaning for those bytes either, so a word holding one names a command
+# that does not exist, whichever of the two ways this reads it.
+#
+# An ODD number of quotes is deliberately left alone. `bash -c "\"\"\"\"\"git
+# commit -m x"` leaves the payload unterminated and a real shell refuses to run
+# it - "unexpected EOF while looking for matching quote" - so denying it would
+# add a case no real command can reach, which is the same stance this file
+# already takes for a lone unterminated quote. Removing pairs leaves the odd
+# one standing, the leading token stays `"git`, and nothing fires.
+#
+# What this is not: a shell. It reads a quote as inert on the content between
+# it and the next one of its kind, with no notion of which quote is inside
+# which. That is the same trade the rest of this file makes, and it errs the
+# safe way - an unrecognised shape keeps its quotes and is erased by
+# strip_quoted exactly as it was before.
+INERT_DQ=$'\001'
+INERT_SQ=$'\002'
+strip_inert_quotes() {
+  printf '%s' "$1" | sed -E \
+    -e 's/\\"([A-Za-z0-9_./-]*)\\"/\1/g' \
+    -e "s/\\\\'([A-Za-z0-9_./-]*)\\\\'/\1/g" \
+    -e "s/\\\\\"/$INERT_DQ/g" \
+    -e "s/\\\\'/$INERT_SQ/g" \
+    -e 's/"([A-Za-z0-9_./-]*)"/\1/g' \
+    -e "s/'([A-Za-z0-9_./-]*)'/\1/g" \
+    -e "s/$INERT_DQ/\\\\\"/g" \
+    -e "s/$INERT_SQ/\\\\'/g"
+}
+
 # Every enforce_* function below finds its segments the same way: strip_quoted
 # erases quoted spans, THEN the result is split on shell operators. That order
 # is exactly what let `bash -c "git commit -m x"` past every check that is not
@@ -196,11 +267,22 @@ recover_interpreter_payloads_once() {
   local text="$1" extra="" line payload
   while IFS= read -r line; do
     [ -n "$line" ] || continue
-    [[ "$line" =~ (\'[^\']*\'|\"([^\"\\]|\\.)*\")$ ]] || continue
-    payload="${BASH_REMATCH[1]}"
-    payload="${payload:1:${#payload}-2}"
+    if [[ "$line" =~ (\'[^\']*\'|\"([^\"\\]|\\.)*\")$ ]]; then
+      payload="${BASH_REMATCH[1]}"
+      payload="${payload:1:${#payload}-2}"
+    elif [[ "$line" =~ [[:space:]]([^[:space:]\'\"]+)$ ]]; then
+      # An unquoted payload is one word by definition - `bash -c git commit`
+      # runs `git` and hands "commit" to it as $0 - and it is the shape a
+      # one-word payload arrives in once strip_inert_quotes has taken the
+      # inert quotes off `bash -c "git"`. Without this alternative that
+      # normalisation would quietly stop those payloads being recovered at
+      # all, which would be a fix that broke something on its way past.
+      payload="${BASH_REMATCH[1]}"
+    else
+      continue
+    fi
     extra="$extra"$'\n'"$payload"
-  done < <(printf '%s' "$text" | grep -Eo "(^|[^[:alnum:]_.-])(bash|sh|zsh|dash|ksh)[[:space:]]+-[A-Za-z]*c[[:space:]]+('[^']*'|\"([^\"\\\\]|\\\\.)*\")")
+  done < <(printf '%s' "$text" | grep -Eo "(^|[^[:alnum:]_.-])(bash|sh|zsh|dash|ksh)[[:space:]]+-[A-Za-z]*c[[:space:]]+('[^']*'|\"([^\"\\\\]|\\\\.)*\"|[^[:space:]'\"]+)")
   printf '%s' "$extra"
 }
 
@@ -266,7 +348,13 @@ bound_scan() {
 
 if [ -n "$command_str" ]; then
   command_str="$(bound_scan "$command_str" "command")"
-  command_str="$command_str$(bound_scan "$(recover_interpreter_payloads "$command_str")" "recovered interpreter payload")"
+  # Bounded first, so the normalisation is paid on at most SCAN_MAX bytes, and
+  # BEFORE the recovery, so a quoted interpreter name (`b""ash -c "..."`) is the
+  # interpreter the recovery is looking for. Applied to the recovered payloads
+  # too, for the same reason the bound is: either text can be the one carrying
+  # the shape.
+  command_str="$(strip_inert_quotes "$command_str")"
+  command_str="$command_str$(bound_scan "$(strip_inert_quotes "$(recover_interpreter_payloads "$command_str")")" "recovered interpreter payload")"
 fi
 
 # A plugin agent can arrive as "scout" or as "plugin-name:scout".
@@ -296,6 +384,25 @@ enforce_spec_writer() {
     */docs/specs/*) return 0 ;;
   esac
   deny "spec-writer invariant: \"Never write anywhere except under docs/specs/: not source, not config, not tests, and never a plan under docs/plans/.\" $tool_name targeted $abs. Write the spec to docs/specs/<issue>.md instead. Anything else belongs to the lead."
+}
+
+# What a backslash does, in the shell's order: before whitespace it makes that
+# whitespace part of the word; anywhere else it quotes the next character and
+# disappears. The placeholder keeps an escaped space from splitting a path into
+# two words without pretending to know what the path says.
+#
+# The line-continuation case is NOT handled here - it is joined out of
+# command_str before anything splits on newlines, because deleting the backslash
+# without joining is what stranded the verb on a second segment.
+#
+# Three callers, and they used to disagree. sub_verb did this and the other two
+# did not, so `git \merge main` was caught while `\git merge main` and
+# `npm \install react` were not - a backslash is quoting, and quoting the
+# command word or the install verb hid it from exactly the checks that read
+# those words. Both were verified to run: `\git --version` prints a version,
+# `npm \install` reaches npm's install.
+unescape_words() {
+  printf '%s' "$1" | sed -e 's/\\\([[:space:]]\)/_/g' -e 's/\\\(.\)/\1/g'
 }
 
 # The subcommand a segment would actually run: the first word after the command
@@ -329,17 +436,7 @@ enforce_spec_writer() {
 sub_verb() {
   local seg tok skip_next=no
   seg="$(command_words "$1")"
-  # Undo what a backslash does, in the shell's own order: a trailing one
-  # continues the line and vanishes; one before whitespace joins that
-  # whitespace into the word; any other quotes the next character and
-  # disappears. The placeholder keeps an escaped space from splitting a path
-  # into two words without pretending to know what the path says.
-  # What a backslash does, in the shell's order: before whitespace it makes that
-  # whitespace part of the word; anywhere else it quotes the next character and
-  # disappears. The line-continuation case is NOT handled here - it is joined
-  # out of command_str before anything splits on newlines, because deleting the
-  # backslash without joining is what stranded the verb on a second segment.
-  seg="$(printf '%s' "$seg" | sed -e 's/\\\([[:space:]]\)/_/g' -e 's/\\\(.\)/\1/g')"
+  seg="$(unescape_words "$seg")"
   # shellcheck disable=SC2086 # deliberate word splitting: this is a word scan
   set -- $seg
   [ "$#" -gt 0 ] || { printf ''; return 0; }
@@ -463,6 +560,9 @@ command_words() {
 leading_token() {
   local tok
   tok="$(printf '%s' "$(command_words "$1")" | awk '{print $1}')"
+  # Unescaped before the basename, the way the shell removes quoting before it
+  # resolves the name: `\git` is the command `git`, and `/bin/\git` is too.
+  tok="$(unescape_words "$tok")"
   printf '%s\n' "${tok##*/}"
 }
 
@@ -885,7 +985,7 @@ UI_DESIGNER_INSTALL_VERBS=" install i ci add require get remove uninstall update
 # still reads `install`.
 install_verb() {
   local seg tok prev=""
-  seg="$(command_words "$1")"
+  seg="$(unescape_words "$(command_words "$1")")"
   # shellcheck disable=SC2086 # deliberate word splitting: this is a word scan
   set -- $seg
   [ "$#" -gt 0 ] || { printf ''; return 0; }

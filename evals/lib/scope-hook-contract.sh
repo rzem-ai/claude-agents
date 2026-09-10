@@ -529,6 +529,122 @@ deny_bash_saying refuter \
 # an ordinary payload into a denial. Nothing here is a git or install verb.
 allow_bash refuter 'bash -c "echo \"quoted \\\"inner\\\" text\""'
 
+printf '\nQuoting the command word does not change the command\n'
+
+# Two characters, and every role with a targeted check was open again.
+# `bash -c "\"\"git commit -m x"` recovered a payload of `\"\"git commit -m x`;
+# sub_verb collapses the backslashes, leading_token returned `""git`, that
+# matches no branch, and the git rule never ran. A real shell concatenates the
+# empty strings away and runs git commit - verified by running it, which is the
+# only thing that separates these from the shapes in the next block that no
+# shell will run.
+#
+# Every place a quote can sit is the same hole wearing a different hat: around
+# the whole word, inside it, around the interpreter's name, or spelled with a
+# backslash instead of a quote. Each one below was run in a real shell first;
+# all of them execute git, npm or bash exactly as if nothing were quoted.
+deny_bash_saying refuter       'bash -c "\"\"git commit -m x"' 'git commit'
+deny_bash_saying ui-designer   'bash -c "\"\"npm install react"' 'npm install'
+deny_bash_saying fleet-steward 'bash -c "\"\"git merge main"' 'git merge'
+if [ -d "$MAINCO" ]; then
+    deny_bash_saying_in coder 'bash -c "\"\"git commit -m x"' 'not a linked worktree' "$MAINCO"
+fi
+
+# The same word, quoted six ways, with no interpreter in front of it. The
+# quotes are erased by strip_quoted before a segment exists, so `"g"it` cannot
+# be recovered by any later parser - which is why the quotes come off the
+# command string first, ahead of everything else that reads it.
+deny_bash_saying refuter '""git commit -m x' 'git commit'
+deny_bash_saying refuter "''git commit -m x" 'git commit'
+deny_bash_saying refuter 'g""it commit -m x' 'git commit'
+deny_bash_saying refuter '"g"it commit -m x' 'git commit'
+deny_bash_saying refuter "gi''t commit -m x" 'git commit'
+deny_bash_saying refuter '"git" commit -m x' 'git commit'
+deny_bash_saying refuter "'git' commit -m x" 'git commit'
+
+# Inside a payload the pair arrives escaped, as `\"\"`, because the recovery
+# appends a payload exactly as written. An even number of them is a real
+# command however many there are.
+deny_bash_saying refuter 'bash -c "g\"\"it commit -m x"' 'git commit'
+deny_bash_saying refuter 'bash -c "\"git\" commit -m x"' 'git commit'
+deny_bash_saying refuter 'bash -c "\"\"\"\"git commit -m x"' 'git commit'
+deny_bash_saying refuter '""""git commit -m x' 'git commit'
+deny_bash_saying refuter '""""""git commit -m x' 'git commit'
+
+# The interpreter's own name is a word like any other, so quoting it hid the
+# whole payload from the recovery. That is why the quotes come off before the
+# recovery runs rather than after it.
+deny_bash_saying refuter     'b""ash -c "git commit -m x"' 'git commit'
+deny_bash_saying ui-designer '""bash -c "npm install react"' 'npm install'
+
+# A backslash quotes the next character and disappears, so `\git` is git and
+# `npm \install` reaches npm's install - both verified by running them.
+# sub_verb already undid this for the VERB, which is why `git \merge` was
+# caught above while the command word and the install verb were not.
+deny_bash_saying refuter       '\git commit -m x' 'git commit'
+deny_bash_saying fleet-steward '\git merge main' 'git merge'
+deny_bash_saying ui-designer   'npm \install react' 'npm install'
+
+# The verb can be quoted as easily as the command.
+deny_bash_saying fleet-steward 'git ""merge main' 'git merge'
+deny_bash_saying fleet-steward 'git "merge" main' 'git merge'
+deny_bash_saying ui-designer   'npm ""install react' 'npm install'
+deny_bash_saying ui-designer   'npm "install" react' 'npm install'
+
+# An allowlist role denied these already, because `""git` is not on its list
+# either. What changes is that it now denies for the real reason, which is the
+# difference between coverage and coincidence.
+deny_bash_saying scout    '""git commit -m x' 'git commit'
+deny_bash_saying reviewer '"g"it commit -m x' 'git commit'
+
+printf '\nAn odd number of quotes is not a command, and is not denied\n'
+
+# `bash -c "\"\"\"\"\"git commit -m x"` leaves the payload unterminated and a
+# real shell refuses it with "unexpected EOF while looking for matching quote".
+# It never runs, so denying it would add a case no command can reach - the
+# same stance this file already takes for a lone unterminated quote. Removing
+# quotes in PAIRS is what keeps this true: the odd one is left standing and the
+# leading token stays `"git`.
+allow_bash refuter     'bash -c "\"\"\"\"\"git commit -m x"'
+allow_bash refuter     'bash -c "\"\"\"git commit -m x"'
+allow_bash refuter     '"""""git commit -m x'
+allow_bash refuter     '"git commit -m x'
+allow_bash ui-designer '"""npm install react'
+
+printf '\nQuotes that are load-bearing keep their meaning\n'
+
+# Only INERT quotes come off - a span whose content is empty or is made of the
+# characters a command name or a plain path can hold. The rest have to stay
+# quoted, or a redirection, a glob or a word split reaches a check that then
+# denies honest work. Several of these are asserted elsewhere in this file too;
+# they are repeated here because this is the change that could break them.
+allow_bash scout       "grep -R '=>' src"
+allow_bash scout       'find . -name "*.ts"'
+allow_bash scout       "sed -n '1,50p' README.md"
+allow_bash scout       'echo "hello world"'
+allow_bash fleet-steward 'git commit -m "propose migration"'
+allow_bash ui-designer 'npm run "link"'
+allow_bash ui-designer 'bash -c "npm run build"'
+allow_bash coder       'bash -c "npm test"'
+allow_bash refuter     'bash evals/lib/check-all.sh'
+if [ -d "$WT" ]; then
+    # A quoted empty string as an ARGUMENT is ordinary, and removing it changes
+    # neither the command nor the verb.
+    allow_bash coder 'git commit --allow-empty-message -m ""' "$WT"
+fi
+
+# The lock on the two placeholders. Without them the plain rules pair the `"`
+# of a `\"` with the real quote that follows, `\""` at the end of this command
+# is eaten, the payload loses its terminator, the recovery finds nothing
+# terminated, and a command that denies today would allow.
+deny_bash_saying refuter 'bash -c "git commit -m \"a b\""' 'git commit'
+
+# The lock on the unquoted-payload alternative in the recovery. Once the inert
+# quotes come off `bash -c "git"` the payload is no longer quoted, so a
+# recovery that only ever matched a quoted payload would have stopped seeing
+# one-word payloads at all - a fix that broke something on its way past.
+deny_bash_saying refuter 'bash -c "git"' 'is not a read-only verb'
+
 printf '\nThe project root itself is inside the project\n'
 
 # inside() excludes the root itself (path == root), which is correct for
