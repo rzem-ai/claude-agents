@@ -216,8 +216,57 @@ recover_interpreter_payloads() {
   printf '%s' "$all"
 }
 
+# ------------------------------------------------------------- the scan bound
+# Every enforce_* branch below reads a command the same way: strip the quoted
+# spans, split the result on the shell's operators, then walk each segment.
+# That work is superlinear in the length of a segment, and this hook is
+# registered in hooks.json with "timeout": 10. Measured end to end on
+# `bash -c "` + N x `\"` + `git commit -m x"`, before this bound:
+#
+#     command   refuter   coder   ui-designer
+#      16 KB      1.2s     1.2s      1.3s
+#      32 KB      2.2s     2.1s      3.0s
+#      48 KB      3.8s     4.0s      5.5s
+#      64 KB      6.4s     6.3s      9.1s
+#      80 KB      9.4s     9.0s     13.6s   <- ui-designer already past the timeout
+#
+# A hook that blows its timeout renders no decision at all, so a single absurd
+# command does not merely evade the role that was slow - it turns every guard
+# off for that call, for every role. That is the failure this bounds against.
+#
+# The length is bounded rather than the cost chased. 8192 bytes, because:
+# the longest command in this repo's entire eval corpus is under 200 bytes;
+# a deliberately generous real one - a long commit message, a find with a
+# dozen paths - is a few hundred more; and nothing a person or an agent types
+# comes near 8 KB. It also keeps the whole hook under a second, which a cap in
+# the tens of KB does not - 16 KB of scanned text measures 1.2s.
+#
+# Truncating is not skipping, and the difference matters. The head of the
+# command is still scanned, so `git commit -m x && <80 KB of padding>` is
+# still caught; skipping the checks on an over-long command would catch
+# nothing and would make length itself the bypass. What a truncated scan
+# gives up is a verb hiding past the bound, which is a real gap and is the
+# price of not having the timeout take every role's guard down with it.
+#
+# The bound is applied twice, because there are two texts and either can be
+# the long one: the command as submitted, and the interpreter payloads
+# recovered from it. Bounding only the first would let a command just under
+# the bound recover several times its own length. So the scanned text is at
+# most two bounds' worth, whatever the input.
+SCAN_MAX=8192
+
+# Prints its text, truncated to the bound, and says so loudly when it does.
+# $1 the text, $2 what it is, for the log line.
+bound_scan() {
+  local text="$1"
+  if [ "${#text}" -le "$SCAN_MAX" ]; then printf '%s' "$text"; return 0; fi
+  log "$2 is ${#text} bytes, $(( ${#text} - SCAN_MAX )) over the ${SCAN_MAX}-byte scan bound; scanning the first ${SCAN_MAX} bytes only, so a verb past that point will not be seen"
+  printf '%s' "${text:0:$SCAN_MAX}"
+}
+
 if [ -n "$command_str" ]; then
-  command_str="$command_str$(recover_interpreter_payloads "$command_str")"
+  command_str="$(bound_scan "$command_str" "command")"
+  command_str="$command_str$(bound_scan "$(recover_interpreter_payloads "$command_str")" "recovered interpreter payload")"
 fi
 
 # A plugin agent can arrive as "scout" or as "plugin-name:scout".

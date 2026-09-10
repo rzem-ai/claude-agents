@@ -600,6 +600,75 @@ else
     printf '  FAIL  the checker was already missing before this test moved it: %s\n' "$CHECKER_PATH"
 fi
 
+printf '\nA command too long to scan is bounded, not skipped\n'
+
+# The hook is registered with "timeout": 10 in hooks.json, and reading a very
+# long command used to cost more than that - about 9s at 80KB for refuter and
+# coder, over 13s for ui-designer. A hook that blows its timeout renders no
+# decision at all, which turns every role's guard off for that call rather
+# than just the slow one's, so length itself was a bypass for the whole file.
+# enforce-agent-scope.sh now scans at most SCAN_MAX bytes of the command and
+# SCAN_MAX of the payloads recovered from it, and logs how far over the bound
+# it was.
+#
+# What these cases pin down is that truncating is not skipping. The verb sits
+# in the HEAD of each command, where a bounded scan still reads it, with the
+# padding pushed out past the bound behind it.
+BIGPAD=$(head -c 80000 /dev/zero | tr '\0' a)
+
+deny_bash_saying refuter       "git commit -m x && echo $BIGPAD" 'git commit'
+deny_bash_saying refuter       "bash -c \"git commit -m x\" && echo $BIGPAD" 'git commit'
+deny_bash_saying fleet-steward "git merge main && echo $BIGPAD" 'git merge'
+deny_bash_saying ui-designer   "npm install react && echo $BIGPAD" 'npm install'
+if [ -d "$MAINCO" ]; then
+    deny_bash_saying_in coder "git commit -m x && echo $BIGPAD" 'not a linked worktree' "$MAINCO"
+fi
+
+# A verb 7KB into the command, still inside the bound, with 200KB behind it.
+# The four cases above would pass even if only the first segment were read,
+# since a deny exits the hook before it reaches the padding. This one does not:
+# the bounded head has to be scanned all the way to the bound.
+deny_bash_saying refuter "echo $(head -c 7000 /dev/zero | tr '\0' a) && git commit -m x && echo $BIGPAD" 'git commit'
+
+# The other half: the bound must not turn length alone into a denial.
+allow_bash refuter "echo $BIGPAD"
+
+# The bound exists for the timeout, so the last two cases assert the timeout
+# itself. They have to be commands that are ALLOWED - a denial exits the hook
+# at the segment that triggered it, so a forbidden verb near the front never
+# pays the cost this bound was added for. The shape below is the expensive
+# one: an interpreter payload that is a single unbroken 200KB token.
+#
+# Measured on this exact command, with the bound and without it:
+#     refuter       0s   vs  51s
+#     ui-designer   0s   vs  78s
+# against the 10s the hook is registered with. SECONDS is a bash builtin with
+# integer resolution - no bc, no GNU date, no new dependency - and integer
+# seconds is plenty when the gap being guarded is 50 seconds wide.
+#
+# Reading "allow" here is not the assertion; the elapsed time is. A hook that
+# times out also produces no output, which this harness reports as allow, so
+# the decision alone could not tell the two apart. That is exactly the failure
+# mode: a timed-out hook renders no decision and every role's guard is off for
+# that call.
+PATHOLOGICAL="bash -c \"$(head -c 100000 /dev/zero | tr '\0' '"' | sed 's/"/\\"/g')x\""
+within_seconds() {
+    # $1 budget in whole seconds, $2 agent, $3 command
+    local start=$SECONDS elapsed
+    decide "$(bash_event "$2" "$3" "$PROJECT")" "$PROJECT" >/dev/null
+    elapsed=$((SECONDS - start))
+    if [ "$elapsed" -lt "$1" ]; then
+        PASSED=$((PASSED + 1))
+        [ "$VERBOSE" -eq 1 ] && printf '  ok    %s: 200KB pathological command decided in %ss\n' "$2" "$elapsed"
+    else
+        FAILED=$((FAILED + 1))
+        printf '  FAIL  %s: 200KB command took %ss, over the %ss budget - the hook would time out\n' "$2" "$elapsed" "$1"
+    fi
+    return 0
+}
+within_seconds 10 refuter "$PATHOLOGICAL"
+within_seconds 10 ui-designer "$PATHOLOGICAL"
+
 printf '\n%s passed, %s failed\n' "$PASSED" "$FAILED"
 if [ "$FAILED" -ne 0 ]; then
     printf 'The scope hook admits something a role forbids, or blocks work the role exists to do.\n'
