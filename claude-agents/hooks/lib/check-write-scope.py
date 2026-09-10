@@ -124,7 +124,14 @@ def main():
         # EXCEPT the project. It mutates copies, and a mutation written back
         # into the tree it is testing is not a mutation, it is a change.
         # Physically resolved, so a symlink pointing back in resolves back in.
-        return 1 if inside(target, project) else 0
+        #
+        # inside() excludes the root itself (path == root), which is the
+        # right call for every allowlist role below - "write under this
+        # root" should not license overwriting the root directory entry -
+        # but it is the wrong call for a role whose rule is a denial: the
+        # project root is squarely inside the tree under test, not outside
+        # it, so it has to be checked for on its own.
+        return 1 if target == project or inside(target, project) else 0
 
     if role == 'spec-writer':
         # Anchor to the physical specs directory of *this* project. If it

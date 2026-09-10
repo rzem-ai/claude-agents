@@ -79,6 +79,42 @@ command_str="$(printf '%s' "$input" | jq -r '.tool_input.command // ""')"
 # leading token was not the command - and was skipped entirely.
 command_str="${command_str//\\$'\n'/}"
 
+# Every enforce_* function below finds its segments the same way: strip_quoted
+# erases quoted spans, THEN the result is split on shell operators. That order
+# is exactly what let `bash -c "git commit -m x"` past every check that is not
+# a plain command allowlist - strip_quoted turned the payload into
+# `bash -c ""`, so the leading token of every segment was "bash", and no
+# per-verb rule (the refuter's git rule, coder's worktree guard, ui-designer's
+# install ban, fleet-steward's merge/push ban) concerns itself with bash. An
+# allowlist role such as scout or reviewer is untouched either way, because
+# bash and sh are not on their allowed-commands list and they deny on the
+# outer segment before a payload would ever matter.
+#
+# The fix recovers the payload BEFORE strip_quoted runs, from the raw string,
+# and appends it as its own newline-separated line, so it is picked up by
+# every function's existing segment scan without any per-role change. The
+# original segment is left in place and is still scanned as written; only the
+# payload is added, never removed. This does not run a shell and is not a
+# parser - it looks for the one shape named here and nothing cleverer, the
+# same stance the rest of this file takes (see sub_verb's header comment).
+# Interpreters covered: bash, sh, zsh, dash, ksh. Not covered: an interpreter
+# invoked by absolute path, one wrapped in `env`/`command`, or `-c` preceded
+# by other flags - each is a real gap, left for the next thing that finds it.
+recover_interpreter_payloads() {
+  local rest="$1" payload extra=""
+  while [[ "$rest" =~ (^|[^[:alnum:]_./-])(bash|sh|zsh|dash|ksh)[[:space:]]+-c[[:space:]]+(\'[^\']*\'|\"[^\"]*\") ]]; do
+    payload="${BASH_REMATCH[3]}"
+    payload="${payload:1:${#payload}-2}"
+    extra="$extra"$'\n'"$payload"
+    rest="${rest#*"${BASH_REMATCH[0]}"}"
+  done
+  printf '%s' "$extra"
+}
+
+if [ -n "$command_str" ]; then
+  command_str="$command_str$(recover_interpreter_payloads "$command_str")"
+fi
+
 # A plugin agent can arrive as "scout" or as "plugin-name:scout".
 agent="${agent_type##*:}"
 
@@ -766,11 +802,26 @@ enforce_ui_designer() {
 case "$agent" in
   spec-writer|ui-designer|tech-writer|fleet-steward|refuter)
     if is_write_tool "$tool_name"; then
+      # Four of these five roles hold an allowlist of roots inside the
+      # project, so a checker that cannot run merely widens that allowlist to
+      # everything - unwelcome, but bounded by the project it already had to
+      # be in. The refuter is the opposite shape: its rule is a denial, the
+      # default it falls back to has to be the same denial, or "cannot tell"
+      # quietly becomes "cannot be stopped" for the one role whose write rule
+      # exists to keep it out of the tree it is attacking.
       if ! command -v python3 >/dev/null 2>&1; then
+        if [ "$agent" = "refuter" ]; then
+          deny "refuter invariant: \"Never write inside the project.\" python3 is not installed, so the checker that tells outside from inside cannot run. No checker means no write - mutate a copy somewhere this hook does not have to guess."
+        fi
         log "python3 is not installed, so write-scope checking cannot run for $agent. Allowing, consistent with this hook failing open."
       else
         checker="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/check-write-scope.py"
-        if [ -f "$checker" ] && ! printf '%s' "$input" | python3 "$checker"; then
+        if [ ! -f "$checker" ]; then
+          if [ "$agent" = "refuter" ]; then
+            deny "refuter invariant: \"Never write inside the project.\" The write-scope checker is missing, so this cannot tell outside from inside. No checker means no write - mutate a copy somewhere this hook does not have to guess."
+          fi
+          log "the write-scope checker is missing at $checker, so write-scope checking cannot run for $agent. Allowing, consistent with this hook failing open."
+        elif ! printf '%s' "$input" | python3 "$checker"; then
           deny "$agent invariant: that write destination is outside the role's approved output scope, or the scope could not be established. spec-writer writes only under this project's docs/specs/; tech-writer writes documentation under docs/ or a Markdown file at the project root; ui-designer writes prototypes/ and a commissioned article under docs/runs/; fleet-steward writes only inside its own working copy; the refuter writes only OUTSIDE the project, because it mutates copies and a mutation written back into the tree under test is a change rather than a mutation. Name the file you need in the handoff and let the lead commission it."
         fi
       fi

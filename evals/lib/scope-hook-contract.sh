@@ -437,6 +437,102 @@ deny_bash_saying refuter 'git commit -m x' 'git commit'
 deny_bash_saying refuter 'git switch -c mutant' 'git switch'
 deny_bash_saying refuter 'git -C /tmp/mutant reset --hard' 'git reset'
 
+printf '\nAn interpreter is not a disguise\n'
+
+# strip_quoted erases a quoted span before the result is split into segments,
+# so `bash -c "git commit -m x"` segmented to `bash -c ""` - the leading token
+# of every segment was bash, and no per-verb rule (the refuter's git rule,
+# coder's worktree guard, ui-designer's install ban, fleet-steward's
+# merge/push ban) has anything to say about bash. Every one of those roles is
+# a targeted check rather than a command allowlist, so all four were open
+# through this shape at once. scout and reviewer are unaffected either way:
+# bash and sh are not on their allowed-commands list, so they already deny on
+# the outer command before a hidden payload would matter.
+deny_bash_saying refuter       'bash -c "git commit -m x"' 'git commit'
+deny_bash_saying refuter       "sh -c 'git push --force origin main'" 'git push'
+deny_bash_saying ui-designer   'bash -c "npm install react"' 'npm install'
+deny_bash_saying fleet-steward 'bash -c "git merge main"' 'git merge'
+if [ -d "$WT" ]; then
+    deny_bash_saying_in coder 'bash -c "git commit -m x"' 'not a linked worktree' "$MAINCO"
+    allow_bash coder 'bash -c "git commit -m x"' "$WT"
+fi
+
+# Unaffected, and for the reason that already denied it: bash and sh were
+# never reachable through either allowlist, hidden payload or not.
+deny_bash_saying scout    'bash -c "git commit -m x"' '"bash" is not on that list'
+deny_bash_saying reviewer "sh -c 'git push --force'" '"sh" is not one of the commands'
+
+printf '\nThe project root itself is inside the project\n'
+
+# inside() excludes the root itself (path == root), which is correct for
+# every allowlist role - "write under this root" was never a license to
+# overwrite the root directory entry - but wrong for the refuter, whose rule
+# is a denial: the project root is squarely inside the tree under test.
+deny_write refuter "$PROJECT"
+
+printf '\nThe refuter fails closed when it cannot tell outside from inside\n'
+
+# The other four write-scope roles hold an allowlist of roots inside the
+# project, so a checker that cannot run only widens that allowlist - unwelcome,
+# but bounded by the project it already had to be in. The refuter's rule is a
+# denial, so its default without a working checker has to be the same denial,
+# or "cannot tell" quietly becomes "cannot be stopped" for the one role this
+# task exists to contain.
+CHECKER_PATH="$REPO_ROOT/claude-agents/hooks/lib/check-write-scope.py"
+
+# A PATH with every tool the hook needs except python3, so the hook's own
+# "command -v python3" genuinely fails rather than being told to.
+NO_PYTHON_BIN="$TMP/no-python-bin"
+mkdir -p "$NO_PYTHON_BIN"
+for _tool in jq sed grep bash git awk cat date dirname basename; do
+    _toolpath="$(command -v "$_tool" 2>/dev/null)"
+    [ -n "$_toolpath" ] && ln -sf "$_toolpath" "$NO_PYTHON_BIN/$_tool"
+done
+unset _tool _toolpath
+
+decide_no_python() {
+    # $1 event JSON, $2 project dir. Like decide(), but python3 is unreachable.
+    local out
+    out=$(printf '%s' "$1" | PATH="$NO_PYTHON_BIN" CLAUDE_PROJECT_DIR="$2" CLAUDE_AGENTS_REPO="$REPO_ROOT" \
+        "$HOOK" 2>/dev/null)
+    if [ -z "$out" ]; then printf 'allow\n'; else
+        printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecision // "allow"'
+    fi
+}
+
+expect_variant() {
+    # $1 decide-function, $2 want, $3 label, $4 event, $5 project dir
+    local got; got=$("$1" "$4" "$5")
+    if [ "$got" = "$2" ]; then
+        PASSED=$((PASSED + 1))
+        [ "$VERBOSE" -eq 1 ] && printf '  ok    %-5s %s\n' "$got" "$3"
+    else
+        FAILED=$((FAILED + 1))
+        printf '  FAIL  wanted %-5s got %-5s  %s\n' "$2" "$got" "$3"
+    fi
+    return 0
+}
+
+expect_variant decide_no_python deny \
+    "refuter -> $TMP/refuter-scratch/py-missing.sh (python3 missing)" \
+    "$(write_event refuter "$TMP/refuter-scratch/py-missing.sh" "$PROJECT")" "$PROJECT"
+# Unaffected: the other roles keep failing open when python3 cannot run.
+expect_variant decide_no_python allow \
+    "fleet-steward -> $REPO_ROOT/docs/scratch-note.md (python3 missing, unaffected)" \
+    "$(write_event fleet-steward "$REPO_ROOT/docs/scratch-note.md" "$REPO_ROOT")" "$REPO_ROOT"
+
+if [ -f "$CHECKER_PATH" ]; then
+    mv "$CHECKER_PATH" "$CHECKER_PATH.disabled-for-test"
+    trap 'mv "$CHECKER_PATH.disabled-for-test" "$CHECKER_PATH" 2>/dev/null; rm -rf "$TMP"' EXIT
+    expect deny "refuter -> $TMP/refuter-scratch/checker-missing.sh (checker missing)" \
+        "$(write_event refuter "$TMP/refuter-scratch/checker-missing.sh" "$PROJECT")" "$PROJECT"
+    mv "$CHECKER_PATH.disabled-for-test" "$CHECKER_PATH"
+    trap 'rm -rf "$TMP"' EXIT
+else
+    FAILED=$((FAILED + 1))
+    printf '  FAIL  the checker was already missing before this test moved it: %s\n' "$CHECKER_PATH"
+fi
+
 printf '\n%s passed, %s failed\n' "$PASSED" "$FAILED"
 if [ "$FAILED" -ne 0 ]; then
     printf 'The scope hook admits something a role forbids, or blocks work the role exists to do.\n'
