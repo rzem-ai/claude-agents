@@ -45,6 +45,11 @@ WANT_SECTIONS='## Scope
 ## Invariants
 ## Handoff'
 
+# Space-flanked so membership below is an exact token match, not a substring
+# match: \b treats a hyphen as a word boundary, so "writer" would match inside
+# "spec-writer" even though it names no agent of its own.
+ALL_AGENTS_LIST=" $(sed -n 's/^ALL_AGENTS="\(.*\)"/\1/p' "$RUN_SH") "
+
 for body in "$AGENT_DIR"/*.md; do
     agent=$(basename "$body" .md)
 
@@ -76,7 +81,10 @@ for body in "$AGENT_DIR"/*.md; do
     [ -d "$REPO_ROOT/evals/$agent" ]
     check "$agent-evals" "has an evals directory" $?
 
-    grep -q "ALL_AGENTS=.*\\b$agent\\b" "$RUN_SH"
+    case "$ALL_AGENTS_LIST" in
+        *" $agent "*) true ;;
+        *) false ;;
+    esac
     check "$agent-runner" "is in the eval runner's ALL_AGENTS" $?
 done
 
