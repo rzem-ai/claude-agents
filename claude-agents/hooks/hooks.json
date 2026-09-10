@@ -15,7 +15,7 @@
     ],
     "SubagentStop": [
       {
-        "matcher": "^(claude-agents:)?(lead|scout|spec-writer|coder|reviewer|ui-designer|tech-writer|researcher|fleet-steward)$",
+        "matcher": "^(claude-agents:)?(lead|scout|spec-writer|coder|reviewer|ui-designer|tech-writer|researcher|fleet-steward|refuter)$",
         "hooks": [
           {
             "type": "command",

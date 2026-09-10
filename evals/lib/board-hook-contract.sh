@@ -323,6 +323,17 @@ RC=0
 printf '' | BOARD_LOG_FILE="$TMP/log.$$" "$HOOKS/board-subagent-stop.sh" >"$TMP/out" 2>"$TMP/err" || RC=$?
 [ "$RC" -eq 0 ]; check stop-empty-stdin-does-not-block "empty stdin is not a malformed handoff" $?
 
+printf '\nSubagentStop: the matcher covers the whole roster\n'
+
+# The matcher is what decides whether an agent's handoff is checked at all, so
+# an agent missing from it fails open and silently: no format gate, no card
+# comment, and no route to the human queue for its blockers.
+MATCHER=$(jq -r '.hooks.SubagentStop[0].matcher' "$HOOKS/hooks.json")
+for agent in lead scout spec-writer coder reviewer ui-designer tech-writer researcher fleet-steward refuter; do
+    printf '%s' "$MATCHER" | grep -q "[(|]$agent[|)]"
+    check "matcher-$agent" "the matcher names $agent" $?
+done
+
 printf '\n%s passed, %s failed\n' "$PASSED" "$FAILED"
 if [ "$FAILED" -ne 0 ]; then
     printf 'A board hook is reading a field the runtime does not send, or moving a card without evidence.\n'

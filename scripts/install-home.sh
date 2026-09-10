@@ -53,13 +53,14 @@ OP_VAULT="Fleet"   # PLACEHOLDER: the dedicated fleet vault's name
 # agents cannot, because ~/.config/claude-agents is in permissions.deny.
 OP_REF_NOTION_TOKEN="op://Fleet/notion/credential"                     # PLACEHOLDER
 
-# Nine per-agent rzem-memory credentials. One identity per agent, because the
+# Ten per-agent rzem-memory credentials. One identity per agent, because the
 # credential is what fixes the memory namespace (section 6).
 OP_REF_MEMORY_LEAD="op://Fleet/rzem-memory-lead/credential"                     # PLACEHOLDER
 OP_REF_MEMORY_SCOUT="op://Fleet/rzem-memory-scout/credential"                   # PLACEHOLDER
 OP_REF_MEMORY_SPEC_WRITER="op://Fleet/rzem-memory-spec-writer/credential"       # PLACEHOLDER
 OP_REF_MEMORY_CODER="op://Fleet/rzem-memory-coder/credential"                   # PLACEHOLDER
 OP_REF_MEMORY_REVIEWER="op://Fleet/rzem-memory-reviewer/credential"             # PLACEHOLDER
+OP_REF_MEMORY_REFUTER="op://Fleet/rzem-memory-refuter/credential"               # PLACEHOLDER
 OP_REF_MEMORY_UI_DESIGNER="op://Fleet/rzem-memory-ui-designer/credential"       # PLACEHOLDER
 OP_REF_MEMORY_TECH_WRITER="op://Fleet/rzem-memory-tech-writer/credential"       # PLACEHOLDER
 OP_REF_MEMORY_RESEARCHER="op://Fleet/rzem-memory-researcher/credential"         # PLACEHOLDER
@@ -77,6 +78,7 @@ secret_specs() {
         "rzem-memory-spec-writer|$OP_REF_MEMORY_SPEC_WRITER" \
         "rzem-memory-coder|$OP_REF_MEMORY_CODER" \
         "rzem-memory-reviewer|$OP_REF_MEMORY_REVIEWER" \
+        "rzem-memory-refuter|$OP_REF_MEMORY_REFUTER" \
         "rzem-memory-ui-designer|$OP_REF_MEMORY_UI_DESIGNER" \
         "rzem-memory-tech-writer|$OP_REF_MEMORY_TECH_WRITER" \
         "rzem-memory-researcher|$OP_REF_MEMORY_RESEARCHER" \
