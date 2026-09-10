@@ -1020,6 +1020,17 @@ console.log('\nreview-round: a round is clean when nobody could break it')
   check('silent-refuter-is-not-clean', 'a refuter that returned nothing is its own stop reason', result.stopped === 'refutation returned nothing' && result.approved === false, [result.stopped, result.approved])
 }
 
+// The other half of the same guard: a string that is empty, or all whitespace,
+// is not evidence of anything either. Silence read as unbreakable is the exact
+// failure this stage exists to prevent, whatever shape the silence takes.
+{
+  const { result } = await runWorkflow('review-round.js', FIX, responder({
+    reviewer: { verdict: 'approve', summary: 'fine', findings: [] },
+    'Round 1 refutation': '',
+  }))
+  check('empty-refuter-is-not-clean', 'a refuter that returned an empty string is its own stop reason too', result.stopped === 'refutation returned nothing' && result.approved === false, [result.stopped, result.approved])
+}
+
 console.log(`\n${passed} passed, ${failed} failed`)
 if (failed) {
   console.log('A workflow branch approves the wrong thing, or has stopped doing its job.')

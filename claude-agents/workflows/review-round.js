@@ -836,6 +836,8 @@ while (true) {
       ]
         .filter(Boolean)
         .join('\n\n'),
+      // No schema, for the same reason coder gets none: a schema would delete
+      // this handoff too, and with it the refuter's only route to Alex.
       { agentType: REFUTER, phase: tag + ' refutation', label: tag + ' refutation' },
     )
 
