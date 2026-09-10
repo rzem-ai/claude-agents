@@ -118,7 +118,24 @@ command_str="${command_str//\\$'\n'/}"
 # "..."` as two separate arguments rather than one cluster). Each is a
 # genuine gap; this hook is a role reminder, not a containment boundary, and
 # none of the four can be closed by pattern-matching the command string.
-recover_interpreter_payloads() {
+#
+# Also deliberately uncovered: an unterminated quote, e.g.
+# `bash -c "git commit -m x`. A real shell rejects that with "unexpected EOF
+# while looking for matching quote" and never runs it, so treating it as a
+# bypass would add a case no real command can reach.
+#
+# A single pass over the whole string finds every SIBLING occurrence - two
+# unrelated `-c` invocations side by side - but not a NESTED one, because the
+# recovered payload of `bash -c "sh -c 'git commit -m x'"` is itself
+# `sh -c 'git commit -m x'`, and a real shell runs that nesting exactly as
+# written. So the single pass below is repeated over whatever the previous
+# pass just found, until a pass finds nothing new. The repeat count is
+# capped at a small fixed number of passes, not "until empty", so a command
+# built to nest the same shape many times cannot turn this into a loop -
+# three is enough for any nesting depth a real command would plausibly use,
+# and anything deeper is one more instance of the uncovered gaps above, not
+# a new one.
+recover_interpreter_payloads_once() {
   local rest="$1" payload extra=""
   while [[ "$rest" =~ (^|[^[:alnum:]_.-])(bash|sh|zsh|dash|ksh)[[:space:]]+-[A-Za-z]*c[[:space:]]+(\'[^\']*\'|\"[^\"]*\") ]]; do
     payload="${BASH_REMATCH[3]}"
@@ -127,6 +144,18 @@ recover_interpreter_payloads() {
     rest="${rest#*"${BASH_REMATCH[0]}"}"
   done
   printf '%s' "$extra"
+}
+
+recover_interpreter_payloads() {
+  local all pass=0 found
+  all="$(recover_interpreter_payloads_once "$1")"
+  found="$all"
+  while [ -n "$found" ] && [ "$pass" -lt 3 ]; do
+    found="$(recover_interpreter_payloads_once "$found")"
+    [ -n "$found" ] && all="$all"$'\n'"$found"
+    pass=$((pass + 1))
+  done
+  printf '%s' "$all"
 }
 
 if [ -n "$command_str" ]; then

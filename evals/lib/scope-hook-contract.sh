@@ -483,6 +483,17 @@ deny_bash_saying fleet-steward '/bin/sh -c "git merge main"' 'git merge'
 deny_bash_saying refuter 'env bash -c "git commit -m x"' 'git commit'
 deny_bash_saying refuter 'zsh -c "git commit -m x"' 'git commit'
 
+printf '\nA nested interpreter runs exactly as written\n'
+
+# A real shell runs this nesting: `bash -c "sh -c '\''git commit -m x'\''"`
+# hands its payload to a second interpreter, which reads ITS payload the same
+# way bash read the first. A single scan over the outer command recovers
+# `sh -c 'git commit -m x'` as a segment, but that segment's own payload was
+# never itself recovered - the fix repeats the recovery over what the
+# previous pass found, so the inner invocation is unwrapped too.
+deny_bash_saying refuter "bash -c \"sh -c 'git commit -m x'\"" 'git commit'
+deny_bash_saying refuter "bash -c 'sh -c \"git commit -m x\"'" 'git commit'
+
 printf '\nThe project root itself is inside the project\n'
 
 # inside() excludes the root itself (path == root), which is correct for
