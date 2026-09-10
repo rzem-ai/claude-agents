@@ -125,6 +125,29 @@ deny_bash_saying_in() {
     return 0
 }
 
+# A bound that truncates has to say so, or a scan that stopped early is
+# indistinguishable from a scan that found nothing. The log line is the only
+# evidence it left, so it gets asserted like a decision does.
+hook_log() {
+    # $1 event JSON, $2 project dir. Prints what the hook wrote to stderr.
+    printf '%s' "$1" | CLAUDE_PROJECT_DIR="$2" CLAUDE_AGENTS_REPO="$REPO_ROOT" \
+        "$HOOK" 2>&1 >/dev/null
+}
+
+log_bash_saying() {
+    # $1 agent, $2 command, $3 substring the log must contain
+    local logged
+    logged=$(hook_log "$(bash_event "$1" "$2" "$PROJECT")" "$PROJECT")
+    if printf '%s' "$logged" | grep -qF -- "$3"; then
+        PASSED=$((PASSED + 1))
+        [ "$VERBOSE" -eq 1 ] && printf '  ok    log   %s: %s\n' "$1" "$3"
+    else
+        FAILED=$((FAILED + 1))
+        printf '  FAIL  %s: the hook did not log "%s": %s\n' "$1" "$3" "${logged:0:110}"
+    fi
+    return 0
+}
+
 deny_bash()  { expect deny  "$1: $2" "$(bash_event "$1" "$2" "${3:-$PROJECT}")" "${3:-$PROJECT}"; }
 allow_bash() { expect allow "$1: $2" "$(bash_event "$1" "$2" "${3:-$PROJECT}")" "${3:-$PROJECT}"; }
 deny_write()  { expect deny  "$1 -> $2" "$(write_event "$1" "$2" "${3:-$PROJECT}")" "${3:-$PROJECT}"; }
@@ -394,6 +417,66 @@ deny_bash_saying fleet-steward 'env -i git merge main' 'git merge'
 deny_bash_saying fleet-steward 'xargs -n1 git merge' 'git merge'
 deny_bash_saying fleet-steward 'nohup git reset --hard HEAD~1' 'git reset'
 allow_bash scout 'env -i git log --oneline'
+
+printf '\nShell syntax in front of the command word does not hide it\n'
+
+# leading_token reads the first whitespace-delimited word of a segment as the
+# command word. Every shape below is legal shell, was confirmed to actually run
+# git, and was ALLOWED for the four denylist roles until this section existed,
+# because the first word was `{`, `!`, `>/tmp/out`, `then`, `do` or a scheduling
+# wrapper rather than `git`.
+deny_bash_saying refuter '{ git commit -m x; }' 'git commit'
+deny_bash_saying refuter '( git commit -m x )' 'git commit'
+deny_bash_saying refuter '! git commit -m x' 'git commit'
+deny_bash_saying refuter 'if true; then git commit -m x; fi' 'git commit'
+deny_bash_saying refuter 'for i in 1; do git commit -m x; done' 'git commit'
+deny_bash_saying refuter 'if false; then true; else git commit -m x; fi' 'git commit'
+deny_bash_saying refuter '>/tmp/out git commit -m x' 'git commit'
+deny_bash_saying refuter '2>/dev/null git commit -m x' 'git commit'
+deny_bash_saying refuter 'nice git commit -m x' 'git commit'
+deny_bash_saying refuter 'stdbuf -o0 git commit -m x' 'git commit'
+deny_bash_saying refuter 'setsid git commit -m x' 'git commit'
+deny_bash_saying refuter 'ionice -c3 git commit -m x' 'git commit'
+# timeout takes a duration before the command, so listing it as a wrapper alone
+# left the token as `5`. The duration is consumed with it.
+deny_bash_saying refuter 'timeout 5 git commit -m x' 'git commit'
+deny_bash_saying refuter 'timeout 30s git commit -m x' 'git commit'
+deny_bash_saying refuter 'timeout -k 1 5 git commit -m x' 'git commit'
+# The other three denylist roles inherit the same fix from command_words.
+deny_bash_saying fleet-steward '{ git merge main; }' 'git merge'
+deny_bash_saying fleet-steward 'timeout 5 git rebase main' 'git rebase'
+deny_bash_saying ui-designer '{ npm install react; }' 'npm install'
+deny_bash_saying ui-designer '>/tmp/o npm install react' 'npm install'
+deny_bash_saying ui-designer 'timeout 5 npm install react' 'npm install'
+if [ -d "$MAINCO/.git" ]; then
+    deny_bash_saying_in coder '{ git commit -m x; }' 'not a linked worktree' "$MAINCO"
+    deny_bash_saying_in coder 'timeout 5 git commit -m x' 'not a linked worktree' "$MAINCO"
+fi
+
+# And the other direction, which is the half that makes it worth doing. A
+# subshell or a brace group around a read is the same act as the read, so an
+# allowlist role must not start denying them - and did, before the strip,
+# because `(cat` and `{` are on nobody's list.
+allow_bash scout    '{ ls -la; }'
+allow_bash scout    '( cat README.md )'
+allow_bash scout    'timeout 5 grep -R needle src'
+allow_bash reviewer 'nice git log --oneline'
+allow_bash reviewer '! git log --oneline'
+# The wrapper is transparent, not permissive: what it wraps is still checked.
+deny_bash scout '{ rm -rf /tmp/x; }'
+deny_bash scout 'nice rm -rf /tmp/x'
+deny_bash scout 'timeout 5 curl https://example.com'
+
+# What this does NOT close, asserted rather than described, so the open-items
+# list and this file cannot drift apart. Command substitution still hides the
+# command word from every role that has no substitution check of its own, and
+# `script` is deliberately not a wrapper: `script cat` writes a file called
+# `cat`, so making it transparent would open for scout exactly the hole the
+# sudo entry above exists to keep shut.
+allow_bash refuter '$(git commit -m x)'
+allow_bash refuter '`git commit -m x`'
+allow_bash refuter 'script -q /dev/null git commit -m x'
+deny_bash  scout   'script -q /dev/null cat README.md'
 
 printf '\nAn option that takes a value does not have to be a long one\n'
 
@@ -704,6 +787,36 @@ expect_variant decide_no_python allow \
     "fleet-steward -> $REPO_ROOT/docs/scratch-note.md (python3 missing, unaffected)" \
     "$(write_event fleet-steward "$REPO_ROOT/docs/scratch-note.md" "$REPO_ROOT")" "$REPO_ROOT"
 
+# Third way it cannot tell: CLAUDE_PROJECT_DIR unset. The checker fell back to
+# the event's cwd, so with cwd pointed anywhere but the project, "outside the
+# project" resolved to the wrong project and a write into the tree under test
+# was ALLOWED - the one role designed to fail closed failing open. The other
+# four survive an unset variable because their rule is "inside this root", and
+# a wrong root only widens an allowance that still has to be inside something.
+decide_no_project_dir() {
+    # $1 event JSON, $2 ignored. Like decide(), but CLAUDE_PROJECT_DIR is unset.
+    local out
+    out=$(printf '%s' "$1" | env -u CLAUDE_PROJECT_DIR CLAUDE_AGENTS_REPO="$REPO_ROOT" \
+        "$HOOK" 2>/dev/null)
+    if [ -z "$out" ]; then printf 'allow\n'; else
+        printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecision // "allow"'
+    fi
+}
+
+expect_variant decide_no_project_dir deny \
+    "refuter -> $PROJECT/README.md (CLAUDE_PROJECT_DIR unset, cwd elsewhere)" \
+    "$(write_event refuter "$PROJECT/README.md" "$TMP/other")" "$PROJECT"
+# Not merely "denies everything": with the variable set, the same event decides
+# on where the file is, and a scratch path outside the project still writes.
+expect deny "refuter -> $PROJECT/README.md (CLAUDE_PROJECT_DIR set)" \
+    "$(write_event refuter "$PROJECT/README.md" "$TMP/other")" "$PROJECT"
+allow_write refuter "$TMP/refuter-scratch/mutant.js"
+# Unaffected: an allowlist role still falls back to cwd, because its rule has a
+# floor that a denial does not.
+expect_variant decide_no_project_dir allow \
+    "spec-writer -> $PROJECT/docs/specs/x.md (CLAUDE_PROJECT_DIR unset, unaffected)" \
+    "$(write_event spec-writer "$PROJECT/docs/specs/x.md" "$PROJECT")" "$PROJECT"
+
 if [ -f "$CHECKER_PATH" ]; then
     mv "$CHECKER_PATH" "$CHECKER_PATH.disabled-for-test"
     trap 'mv "$CHECKER_PATH.disabled-for-test" "$CHECKER_PATH" 2>/dev/null; rm -rf "$TMP"' EXIT
@@ -775,15 +888,55 @@ within_seconds() {
     elapsed=$((SECONDS - start))
     if [ "$elapsed" -lt "$1" ]; then
         PASSED=$((PASSED + 1))
-        [ "$VERBOSE" -eq 1 ] && printf '  ok    %s: 200KB pathological command decided in %ss\n' "$2" "$elapsed"
+        [ "$VERBOSE" -eq 1 ] && printf '  ok    %s: %s-byte command decided in %ss\n' "$2" "${#3}" "$elapsed"
     else
         FAILED=$((FAILED + 1))
-        printf '  FAIL  %s: 200KB command took %ss, over the %ss budget - the hook would time out\n' "$2" "$elapsed" "$1"
+        printf '  FAIL  %s: %s-byte command took %ss, over the %ss budget - the hook would time out\n' "$2" "${#3}" "$elapsed" "$1"
     fi
     return 0
 }
 within_seconds 10 refuter "$PATHOLOGICAL"
 within_seconds 10 ui-designer "$PATHOLOGICAL"
+
+printf '\nA command with too many segments is bounded the same way\n'
+
+# The byte bound above does not bound the cost, and the whole-branch review
+# proved it: 200 `git log` segments is under 2KB, a quarter of SCAN_MAX, and
+# took 11.7s against the same 10s timeout. Segment COUNT is the other cost, and
+# the expensive one, because every segment pays its own subprocess spawns
+# through leading_token, command_words, unescape_words and sub_verb, while a
+# single long segment pays them once. So the count is bounded too, by
+# SEGMENT_MAX, applied after the split in every enforce_* function.
+#
+# Both directions, on the same shape, so the cap is pinned rather than
+# described: the verb sits in the last segment either way, and the only
+# difference between the two commands is which side of the cap that segment
+# falls on.
+repeat_segs() {
+    # $1 how many copies of segment $2, chained with the shell's `;`
+    local i out=""
+    for (( i = 0; i < $1; i++ )); do out="${out}${2} ; "; done
+    printf '%s' "$out"
+}
+
+deny_bash_saying refuter "$(repeat_segs 15 'echo a')git commit -m x" 'git commit'
+allow_bash       refuter "$(repeat_segs 16 'echo a')git commit -m x"
+log_bash_saying  refuter "$(repeat_segs 16 'echo a')git commit -m x" \
+    'over the 16-segment scan bound'
+
+# Blank segments are dropped before the count, not after it, or `;;;;` would
+# be a one-line way of pushing a verb past the bound. Seventeen separators and
+# still only two segments, so the verb is inside the bound and is caught.
+deny_bash_saying refuter ';;;;;;;;;;;;;;;;; echo a ; git commit -m x' 'git commit'
+
+# And the timing the bound exists for, on the two shapes that reach it. The
+# first is the review's own reproduction. The second is the most expensive
+# segment shape found: leading assignments and wrappers make command_words
+# loop, spawning two more processes per word, before either parser gets a
+# command word. Measured on this machine WITHOUT the segment bound, scout, the
+# slowest role: 13.8s for 200 of the first, 13.5s for 64 of the second.
+within_seconds 10 scout "$(repeat_segs 200 'git log')"
+within_seconds 10 scout "$(repeat_segs 64 'A=1 B=2 env xargs git -C /tmp/x log --oneline')"
 
 printf '\n%s passed, %s failed\n' "$PASSED" "$FAILED"
 if [ "$FAILED" -ne 0 ]; then

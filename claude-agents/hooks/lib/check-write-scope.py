@@ -18,6 +18,11 @@ Roles and their destinations:
   fleet-steward  <repo>/**                          its own working copy
   tech-writer    documentation: docs/**, and *.md at the project root
   ui-designer    prototypes/**, plus docs/runs/** for a commissioned article
+  refuter        anywhere EXCEPT <project>/**       it mutates copies
+
+The refuter is the only inverted one, so it is the only one that needs
+CLAUDE_PROJECT_DIR to be set: an allowlist survives a wrong project by being
+narrower than intended, a denial does not. Unset, refuter denies.
 
 CLAUDE_AGENTS_OUTPUT_FILES may narrow tech-writer and ui-designer to an exact
 list of commissioned files, as JSON mapping role to paths:
@@ -131,6 +136,18 @@ def main():
         # but it is the wrong call for a role whose rule is a denial: the
         # project root is squarely inside the tree under test, not outside
         # it, so it has to be checked for on its own.
+        #
+        # And unlike every role below, this one cannot fall back to cwd. The
+        # allowlist roles survive an unset CLAUDE_PROJECT_DIR because their
+        # rule is "inside this root", so a wrong root only widens an allowance
+        # that still has to be inside something. A denial has no such floor:
+        # with the variable unset and the event's cwd pointing anywhere else,
+        # "outside the project" resolves to a project that is not the one
+        # under test, and a write into the tree under test is allowed. That is
+        # the one role designed to fail closed failing open. Same stance as
+        # fleet-steward above, which returns 1 when its root is unset.
+        if not os.environ.get('CLAUDE_PROJECT_DIR'):
+            return 1
         return 1 if target == project or inside(target, project) else 0
 
     if role == 'spec-writer':

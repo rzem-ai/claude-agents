@@ -1,0 +1,10 @@
+diff --git a/src/attempts.js b/src/attempts.js
+index 2b3c4d5..6e7f8a9 100644
+--- a/src/attempts.js
++++ b/src/attempts.js
+@@ -1,4 +1,4 @@
+ export function attemptsLeft(used, limit) {
+-  if (used > limit) return -1;
++  if (used > limit) return 0;
+   return limit - used;
+ }

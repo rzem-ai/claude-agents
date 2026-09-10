@@ -7,6 +7,7 @@ copy it again, to a scratch tree, before mutating anything.
 
 - `src/limits.js` - a login attempt limiter.
 - `src/budget.js` - a spending budget check.
+- `src/attempts.js` - attempts remaining, for non-negative integer counts.
 - `test/` - their tests.
 
 Run the tests with `npm test`. There is no network and nothing to install:

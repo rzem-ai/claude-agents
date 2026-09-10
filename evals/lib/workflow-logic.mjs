@@ -1031,6 +1031,19 @@ console.log('\nreview-round: a round is clean when nobody could break it')
   check('empty-refuter-is-not-clean', 'a refuter that returned an empty string is its own stop reason too', result.stopped === 'refutation returned nothing' && result.approved === false, [result.stopped, result.approved])
 }
 
+// The whitespace half, which is the half that carries the guard. `''` is falsy
+// with or without the .trim(), so it cannot tell the real check from a mutant
+// that drops the trim - both `refutation === ''` and `!refutation` survive it,
+// confirmed by running them. A string of blanks is the only input where the
+// three differ, so it is the only input that pins the line.
+{
+  const { result } = await runWorkflow('review-round.js', FIX, responder({
+    reviewer: { verdict: 'approve', summary: 'fine', findings: [] },
+    'Round 1 refutation': '   \n\t  ',
+  }))
+  check('blank-refuter-is-not-clean', 'a refuter that returned only whitespace is its own stop reason too', result.stopped === 'refutation returned nothing' && result.approved === false, [result.stopped, result.approved])
+}
+
 console.log(`\n${passed} passed, ${failed} failed`)
 if (failed) {
   console.log('A workflow branch approves the wrong thing, or has stopped doing its job.')
