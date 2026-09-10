@@ -129,12 +129,24 @@ command_str="${command_str//\\$'\n'/}"
 # recovered payload of `bash -c "sh -c 'git commit -m x'"` is itself
 # `sh -c 'git commit -m x'`, and a real shell runs that nesting exactly as
 # written. So the single pass below is repeated over whatever the previous
-# pass just found, until a pass finds nothing new. The repeat count is
-# capped at a small fixed number of passes, not "until empty", so a command
-# built to nest the same shape many times cannot turn this into a loop -
-# three is enough for any nesting depth a real command would plausibly use,
-# and anything deeper is one more instance of the uncovered gaps above, not
-# a new one.
+# pass just found, until a pass finds nothing new, capped at a small fixed
+# number of passes rather than "until empty" so a command built to nest the
+# same shape many times cannot turn this into a loop.
+#
+# In practice that cap catches a nesting depth of two -
+# `bash -c "sh -c 'git commit -m x'"` - and no deeper: a third level, e.g.
+# `bash -c "sh -c 'sh -c \"git commit -m x\"'"`, is reachable by a real shell
+# and is NOT caught here. This is a known limit, not an oversight, and
+# raising the cap would not close it so much as move it - depth three would
+# deny and depth four would not. Nobody trying to hide a command reaches for
+# triple-nested interpreters when `bash -c "$VAR"`, `eval`, or a heredoc are
+# all simpler and, unlike nesting, cannot be closed by pattern-matching the
+# command string at all (see the uncovered-gaps list above). The guard is
+# exactly as strong against a deliberate bypass either way; what the cap
+# actually buys is closing the shape one and two keystrokes away from the
+# plain form, the same standard the rest of this function holds itself to.
+# Restated once more because it is the premise this whole function rests on:
+# this hook is a role reminder, not a containment boundary.
 #
 # The single pass finds every occurrence with grep, not with a bash `while
 # [[ =~ ]]` loop that peels one match off the front and re-searches the
