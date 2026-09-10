@@ -17,10 +17,12 @@ Copied verbatim from `docs/agent-contract.md`, and they apply to every task:
 - Agent bodies are under 60 lines total, frontmatter included. Four H2 sections - `## Scope`, `## How you work`, `## Invariants`, `## Handoff` - in that order, after an unheaded opening. No H1, no other headings.
 - Australian English: organise, behaviour, colour, recognise, analyse.
 - Standard hyphens for asides. Never an em dash, never an en dash. This is the most common thing to get wrong.
+- Never hard-wrap prose. One line per paragraph, and let the editor wrap it. Code fences, table rows and ASCII trees are structure and stay as they are, and `## Invariants` stays one sentence per line. This landed in `docs/agent-contract.md` section 4 on 10 September, after this plan was drafted, and `migration-checklist` check 19 carries the command that finds violations.
 - No emojis, anywhere, ever.
 - Second person throughout a body. No personas, no conditional model or effort logic.
 - Every agent preloads `glossary`, `handoff` and `using-memory` at minimum.
 - `model` is an alias, never an ID.
+- The contract's own checklist item 10 now reads: no em dashes, no en dashes, no emojis, Australian spelling, and no hard-wrapped prose. Run it against anything this plan creates.
 - Every behaviour change needs a deterministic test, and `evals/lib/check-all.sh` must be green before each commit.
 - Commit messages: no em dashes, sentence-case subject under about 70 characters, and the two trailers this repository uses.
 
@@ -140,6 +142,7 @@ printf 'Every agent body, the matcher, the eval runner and the eval directories 
 - [ ] **Step 2: Run it and watch it pass on the current nine**
 
 Run: `bash evals/lib/roster-contract.sh -v`
+
 Expected: PASS, "Every agent body, the matcher, the eval runner and the eval directories agree."
 
 If any assertion fails here, the assertion is wrong, not the repository. Fix the assertion.
@@ -172,6 +175,7 @@ run roster-contract     "$LIB_DIR/roster-contract.sh"
 - [ ] **Step 5: Run the whole suite**
 
 Run: `bash evals/lib/check-all.sh`
+
 Expected: `Every deterministic check passes.`
 
 - [ ] **Step 6: Commit**
@@ -246,6 +250,7 @@ deny_bash_saying refuter 'git -C /tmp/mutant reset --hard' 'git reset'
 - [ ] **Step 2: Run them and watch them fail**
 
 Run: `bash evals/lib/scope-hook-contract.sh 2>&1 | grep FAIL`
+
 Expected: the three `deny_write` cases fail (`wanted deny got allow`) and the three `deny_bash_saying` cases fail, because no branch claims `refuter` yet. The `allow_*` cases pass already, for the same reason.
 
 - [ ] **Step 3: Add the write rule**
@@ -270,6 +275,21 @@ and in `main()`, immediately after the `fleet-steward` branch and before `projec
 ```
 
 Note the existing `project = resolve(...)` line further down becomes a duplicate assignment; delete the later one so `project` is computed once.
+
+- [ ] **Step 3b: Let the shell reach the checker**
+
+Adding `refuter` to the Python `ROLES` set is not enough on its own. `enforce-agent-scope.sh` gates the checker on an explicit list of agents, so without this the checker is never invoked for a refuter and all three `deny_write` cases fail with no obvious cause. In `claude-agents/hooks/enforce-agent-scope.sh`, the write-scope gate becomes:
+
+```bash
+case "$agent" in
+  spec-writer|ui-designer|tech-writer|fleet-steward|refuter)
+```
+
+The deny message beside it enumerates each role's scope and needs a clause for the new one, appended before the closing sentence:
+
+```
+the refuter writes only OUTSIDE the project, because it mutates copies and a mutation written back into the tree under test is a change rather than a mutation.
+```
 
 - [ ] **Step 4: Add the git rule**
 
@@ -319,6 +339,7 @@ and add to the dispatch at the bottom of the file, after the `coder)` line:
 - [ ] **Step 5: Run the tests and watch them pass**
 
 Run: `bash evals/lib/scope-hook-contract.sh`
+
 Expected: PASS, and the count is 11 higher than before Step 1.
 
 - [ ] **Step 6: Prove the write rule is not vacuous**
@@ -439,6 +460,7 @@ Expected: under 60 lines; exactly `## Scope`, `## How you work`, `## Invariants`
 - [ ] **Step 3: Run the roster check and watch it fail for the right reasons**
 
 Run: `bash evals/lib/roster-contract.sh 2>&1 | grep FAIL`
+
 Expected: exactly three failures - `refuter-matcher`, `refuter-evals`, `refuter-runner`. Those are Tasks 4 and 5. Any other failure is a defect in the body.
 
 - [ ] **Step 4: Commit**
@@ -498,6 +520,7 @@ done
 - [ ] **Step 2: Run it and watch it fail**
 
 Run: `bash evals/lib/board-hook-contract.sh 2>&1 | grep FAIL`
+
 Expected: `FAIL matcher-refuter`.
 
 - [ ] **Step 3: Add the three entries**
@@ -529,11 +552,13 @@ and in the render list, after the `rzem-memory-reviewer` row:
 - [ ] **Step 4: Run the tests**
 
 Run: `bash evals/lib/board-hook-contract.sh && bash evals/lib/roster-contract.sh`
+
 Expected: board-hook passes; roster-contract now fails on `refuter-evals` only.
 
 - [ ] **Step 5: Verify the JSON is still valid**
 
 Run: `python3 -c "import json; json.load(open('claude-agents/hooks/hooks.json')); print('valid')"`
+
 Expected: `valid`
 
 - [ ] **Step 6: Commit**
@@ -660,6 +685,7 @@ Create `evals/refuter/baseline.json`, copying `evals/reviewer/baseline.json` wit
 - [ ] **Step 5: Run the roster check and watch it pass**
 
 Run: `chmod +x evals/refuter/checks.sh && bash evals/lib/roster-contract.sh`
+
 Expected: PASS. This is the first point since Task 3 where the roster agrees with itself.
 
 - [ ] **Step 6: Run the whole suite and commit**
@@ -708,6 +734,7 @@ Create `claude-agents/skills/looping/SKILL.md` with `name` and `description` fro
 - [ ] **Step 2: Check the conventions**
 
 Run: `grep -c '—\|–' claude-agents/skills/looping/SKILL.md`
+
 Expected: `0`
 
 - [ ] **Step 3: Commit**
@@ -755,6 +782,7 @@ Never extend your own budget. Running out of rounds is a result to report, not a
 - [ ] **Step 2: Check the line budget**
 
 Run: `wc -l claude-agents/agents/coder.md`
+
 Expected: under 60. It was 53, and this adds four lines, so 57.
 
 If it exceeds 60, the fix is to cut an existing invariant that the opening paragraph already says, per the contract's "say the thing once" rule. Do not cut one of these three.
@@ -762,6 +790,7 @@ If it exceeds 60, the fix is to cut an existing invariant that the opening parag
 - [ ] **Step 3: Run the roster check and the suite**
 
 Run: `bash evals/lib/roster-contract.sh && bash evals/lib/check-all.sh`
+
 Expected: both pass.
 
 - [ ] **Step 4: Commit**
@@ -906,6 +935,7 @@ console.log('\nreview-round: a round is clean when nobody could break it')
 - [ ] **Step 2: Run them and watch them fail**
 
 Run: `node evals/lib/workflow-logic.mjs 2>&1 | grep FAIL`
+
 Expected: five failures. `refuter-is-opt-in` passes already, because no refuter is spawned by anything yet.
 
 - [ ] **Step 3: Add the stage**
@@ -992,6 +1022,7 @@ And carry the result in the return, beside `fixes`:
 - [ ] **Step 4: Run the tests and watch them pass**
 
 Run: `node evals/lib/workflow-logic.mjs`
+
 Expected: all pass, count 6 higher than before Step 1.
 
 - [ ] **Step 5: Prove the gate is not vacuous**
@@ -1124,6 +1155,7 @@ Claude-Session: https://claude.ai/code/session_01DCHeEto78BefsrFae2XXYH"
 - [ ] **Step 1: Regenerate the glossary**
 
 Run: `bash scripts/gen-glossary-rule.sh`
+
 Expected: either "up to date" or a rewritten `templates/rules/glossary.md`.
 
 - [ ] **Step 2: Bump the version in both places**
