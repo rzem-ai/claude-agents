@@ -447,7 +447,7 @@ say "  agents   $AGENTS"
 for agent in $AGENTS; do
     case " $ALL_AGENTS " in
         *" $agent "*) ;;
-        *) die "'$agent' is not one of the nine: $ALL_AGENTS" ;;
+        *) die "'$agent' is not one of the ten: $ALL_AGENTS" ;;
     esac
 
     prompts=$(prompt_files "$agent")

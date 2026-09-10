@@ -193,7 +193,7 @@ printf '\nSubagentStop: a structured-output run carries no handoff\n'
 # validate_handoff with "the final message is empty", exiting 2. Every workflow
 # spawns fleet agents with schemas - scout and reviewer in review-round,
 # researcher in deep-research, scout and spec-writer in spec-to-plan - and the
-# SubagentStop matcher covers all nine fleet names, so the gate had been
+# SubagentStop matcher covers all ten fleet names, so the gate had been
 # refusing to let those runs stop. Scoping the matcher (README item 12) fixed
 # this for the built-in Plan and general-purpose lanes; it cannot help when the
 # schema-carrying agent is itself a fleet agent.

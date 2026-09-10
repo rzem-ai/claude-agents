@@ -2,7 +2,7 @@
 
 Every agent body in `claude-agents/agents/` conforms to this file. `claude-agents/agents/reviewer.md` is the worked exemplar - read it alongside this.
 
-`docs/` was added to the plan's section 10 tree after the fact, deliberately: section 11 has the `fleet-steward` running the `migration-checklist` skill over every agent body each time a model ships, and a checklist needs something to check against. This is that thing. When a frontmatter field is added or renamed upstream, the steward's PR updates this file first and the nine bodies second.
+`docs/` was added to the plan's section 10 tree after the fact, deliberately: section 11 has the `fleet-steward` running the `migration-checklist` skill over every agent body each time a model ships, and a checklist needs something to check against. This is that thing. When a frontmatter field is added or renamed upstream, the steward's PR updates this file first and the ten bodies second.
 
 Verified against `https://code.claude.com/docs/en/sub-agents` on 8 September 2026. Field names below are the real ones, not the plan's table headings.
 
@@ -31,11 +31,11 @@ The file is a markdown file with a YAML frontmatter block delimited by `---`. Ev
 
 ### 1.3 Where the roster columns do not map cleanly
 
-Four of the plan's section 4 columns do not survive contact with the real frontmatter. All nine bodies handle them the same way.
+Four of the plan's section 4 columns do not survive contact with the real frontmatter. All ten bodies handle them the same way.
 
 **Memory `none` is not a value.** `memory` accepts `user`, `project` or `local` and nothing else. "Memory: none" in the roster means *omit the field entirely* - the agent then launches with no memory directory and no memory instructions, which is exactly what section 6 wants, because per-agent memory lives on the rzem-memory server instead. Leave a comment line in the frontmatter saying the omission is deliberate, so the steward does not read it as an oversight and a future reviewer does not add `memory: local` to be helpful.
 
-**Isolation `none` is not a value either.** `isolation` accepts only `worktree`. Omit the field for the eight agents that are not `coder`.
+**Isolation `none` is not a value either.** `isolation` accepts only `worktree`. Omit the field for the nine agents that are not `coder`.
 
 **Bash cannot be scoped to git.** The `tools` field has no command-level specifier - there is no `Bash(git:*)`. `Bash` is all of Bash or none of it. So "Bash (git only)" and "Bash (read-only)" in the roster become two things working together: `Bash` in `tools`, plus an explicit invariant line in the body naming the git verbs that are forbidden. Real enforcement is the `PreToolUse` hook `claude-agents/hooks/enforce-agent-scope.sh`, which switches on `agent_type` and can therefore bind one agent; host-level `permissions.deny` (plan section 12) is session-scoped, so it applies to every agent in the session or to none. Say this in the body rather than pretending the frontmatter did it.
 
@@ -118,12 +118,12 @@ The fleet uses three servers today, all reached as claude.ai connectors. A conne
 
 | Server | Granted as | Carried by | Where the name came from |
 |---|---|---|---|
-| rzem-memory, the "Memory" connector at memory-mcp.rzem.ai | `mcp__claude_ai_Memory__<tool>` | all nine agents | `claude mcp list` on Alex's laptop, 9 September 2026 |
+| rzem-memory, the "Memory" connector at memory-mcp.rzem.ai | `mcp__claude_ai_Memory__<tool>` | all ten agents | `claude mcp list` on Alex's laptop, 9 September 2026 |
 | Notion | `mcp__claude_ai_Notion`, and `mcp__claude_ai_Notion__<tool>` in `disallowedTools` | `spec-writer`, `fleet-steward`, the lead | `claude mcp list` on Alex's laptop, 9 September 2026 |
 | Hugging Face | `mcp__claude_ai_Hugging_Face` | `researcher` | `claude mcp list` on Alex's laptop, 9 September 2026 |
 
 Context7 is not installed, so `coder` does not carry it. When it is, it arrives either as a connector (`mcp__claude_ai_Context7`) or, from the official plugin, as `mcp__plugin_context7_<server>`. Add the entry to the body only once `claude mcp list` shows it, and record the spelling here first.
 
-The names were confirmed on one machine. A connector follows Alex's claude.ai login rather than a machine, so the lab boxes and Claude Code on the web should see the same identifiers, but that is an expectation until `claude mcp list` has been run there too. The earlier spellings `mcp__rzem-memory__`, `mcp__Notion` and `mcp__Hugging_Face` were transcribed from display names and granted nothing: a wrong server name is a silent no-op, which is why this table exists. One consequence worth knowing: a connector is one login shared by every agent, so the nine per-agent memory credentials in plan section 6 do not separate agent namespaces today.
+The names were confirmed on one machine. A connector follows Alex's claude.ai login rather than a machine, so the lab boxes and Claude Code on the web should see the same identifiers, but that is an expectation until `claude mcp list` has been run there too. The earlier spellings `mcp__rzem-memory__`, `mcp__Notion` and `mcp__Hugging_Face` were transcribed from display names and granted nothing: a wrong server name is a silent no-op, which is why this table exists. One consequence worth knowing: a connector is one login shared by every agent, so the ten per-agent memory credentials in plan section 6 do not separate agent namespaces today.
 
-Two scoping notes that go with the names. rzem-memory reaches all nine agents deliberately (plan section 6); every other server stays scoped, because an MCP server's tool list is paid for on every turn of every agent that carries it. And a plugin agent cannot set `mcpServers` (plan section 9), so any server that is not a connector has to be registered at user scope, or wired in a local copy under `home/agents/`, before a body can name it.
+Two scoping notes that go with the names. rzem-memory reaches all ten agents deliberately (plan section 6); every other server stays scoped, because an MCP server's tool list is paid for on every turn of every agent that carries it. And a plugin agent cannot set `mcpServers` (plan section 9), so any server that is not a connector has to be registered at user scope, or wired in a local copy under `home/agents/`, before a body can name it.

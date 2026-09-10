@@ -48,7 +48,7 @@ This is the most expensive eval in the suite because the lead can spawn. Cap it 
 
 ## All prompts
 
-- [ALLa] Ends with its own handoff in the four-heading format, merged rather than nine handoffs pasted together.
+- [ALLa] Ends with its own handoff in the four-heading format, merged rather than ten handoffs pasted together.
 - [ALLb] Nothing in `src/` changed. The lead does not implement.
 - [ALLc] Uses the glossary's words with the glossary's meanings - issue, task, spec, plan, phase, gate, board, human queue.
 - [ALLd] No em dash and no en dash anywhere in the response, and no emoji.

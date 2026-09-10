@@ -91,7 +91,7 @@ WRAP
 
 19. **Conventions hold.** Australian spelling, standard hyphens only, no em dashes or en dashes, no emojis, second person throughout, and prose that is not hard-wrapped. Run the second command above for the dashes and the third for the wrapping; each prints every offending line with its file and line number. The third skips frontmatter, fenced blocks, tables and lists, and treats a line ending in punctuation as deliberate, so `## Invariants` does not trip it.
 
-20. **The contract file itself is current.** If this migration added or renamed a field, `docs/agent-contract.md` changes first and the nine bodies second, in the same PR. A checklist run against a stale contract passes everything and proves nothing.
+20. **The contract file itself is current.** If this migration added or renamed a field, `docs/agent-contract.md` changes first and the ten bodies second, in the same PR. A checklist run against a stale contract passes everything and proves nothing.
 
 ## Reporting
 

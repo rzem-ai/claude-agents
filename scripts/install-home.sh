@@ -9,7 +9,7 @@
 #      ~/.claude/CLAUDE.md (section 8).
 #   2. Render the fleet secrets out of 1Password with `op read` into
 #      ~/.config/claude-agents/ at mode 600 - the Notion token the hooks use and
-#      the nine per-agent rzem-memory credentials (section 6).
+#      the ten per-agent rzem-memory credentials (section 6).
 #
 # What it never touches: ~/.claude/projects/, sessions, history, todos, debug,
 # logs, shell snapshots and plugins/cache. Those are per-machine state and this

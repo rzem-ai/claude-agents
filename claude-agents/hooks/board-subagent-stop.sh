@@ -321,7 +321,7 @@ fi
 #
 # Unless no handoff was ever asked for. Every workflow spawns fleet agents with
 # schemas - scout and reviewer in review-round, researcher in deep-research,
-# scout and spec-writer in spec-to-plan - and the matcher covers all nine fleet
+# scout and spec-writer in spec-to-plan - and the matcher covers all ten fleet
 # names, so this gate had been exiting 2 on those runs and telling them to
 # re-emit a handoff they were never asked to write. Scoping the matcher (item
 # 12) fixed the built-in Plan and general-purpose lanes; it cannot help when the
