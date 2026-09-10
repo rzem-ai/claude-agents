@@ -135,14 +135,33 @@ command_str="${command_str//\\$'\n'/}"
 # three is enough for any nesting depth a real command would plausibly use,
 # and anything deeper is one more instance of the uncovered gaps above, not
 # a new one.
+#
+# The single pass finds every occurrence with grep, not with a bash `while
+# [[ =~ ]]` loop that peels one match off the front and re-searches the
+# remainder. That first version was correct but not linear: advancing past a
+# found match used `${rest#*"$match"}`, and bash's own glob-pattern removal
+# for a leading-wildcard pattern against a long string is quadratic - each
+# call rescans from the start, so N matches (or one match near the end of a
+# long, otherwise-unmatching string) cost O(length^2). Measured: a 100
+# thousand character command took over 14 seconds against this hook's own 10
+# second timeout, and a command that exceeds the timeout renders no decision
+# at all - for every governed role, not only the one that triggered it. The
+# regex match itself was never the slow part; a command with no interpreter
+# shape in it stayed fast at any length, which is what pointed at the
+# advance-the-cursor step rather than the search. grep finds every
+# non-overlapping match in one linear pass and prints each one on its own
+# line; the second, small regex below only ever runs against one already-found
+# match, never against the original string, so nothing here is proportional
+# to the command's length except the one initial grep.
 recover_interpreter_payloads_once() {
-  local rest="$1" payload extra=""
-  while [[ "$rest" =~ (^|[^[:alnum:]_.-])(bash|sh|zsh|dash|ksh)[[:space:]]+-[A-Za-z]*c[[:space:]]+(\'[^\']*\'|\"[^\"]*\") ]]; do
-    payload="${BASH_REMATCH[3]}"
+  local text="$1" extra="" line payload
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    [[ "$line" =~ (\'[^\']*\'|\"[^\"]*\")$ ]] || continue
+    payload="${BASH_REMATCH[1]}"
     payload="${payload:1:${#payload}-2}"
     extra="$extra"$'\n'"$payload"
-    rest="${rest#*"${BASH_REMATCH[0]}"}"
-  done
+  done < <(printf '%s' "$text" | grep -Eo "(^|[^[:alnum:]_.-])(bash|sh|zsh|dash|ksh)[[:space:]]+-[A-Za-z]*c[[:space:]]+('[^']*'|\"[^\"]*\")")
   printf '%s' "$extra"
 }
 
