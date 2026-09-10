@@ -62,7 +62,7 @@ export const meta = {
 // string, the hook still validates it, still comments the card, and still
 // routes a blocker to Alex. Everything this script needs to *decide* on comes
 // instead from `gitLane` calls, which carry a schema and deliberately carry no
-// `agentType`: the SubagentStop matcher lists only the nine fleet names, so
+// `agentType`: the SubagentStop matcher lists only the ten fleet names, so
 // those lanes are skipped by the gate and a schema costs them nothing.
 //
 // Note what that means and does not mean: no branch of enforce-agent-scope.sh
