@@ -6,6 +6,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 The version in `.claude-plugin/plugin.json` is load-bearing. Clients keep the cached copy of the plugin until that number changes, so every change that should reach a machine needs a version bump and an entry below.
 
+## [Unreleased]
+
 ## [0.7.0] - 2026-09-10
 
 The round that gave the fleet a tenth agent, `refuter`, whose job is to try to break a change rather than review it: copy it outside the project, mutate the copy, and run the suite against each mutation. Building its permissions found four ways `enforce-agent-scope.sh` could be walked around that had nothing to do with the refuter itself, and closing those took most of the round.
