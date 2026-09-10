@@ -131,22 +131,49 @@ command_str="${command_str//\\$'\n'/}"
 # written. So the single pass below is repeated over whatever the previous
 # pass just found, until a pass finds nothing new, capped at a small fixed
 # number of passes rather than "until empty" so a command built to nest the
-# same shape many times cannot turn this into a loop.
+# same shape many times cannot turn this into a loop. The cap bounds the work.
+# It is NOT what bounds the depth, and an earlier version of this comment said
+# it was - it claimed the cap caught two levels and no more, and that raising
+# it would only move the limit from depth three to depth four. That was wrong
+# in both halves: depths four through ten deny today, and the one shape that
+# was escaping had nothing to do with the number of passes.
 #
-# In practice that cap catches a nesting depth of two -
-# `bash -c "sh -c 'git commit -m x'"` - and no deeper: a third level, e.g.
-# `bash -c "sh -c 'sh -c \"git commit -m x\"'"`, is reachable by a real shell
-# and is NOT caught here. This is a known limit, not an oversight, and
-# raising the cap would not close it so much as move it - depth three would
-# deny and depth four would not. Nobody trying to hide a command reaches for
-# triple-nested interpreters when `bash -c "$VAR"`, `eval`, or a heredoc are
-# all simpler and, unlike nesting, cannot be closed by pattern-matching the
-# command string at all (see the uncovered-gaps list above). The guard is
-# exactly as strong against a deliberate bypass either way; what the cap
-# actually buys is closing the shape one and two keystrokes away from the
-# plain form, the same standard the rest of this function holds itself to.
-# Restated once more because it is the premise this whole function rests on:
-# this hook is a role reminder, not a containment boundary.
+# What actually bounds the recovery is ESCAPING. A recovered payload is
+# appended exactly as it appeared in the command, without undoing the
+# backslash escapes a real shell strips when it reads that payload. So a quote
+# still carrying its backslash is invisible to the next pass: the pattern
+# below looks for a real `'` or `"` after the `-c`, and `\"` is not one.
+#
+# The rule that falls out of that is about quoting, not about how many
+# interpreters are stacked:
+#
+#   Caught, however deep, when the innermost payload is single-quoted - the
+#   levels above it never had to escape those quotes, so they survive as real
+#   quote characters for a later pass to find. Verified to ten levels:
+#     zsh -c "sh -c \"bash -c 'git commit -m x'\""
+#
+#   Not caught, when reaching the innermost payload would mean unescaping a
+#   layer first:
+#     sh -c "bash -c \"git commit -m x\""
+#     bash -c "sh -c 'sh -c \"git commit -m x\"'"
+#
+# Closing those would mean unescaping each recovered payload between passes.
+# That is a real option, deliberately not taken: it is another step further
+# into emulating a shell, and it would buy nothing against someone actually
+# trying, who has `bash -c "$VAR"`, `eval` and a heredoc available - all
+# simpler to write than an escaped nesting, and none of them closable by
+# pattern-matching the command string at all (see the uncovered-gaps list
+# above). Restated once more because it is the premise this whole function
+# rests on: this hook is a role reminder, not a containment boundary.
+#
+# The double-quoted alternative in the pattern is therefore escape-aware -
+# `"([^"\\]|\\.)*"`, which ends only on an unescaped quote - while the
+# single-quoted one stays `'[^']*'`. That asymmetry is deliberate and matches
+# the shell: inside single quotes a backslash is not an escape, so `'a\b'` is
+# a complete literal that ends at its closing quote. The same escape-aware
+# form appears twice below, once in the grep pattern and once in the small
+# regex that strips the quotes off a match; both must agree, or the match
+# succeeds and the payload comes back empty.
 #
 # The single pass finds every occurrence with grep, not with a bash `while
 # [[ =~ ]]` loop that peels one match off the front and re-searches the
@@ -169,11 +196,11 @@ recover_interpreter_payloads_once() {
   local text="$1" extra="" line payload
   while IFS= read -r line; do
     [ -n "$line" ] || continue
-    [[ "$line" =~ (\'[^\']*\'|\"[^\"]*\")$ ]] || continue
+    [[ "$line" =~ (\'[^\']*\'|\"([^\"\\]|\\.)*\")$ ]] || continue
     payload="${BASH_REMATCH[1]}"
     payload="${payload:1:${#payload}-2}"
     extra="$extra"$'\n'"$payload"
-  done < <(printf '%s' "$text" | grep -Eo "(^|[^[:alnum:]_.-])(bash|sh|zsh|dash|ksh)[[:space:]]+-[A-Za-z]*c[[:space:]]+('[^']*'|\"[^\"]*\")")
+  done < <(printf '%s' "$text" | grep -Eo "(^|[^[:alnum:]_.-])(bash|sh|zsh|dash|ksh)[[:space:]]+-[A-Za-z]*c[[:space:]]+('[^']*'|\"([^\"\\\\]|\\\\.)*\")")
   printf '%s' "$extra"
 }
 

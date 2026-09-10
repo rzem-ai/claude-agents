@@ -494,6 +494,41 @@ printf '\nA nested interpreter runs exactly as written\n'
 deny_bash_saying refuter "bash -c \"sh -c 'git commit -m x'\"" 'git commit'
 deny_bash_saying refuter "bash -c 'sh -c \"git commit -m x\"'" 'git commit'
 
+printf '\nAn escaped quote does not end a quoted payload\n'
+
+# `zsh -c "sh -c \"bash -c '\''git commit -m x'\''\""` is one command a real
+# shell runs as written, verified by running it. The recovery pattern matched
+# the payload with `"[^"]*"`, which stops at the first `"` REGARDLESS of the
+# backslash in front of it - so it recovered `"sh -c \"` and nothing else, and
+# the git verb three levels down was never scanned. The double-quoted
+# alternative is now `"([^"\\]|\\.)*"`, which consumes an escaped quote as one
+# unit and ends only on an unescaped one.
+#
+# The single-quoted alternative stays `'[^']*'` deliberately: inside shell
+# single quotes a backslash is NOT an escape, so `'a\b'` is a complete literal
+# that must match whole. The last case below is the lock on that - if the
+# single-quoted span wrongly ran past its closing quote it would swallow the
+# `git commit` that follows, and this would allow.
+deny_bash_saying refuter       "zsh -c \"sh -c \\\"bash -c 'git commit -m x'\\\"\"" 'git commit'
+deny_bash_saying refuter       "bash -c \"zsh -c \\\"dash -c 'git push --force origin main'\\\"\"" 'git push'
+deny_bash_saying refuter       "/bin/bash -c \"sh -c \\\"ksh -c 'git reset --hard'\\\"\"" 'git reset'
+deny_bash_saying fleet-steward "sh -c \"bash -c \\\"zsh -c 'git merge main'\\\"\"" 'git merge'
+deny_bash_saying ui-designer   "bash -c \"sh -c \\\"zsh -c 'npm install react'\\\"\"" 'npm install'
+deny_bash_saying refuter       "sh -c 'echo a\\b' && bash -c \"git commit -m x\"" 'git commit'
+
+# What bounds the recovery is how deeply the innermost payload's own quotes are
+# escaped, not how many interpreters are stacked. A payload the outer levels
+# never had to escape - a single-quoted innermost - stays visible however deep
+# it sits, so this five-level command denies for the same reason the one-level
+# one does.
+deny_bash_saying refuter \
+  "dash -c \"zsh -c \\\"sh -c \\\\\\\"bash -c \\\\\\\\\\\\\\\"ksh -c 'git commit -m x'\\\\\\\\\\\\\\\"\\\\\\\"\\\"\"" \
+  'git commit'
+
+# The other half of the same change: consuming an escaped quote must not turn
+# an ordinary payload into a denial. Nothing here is a git or install verb.
+allow_bash refuter 'bash -c "echo \"quoted \\\"inner\\\" text\""'
+
 printf '\nThe project root itself is inside the project\n'
 
 # inside() excludes the root itself (path == root), which is correct for
