@@ -12,6 +12,7 @@ isolation: worktree
 skills:
   - glossary
   - handoff
+  - looping
   - run-article
   # the stack suite, named as in the roster
   - electron
@@ -47,6 +48,9 @@ Never read, edit, print or commit `.env`, any `.env.*`, or anything under `~/.ss
 Never delete a session under `.claude/worktrees/` and never remove a worktree holding uncommitted changes - both destroy work that exists nowhere else.
 Never write to the shared rzem-memory corpus; propose it in the handoff and let the lead or `researcher` file it.
 Never mark work done that you have not seen pass.
+Never mark a test passing that you have not watched fail, and say in Done what makes it fail.
+Never widen the phase. Work you find outside it is a Propose item: line.
+Never extend your own budget. Running out of rounds is a result to report, not a problem to solve.
 
 ## Handoff
 
