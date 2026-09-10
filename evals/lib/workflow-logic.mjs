@@ -279,6 +279,11 @@ function responder(over = {}) {
         : { verdict: 'approve', summary: 'fixed', findings: [] }
     }
     if (type === 'coder') return handoff({ done: HINTS.concat('fixed src/a.ts') })
+    // Under fix: true the refutation stage is mandatory, so every FIX-based
+    // case in this suite that says nothing about it still needs an answer -
+    // one where nothing survived, since these cases are about the fix loop,
+    // not about refutation.
+    if (type === 'refuter') return handoff({ done: ['ran 12 mutations, all killed'] })
     if (label === 'verify fix') {
       return {
         headCommit: 'bbb2222',
@@ -967,6 +972,52 @@ console.log('\nreview-round: claims that were right, and now watched')
   const p = fix ? fix.prompt : ''
   check('isolation-checked-before-anything-is-written', 'the fix prompt checks which checkout it is in before it writes', p.indexOf('rev-parse --git-dir') > -1 && p.indexOf('rev-parse --git-dir') < p.indexOf('git switch -c'), [p.indexOf('rev-parse --git-dir'), p.indexOf('git switch -c')])
   check('main-checkout-is-refused-not-reported', 'and says to write nothing at all if it is the main checkout', /Run no writing git command at all/.test(p), false)
+}
+
+console.log('\nreview-round: a round is clean when nobody could break it')
+
+// Off by default. Nothing that runs today gets slower or more expensive
+// without being asked for it.
+{
+  const { calls } = await runWorkflow('review-round.js', { range: 'main...x', issue: 'x' }, responder({ reviewer: { verdict: 'approve', summary: 'fine', findings: [] } }))
+  check('refuter-is-opt-in', 'an ordinary review does not spawn a refuter', calls.every((c) => c.opts.agentType !== 'refuter'), calls.map((c) => c.opts.agentType))
+}
+
+// Reachable outside a loop, which is how the role earns its place before
+// anything depends on it.
+{
+  const { calls } = await runWorkflow('review-round.js', { range: 'main...x', issue: 'x', refute: true }, responder({ reviewer: { verdict: 'approve', summary: 'fine', findings: [] } }))
+  const r = calls.find((c) => c.opts.agentType === 'refuter')
+  check('refute-flag-spawns-one', 'refute: true spawns a refuter on an ordinary review', Boolean(r), false)
+  check('refuter-carries-no-schema', 'and it carries no schema, so its handoff still reaches the gate', r && r.opts.schema === undefined, r && r.opts.schema)
+}
+
+// A clean verdict is not the end of a loop round.
+{
+  const { result } = await runWorkflow('review-round.js', FIX, responder({
+    reviewer: { verdict: 'approve', summary: 'fine', findings: [] },
+    'Round 1 refutation': handoff({ done: ['ran 12 mutations, all killed'] }),
+  }))
+  check('clean-plus-unbroken-is-done', 'a clean verdict and a failed refutation together are done', result.stopped === 'clean' && result.approved === true, [result.stopped, result.approved])
+}
+
+// A surviving mutation is a blocking finding, whatever the reviewer said.
+{
+  const { result } = await runWorkflow('review-round.js', FIX, responder({
+    reviewer: { verdict: 'approve', summary: 'fine', findings: [] },
+    'Round 1 refutation': handoff({ done: ['ran 12 mutations'], decisions: ['Blocker: deleting the isMain guard kills no test'] }),
+  }))
+  check('a-survivor-is-not-clean', 'a surviving mutation stops the round even on an approving verdict', result.stopped !== 'clean' && result.approved === false, [result.stopped, result.approved])
+  check('the-survivor-is-carried', 'and what survived is carried back', /isMain guard/.test(JSON.stringify(result)), result.refutation)
+}
+
+// Fails closed, like every other branch in this file.
+{
+  const { result } = await runWorkflow('review-round.js', FIX, responder({
+    reviewer: { verdict: 'approve', summary: 'fine', findings: [] },
+    'Round 1 refutation': null,
+  }))
+  check('silent-refuter-is-not-clean', 'a refuter that returned nothing is its own stop reason', result.stopped === 'refutation returned nothing' && result.approved === false, [result.stopped, result.approved])
 }
 
 console.log(`\n${passed} passed, ${failed} failed`)
