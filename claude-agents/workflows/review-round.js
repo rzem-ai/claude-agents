@@ -88,6 +88,7 @@ export const meta = {
 const SCOUT = 'scout'
 const REVIEWER = 'reviewer'
 const CODER = 'coder'
+const REFUTER = 'refuter'
 
 const SENSITIVE =
   /(auth|authz|authn|login|logout|session|token|jwt|oauth|saml|oidc|password|passkey|credential|secret|crypto|cipher|hash|permission|entitlement|\.env|keychain|vault)/i
@@ -159,6 +160,13 @@ const intentPath = issue ? 'docs/plans/' + issue + '.md' : input.plan || null
 // Opt-in, and read strictly. `input.fix` arrives from a slash command's JSON,
 // so anything other than a real `true` is not consent.
 const autoFix = input.fix === true
+
+// Mandatory under fix: true, and reachable on an ordinary review through
+// refute: true. Reaching it outside a loop is how the role earns its place:
+// one agent on a single round produces real evidence about its behaviour,
+// where a refuter first exercised inside a loop is being trusted with
+// compounding errors on its first outing.
+const refute = autoFix || input.refute === true
 
 // --- reading a handoff -----------------------------------------------------
 //
@@ -808,6 +816,45 @@ while (true) {
   log(tag + ': ' + review.verdict + ', ' + blocking.length + ' blocking of ' + (review.findings || []).length + '.')
 
   if (!blocking.length) {
+    if (!refute) {
+      stopped = 'clean'
+      break
+    }
+
+    // A clean verdict is the reviewer failing to find something. It is not the
+    // same as somebody failing to break it, and only the second is evidence.
+    phase(tag + ' refutation')
+    const refutation = await agent(
+      [
+        'Try to break the change in ' + reviewRange + '. This is ' + tag + '.',
+        checkoutPath ? 'It is in ' + checkoutPath + '.' : '',
+        'The reviewer found nothing blocking. That is what you are here to disagree with.',
+        'Copy what you need OUTSIDE this project, mutate it there, and run the suite against each mutation. Never mutate the tree under test.',
+        'Report every mutation that no test noticed, with the exact edit that produced it, as a "- Blocker: " line.',
+        'A mutation that makes the process exit non-zero is a kill, not a survival.',
+        'Say what you could not attack, in the same detail as what you did.',
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
+      // No schema, for the same reason coder gets none: a schema would delete
+      // this handoff too, and with it the refuter's only route to Alex.
+      { agentType: REFUTER, phase: tag + ' refutation', label: tag + ' refutation' },
+    )
+
+    if (typeof refutation !== 'string' || !refutation.trim()) {
+      stopped = 'refutation returned nothing'
+      log(tag + ': the refutation returned nothing. Stopping rather than treating silence as unbreakable.')
+      break
+    }
+
+    const broke = readHandoff(refutation)
+    rounds[rounds.length - 1].refutation = { survivors: broke.blockers, said: broke.done }
+    if (broke.blockers.length) {
+      stopped = 'refuted'
+      log(tag + ': ' + broke.blockers.length + ' mutation(s) survived. A clean verdict over tests that would not notice is not clean.')
+      break
+    }
+
     stopped = 'clean'
     break
   }
@@ -1072,6 +1119,10 @@ const NEXT_STEP = {
     'A fix was verified but the range from the reviewed commit to it is empty, which should not happen. Look at the worktree directly.',
   'scope pass returned nothing':
     'The scope pass returned nothing, so what changed is unknown and nothing was reviewed. This is not an empty diff and not an approval - run it again.',
+  refuted:
+    'The reviewer found nothing and the refuter did. Every surviving mutation above is a behaviour no test would notice changing, so the code may well be right and the tests are not evidence that it is. Fix the tests, then run this again.',
+  'refutation returned nothing':
+    'The refutation produced no handoff, so nothing is known about whether the change survives being attacked. This is not an approval. Run it again.',
 }
 
 return {
@@ -1112,6 +1163,8 @@ return {
   // Non-null only when the loop declined to fix, or could not.
   fixRequest,
   fixes,
+  refuted: stopped === 'refuted',
+  refutation: (last.refutation || null),
   checkout: checkoutPath,
   history: rounds.map((r) => ({
     round: r.round,

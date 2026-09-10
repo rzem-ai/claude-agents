@@ -409,6 +409,382 @@ allow_bash ui-designer 'npm run install-deps'
 deny_bash_saying ui-designer 'npm -g install react' 'npm install'
 allow_bash ui-designer 'npx serve prototypes/'
 
+printf '\nThe refuter runs anything and writes nowhere near the project\n'
+
+# The inverse of every other write scope. Everyone else has an allowlist of
+# roots inside the project; the refuter's rule is that the project is the one
+# place it may not write. What bounds "outside" is the sandbox's own denyWrite,
+# which already covers ~/.ssh and friends - this layer expresses the role
+# boundary, that one expresses the credential boundary.
+deny_write  refuter "$PROJECT/src/a.ts"
+deny_write  refuter "$PROJECT/evals/lib/check-all.sh"
+deny_write  refuter "$PROJECT/docs/notes.md"
+allow_write refuter "$TMP/refuter-scratch/mutant.sh"
+allow_write refuter "$TMP/scratch/copy-of-review-round.js"
+
+# Running things is the job, so there is no command allowlist. This is the one
+# role where that is deliberate rather than an omission.
+allow_bash refuter 'bash evals/lib/check-all.sh'
+allow_bash refuter 'node evals/lib/workflow-logic.mjs'
+allow_bash refuter 'python3 -c "print(1)"'
+allow_bash refuter 'cp claude-agents/workflows/review-round.js /tmp/mutant.js'
+
+# Read-only git, the same verbs the reviewer has. It mutates a scratch copy; it
+# never moves a ref in the real repository.
+allow_bash refuter 'git diff main...HEAD'
+allow_bash refuter 'git log --oneline -20'
+deny_bash_saying refuter 'git commit -m x' 'git commit'
+deny_bash_saying refuter 'git switch -c mutant' 'git switch'
+deny_bash_saying refuter 'git -C /tmp/mutant reset --hard' 'git reset'
+
+printf '\nAn interpreter is not a disguise\n'
+
+# strip_quoted erases a quoted span before the result is split into segments,
+# so `bash -c "git commit -m x"` segmented to `bash -c ""` - the leading token
+# of every segment was bash, and no per-verb rule (the refuter's git rule,
+# coder's worktree guard, ui-designer's install ban, fleet-steward's
+# merge/push ban) has anything to say about bash. Every one of those roles is
+# a targeted check rather than a command allowlist, so all four were open
+# through this shape at once. scout and reviewer are unaffected either way:
+# bash and sh are not on their allowed-commands list, so they already deny on
+# the outer command before a hidden payload would matter.
+deny_bash_saying refuter       'bash -c "git commit -m x"' 'git commit'
+deny_bash_saying refuter       "sh -c 'git push --force origin main'" 'git push'
+deny_bash_saying ui-designer   'bash -c "npm install react"' 'npm install'
+deny_bash_saying fleet-steward 'bash -c "git merge main"' 'git merge'
+if [ -d "$WT" ]; then
+    deny_bash_saying_in coder 'bash -c "git commit -m x"' 'not a linked worktree' "$MAINCO"
+    allow_bash coder 'bash -c "git commit -m x"' "$WT"
+fi
+
+# Unaffected, and for the reason that already denied it: bash and sh were
+# never reachable through either allowlist, hidden payload or not.
+deny_bash_saying scout    'bash -c "git commit -m x"' '"bash" is not on that list'
+deny_bash_saying reviewer "sh -c 'git push --force'" '"sh" is not one of the commands'
+
+printf '\nA cluster ending in c, and a path in front of the name, are the same shape\n'
+
+# Two ways to be one keystroke from the plain form above, both closed the
+# same way as the plain form: bash reads its script from the next argument
+# for ANY short-option cluster ending in c, not only the bare flag, so -lc,
+# -ec and -xc are "-c plus something else" rather than a different shape. And
+# an interpreter named by its full path is still the same interpreter - the
+# boundary check accepts "/" immediately before the name, the way
+# leading_token strips a path down to a basename elsewhere in this file.
+deny_bash_saying refuter       'bash -lc "git reset --hard"' 'git reset'
+deny_bash_saying refuter       'bash -ec "git commit -m x"' 'git commit'
+deny_bash_saying refuter       'bash -xc "git push --force"' 'git push'
+deny_bash_saying refuter       '/bin/bash -c "git commit -m x"' 'git commit'
+deny_bash_saying fleet-steward '/bin/sh -c "git merge main"' 'git merge'
+
+# Unaffected, confirming the fix did not narrow what was already caught: a
+# wrapper's own space is a boundary regardless of what token sits before it,
+# and zsh was already on the interpreter list before this round.
+deny_bash_saying refuter 'env bash -c "git commit -m x"' 'git commit'
+deny_bash_saying refuter 'zsh -c "git commit -m x"' 'git commit'
+
+printf '\nA nested interpreter runs exactly as written\n'
+
+# A real shell runs this nesting: `bash -c "sh -c '\''git commit -m x'\''"`
+# hands its payload to a second interpreter, which reads ITS payload the same
+# way bash read the first. A single scan over the outer command recovers
+# `sh -c 'git commit -m x'` as a segment, but that segment's own payload was
+# never itself recovered - the fix repeats the recovery over what the
+# previous pass found, so the inner invocation is unwrapped too.
+deny_bash_saying refuter "bash -c \"sh -c 'git commit -m x'\"" 'git commit'
+deny_bash_saying refuter "bash -c 'sh -c \"git commit -m x\"'" 'git commit'
+
+printf '\nAn escaped quote does not end a quoted payload\n'
+
+# `zsh -c "sh -c \"bash -c '\''git commit -m x'\''\""` is one command a real
+# shell runs as written, verified by running it. The recovery pattern matched
+# the payload with `"[^"]*"`, which stops at the first `"` REGARDLESS of the
+# backslash in front of it - so it recovered `"sh -c \"` and nothing else, and
+# the git verb three levels down was never scanned. The double-quoted
+# alternative is now `"([^"\\]|\\.)*"`, which consumes an escaped quote as one
+# unit and ends only on an unescaped one.
+#
+# The single-quoted alternative stays `'[^']*'` deliberately: inside shell
+# single quotes a backslash is NOT an escape, so `'a\b'` is a complete literal
+# that must match whole. The last case below is the lock on that - if the
+# single-quoted span wrongly ran past its closing quote it would swallow the
+# `git commit` that follows, and this would allow.
+deny_bash_saying refuter       "zsh -c \"sh -c \\\"bash -c 'git commit -m x'\\\"\"" 'git commit'
+deny_bash_saying refuter       "bash -c \"zsh -c \\\"dash -c 'git push --force origin main'\\\"\"" 'git push'
+deny_bash_saying refuter       "/bin/bash -c \"sh -c \\\"ksh -c 'git reset --hard'\\\"\"" 'git reset'
+deny_bash_saying fleet-steward "sh -c \"bash -c \\\"zsh -c 'git merge main'\\\"\"" 'git merge'
+deny_bash_saying ui-designer   "bash -c \"sh -c \\\"zsh -c 'npm install react'\\\"\"" 'npm install'
+deny_bash_saying refuter       "sh -c 'echo a\\b' && bash -c \"git commit -m x\"" 'git commit'
+
+# What bounds the recovery is how deeply the innermost payload's own quotes are
+# escaped, not how many interpreters are stacked. A payload the outer levels
+# never had to escape - a single-quoted innermost - stays visible however deep
+# it sits, so this five-level command denies for the same reason the one-level
+# one does.
+deny_bash_saying refuter \
+  "dash -c \"zsh -c \\\"sh -c \\\\\\\"bash -c \\\\\\\\\\\\\\\"ksh -c 'git commit -m x'\\\\\\\\\\\\\\\"\\\\\\\"\\\"\"" \
+  'git commit'
+
+# The other half of the same change: consuming an escaped quote must not turn
+# an ordinary payload into a denial. Nothing here is a git or install verb.
+allow_bash refuter 'bash -c "echo \"quoted \\\"inner\\\" text\""'
+
+printf '\nQuoting the command word does not change the command\n'
+
+# Two characters, and every role with a targeted check was open again.
+# `bash -c "\"\"git commit -m x"` recovered a payload of `\"\"git commit -m x`;
+# sub_verb collapses the backslashes, leading_token returned `""git`, that
+# matches no branch, and the git rule never ran. A real shell concatenates the
+# empty strings away and runs git commit - verified by running it, which is the
+# only thing that separates these from the shapes in the next block that no
+# shell will run.
+#
+# Every place a quote can sit is the same hole wearing a different hat: around
+# the whole word, inside it, around the interpreter's name, or spelled with a
+# backslash instead of a quote. Each one below was run in a real shell first;
+# all of them execute git, npm or bash exactly as if nothing were quoted.
+deny_bash_saying refuter       'bash -c "\"\"git commit -m x"' 'git commit'
+deny_bash_saying ui-designer   'bash -c "\"\"npm install react"' 'npm install'
+deny_bash_saying fleet-steward 'bash -c "\"\"git merge main"' 'git merge'
+if [ -d "$MAINCO" ]; then
+    deny_bash_saying_in coder 'bash -c "\"\"git commit -m x"' 'not a linked worktree' "$MAINCO"
+fi
+
+# The same word, quoted six ways, with no interpreter in front of it. The
+# quotes are erased by strip_quoted before a segment exists, so `"g"it` cannot
+# be recovered by any later parser - which is why the quotes come off the
+# command string first, ahead of everything else that reads it.
+deny_bash_saying refuter '""git commit -m x' 'git commit'
+deny_bash_saying refuter "''git commit -m x" 'git commit'
+deny_bash_saying refuter 'g""it commit -m x' 'git commit'
+deny_bash_saying refuter '"g"it commit -m x' 'git commit'
+deny_bash_saying refuter "gi''t commit -m x" 'git commit'
+deny_bash_saying refuter '"git" commit -m x' 'git commit'
+deny_bash_saying refuter "'git' commit -m x" 'git commit'
+
+# Inside a payload the pair arrives escaped, as `\"\"`, because the recovery
+# appends a payload exactly as written. An even number of them is a real
+# command however many there are.
+deny_bash_saying refuter 'bash -c "g\"\"it commit -m x"' 'git commit'
+deny_bash_saying refuter 'bash -c "\"git\" commit -m x"' 'git commit'
+deny_bash_saying refuter 'bash -c "\"\"\"\"git commit -m x"' 'git commit'
+deny_bash_saying refuter '""""git commit -m x' 'git commit'
+deny_bash_saying refuter '""""""git commit -m x' 'git commit'
+
+# The interpreter's own name is a word like any other, so quoting it hid the
+# whole payload from the recovery. That is why the quotes come off before the
+# recovery runs rather than after it.
+deny_bash_saying refuter     'b""ash -c "git commit -m x"' 'git commit'
+deny_bash_saying ui-designer '""bash -c "npm install react"' 'npm install'
+
+# A backslash quotes the next character and disappears, so `\git` is git and
+# `npm \install` reaches npm's install - both verified by running them.
+# sub_verb already undid this for the VERB, which is why `git \merge` was
+# caught above while the command word and the install verb were not.
+deny_bash_saying refuter       '\git commit -m x' 'git commit'
+deny_bash_saying fleet-steward '\git merge main' 'git merge'
+deny_bash_saying ui-designer   'npm \install react' 'npm install'
+
+# The verb can be quoted as easily as the command.
+deny_bash_saying fleet-steward 'git ""merge main' 'git merge'
+deny_bash_saying fleet-steward 'git "merge" main' 'git merge'
+deny_bash_saying ui-designer   'npm ""install react' 'npm install'
+deny_bash_saying ui-designer   'npm "install" react' 'npm install'
+
+# An allowlist role denied these already, because `""git` is not on its list
+# either. What changes is that it now denies for the real reason, which is the
+# difference between coverage and coincidence.
+deny_bash_saying scout    '""git commit -m x' 'git commit'
+deny_bash_saying reviewer '"g"it commit -m x' 'git commit'
+
+printf '\nAn odd number of quotes is not a command, and is not denied\n'
+
+# `bash -c "\"\"\"\"\"git commit -m x"` leaves the payload unterminated and a
+# real shell refuses it with "unexpected EOF while looking for matching quote".
+# It never runs, so denying it would add a case no command can reach - the
+# same stance this file already takes for a lone unterminated quote. Removing
+# quotes in PAIRS is what keeps this true: the odd one is left standing and the
+# leading token stays `"git`.
+allow_bash refuter     'bash -c "\"\"\"\"\"git commit -m x"'
+allow_bash refuter     'bash -c "\"\"\"git commit -m x"'
+allow_bash refuter     '"""""git commit -m x'
+allow_bash refuter     '"git commit -m x'
+allow_bash ui-designer '"""npm install react'
+
+printf '\nQuotes that are load-bearing keep their meaning\n'
+
+# Only INERT quotes come off - a span whose content is empty or is made of the
+# characters a command name or a plain path can hold. The rest have to stay
+# quoted, or a redirection, a glob or a word split reaches a check that then
+# denies honest work. Several of these are asserted elsewhere in this file too;
+# they are repeated here because this is the change that could break them.
+allow_bash scout       "grep -R '=>' src"
+allow_bash scout       'find . -name "*.ts"'
+allow_bash scout       "sed -n '1,50p' README.md"
+allow_bash scout       'echo "hello world"'
+allow_bash fleet-steward 'git commit -m "propose migration"'
+allow_bash ui-designer 'npm run "link"'
+allow_bash ui-designer 'bash -c "npm run build"'
+allow_bash coder       'bash -c "npm test"'
+allow_bash refuter     'bash evals/lib/check-all.sh'
+if [ -d "$WT" ]; then
+    # A quoted empty string as an ARGUMENT is ordinary, and removing it changes
+    # neither the command nor the verb.
+    allow_bash coder 'git commit --allow-empty-message -m ""' "$WT"
+fi
+
+# The lock on the two placeholders. Without them the plain rules pair the `"`
+# of a `\"` with the real quote that follows, `\""` at the end of this command
+# is eaten, the payload loses its terminator, the recovery finds nothing
+# terminated, and a command that denies today would allow.
+deny_bash_saying refuter 'bash -c "git commit -m \"a b\""' 'git commit'
+
+# The lock on the unquoted-payload alternative in the recovery. Once the inert
+# quotes come off `bash -c "git"` the payload is no longer quoted, so a
+# recovery that only ever matched a quoted payload would have stopped seeing
+# one-word payloads at all - a fix that broke something on its way past.
+deny_bash_saying refuter 'bash -c "git"' 'is not a read-only verb'
+
+printf '\nThe project root itself is inside the project\n'
+
+# inside() excludes the root itself (path == root), which is correct for
+# every allowlist role - "write under this root" was never a license to
+# overwrite the root directory entry - but wrong for the refuter, whose rule
+# is a denial: the project root is squarely inside the tree under test.
+deny_write refuter "$PROJECT"
+
+printf '\nThe refuter fails closed when it cannot tell outside from inside\n'
+
+# The other four write-scope roles hold an allowlist of roots inside the
+# project, so a checker that cannot run only widens that allowlist - unwelcome,
+# but bounded by the project it already had to be in. The refuter's rule is a
+# denial, so its default without a working checker has to be the same denial,
+# or "cannot tell" quietly becomes "cannot be stopped" for the one role this
+# task exists to contain.
+CHECKER_PATH="$REPO_ROOT/claude-agents/hooks/lib/check-write-scope.py"
+
+# A PATH with every tool the hook needs except python3, so the hook's own
+# "command -v python3" genuinely fails rather than being told to.
+NO_PYTHON_BIN="$TMP/no-python-bin"
+mkdir -p "$NO_PYTHON_BIN"
+for _tool in jq sed grep bash git awk cat date dirname basename; do
+    _toolpath="$(command -v "$_tool" 2>/dev/null)"
+    [ -n "$_toolpath" ] && ln -sf "$_toolpath" "$NO_PYTHON_BIN/$_tool"
+done
+unset _tool _toolpath
+
+decide_no_python() {
+    # $1 event JSON, $2 project dir. Like decide(), but python3 is unreachable.
+    local out
+    out=$(printf '%s' "$1" | PATH="$NO_PYTHON_BIN" CLAUDE_PROJECT_DIR="$2" CLAUDE_AGENTS_REPO="$REPO_ROOT" \
+        "$HOOK" 2>/dev/null)
+    if [ -z "$out" ]; then printf 'allow\n'; else
+        printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecision // "allow"'
+    fi
+}
+
+expect_variant() {
+    # $1 decide-function, $2 want, $3 label, $4 event, $5 project dir
+    local got; got=$("$1" "$4" "$5")
+    if [ "$got" = "$2" ]; then
+        PASSED=$((PASSED + 1))
+        [ "$VERBOSE" -eq 1 ] && printf '  ok    %-5s %s\n' "$got" "$3"
+    else
+        FAILED=$((FAILED + 1))
+        printf '  FAIL  wanted %-5s got %-5s  %s\n' "$2" "$got" "$3"
+    fi
+    return 0
+}
+
+expect_variant decide_no_python deny \
+    "refuter -> $TMP/refuter-scratch/py-missing.sh (python3 missing)" \
+    "$(write_event refuter "$TMP/refuter-scratch/py-missing.sh" "$PROJECT")" "$PROJECT"
+# Unaffected: the other roles keep failing open when python3 cannot run.
+expect_variant decide_no_python allow \
+    "fleet-steward -> $REPO_ROOT/docs/scratch-note.md (python3 missing, unaffected)" \
+    "$(write_event fleet-steward "$REPO_ROOT/docs/scratch-note.md" "$REPO_ROOT")" "$REPO_ROOT"
+
+if [ -f "$CHECKER_PATH" ]; then
+    mv "$CHECKER_PATH" "$CHECKER_PATH.disabled-for-test"
+    trap 'mv "$CHECKER_PATH.disabled-for-test" "$CHECKER_PATH" 2>/dev/null; rm -rf "$TMP"' EXIT
+    expect deny "refuter -> $TMP/refuter-scratch/checker-missing.sh (checker missing)" \
+        "$(write_event refuter "$TMP/refuter-scratch/checker-missing.sh" "$PROJECT")" "$PROJECT"
+    mv "$CHECKER_PATH.disabled-for-test" "$CHECKER_PATH"
+    trap 'rm -rf "$TMP"' EXIT
+else
+    FAILED=$((FAILED + 1))
+    printf '  FAIL  the checker was already missing before this test moved it: %s\n' "$CHECKER_PATH"
+fi
+
+printf '\nA command too long to scan is bounded, not skipped\n'
+
+# The hook is registered with "timeout": 10 in hooks.json, and reading a very
+# long command used to cost more than that - about 9s at 80KB for refuter and
+# coder, over 13s for ui-designer. A hook that blows its timeout renders no
+# decision at all, which turns every role's guard off for that call rather
+# than just the slow one's, so length itself was a bypass for the whole file.
+# enforce-agent-scope.sh now scans at most SCAN_MAX bytes of the command and
+# SCAN_MAX of the payloads recovered from it, and logs how far over the bound
+# it was.
+#
+# What these cases pin down is that truncating is not skipping. The verb sits
+# in the HEAD of each command, where a bounded scan still reads it, with the
+# padding pushed out past the bound behind it.
+BIGPAD=$(head -c 80000 /dev/zero | tr '\0' a)
+
+deny_bash_saying refuter       "git commit -m x && echo $BIGPAD" 'git commit'
+deny_bash_saying refuter       "bash -c \"git commit -m x\" && echo $BIGPAD" 'git commit'
+deny_bash_saying fleet-steward "git merge main && echo $BIGPAD" 'git merge'
+deny_bash_saying ui-designer   "npm install react && echo $BIGPAD" 'npm install'
+if [ -d "$MAINCO" ]; then
+    deny_bash_saying_in coder "git commit -m x && echo $BIGPAD" 'not a linked worktree' "$MAINCO"
+fi
+
+# A verb 7KB into the command, still inside the bound, with 200KB behind it.
+# The four cases above would pass even if only the first segment were read,
+# since a deny exits the hook before it reaches the padding. This one does not:
+# the bounded head has to be scanned all the way to the bound.
+deny_bash_saying refuter "echo $(head -c 7000 /dev/zero | tr '\0' a) && git commit -m x && echo $BIGPAD" 'git commit'
+
+# The other half: the bound must not turn length alone into a denial.
+allow_bash refuter "echo $BIGPAD"
+
+# The bound exists for the timeout, so the last two cases assert the timeout
+# itself. They have to be commands that are ALLOWED - a denial exits the hook
+# at the segment that triggered it, so a forbidden verb near the front never
+# pays the cost this bound was added for. The shape below is the expensive
+# one: an interpreter payload that is a single unbroken 200KB token.
+#
+# Measured on this exact command, with the bound and without it:
+#     refuter       0s   vs  51s
+#     ui-designer   0s   vs  78s
+# against the 10s the hook is registered with. SECONDS is a bash builtin with
+# integer resolution - no bc, no GNU date, no new dependency - and integer
+# seconds is plenty when the gap being guarded is 50 seconds wide.
+#
+# Reading "allow" here is not the assertion; the elapsed time is. A hook that
+# times out also produces no output, which this harness reports as allow, so
+# the decision alone could not tell the two apart. That is exactly the failure
+# mode: a timed-out hook renders no decision and every role's guard is off for
+# that call.
+PATHOLOGICAL="bash -c \"$(head -c 100000 /dev/zero | tr '\0' '"' | sed 's/"/\\"/g')x\""
+within_seconds() {
+    # $1 budget in whole seconds, $2 agent, $3 command
+    local start=$SECONDS elapsed
+    decide "$(bash_event "$2" "$3" "$PROJECT")" "$PROJECT" >/dev/null
+    elapsed=$((SECONDS - start))
+    if [ "$elapsed" -lt "$1" ]; then
+        PASSED=$((PASSED + 1))
+        [ "$VERBOSE" -eq 1 ] && printf '  ok    %s: 200KB pathological command decided in %ss\n' "$2" "$elapsed"
+    else
+        FAILED=$((FAILED + 1))
+        printf '  FAIL  %s: 200KB command took %ss, over the %ss budget - the hook would time out\n' "$2" "$elapsed" "$1"
+    fi
+    return 0
+}
+within_seconds 10 refuter "$PATHOLOGICAL"
+within_seconds 10 ui-designer "$PATHOLOGICAL"
+
 printf '\n%s passed, %s failed\n' "$PASSED" "$FAILED"
 if [ "$FAILED" -ne 0 ]; then
     printf 'The scope hook admits something a role forbids, or blocks work the role exists to do.\n'

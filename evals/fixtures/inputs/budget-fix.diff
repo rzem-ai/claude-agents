@@ -1,0 +1,10 @@
+diff --git a/src/budget.js b/src/budget.js
+index 4a5b6c7..8d9e0f1 100644
+--- a/src/budget.js
++++ b/src/budget.js
+@@ -1,4 +1,4 @@
+ export function withinBudget(spent, budget) {
+-  if (spent >= budget) return false;
++  if (spent > budget) return false;
+   return true;
+ }

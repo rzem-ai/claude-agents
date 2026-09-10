@@ -166,10 +166,10 @@ Nothing prunes the archives and nothing backs them up. A run worth keeping perma
 
 ### Who it applies to
 
-`SubagentStop` takes a matcher and the matcher is the agent type, so `hooks.json` registers this hook against the nine fleet agents and nothing else:
+`SubagentStop` takes a matcher and the matcher is the agent type, so `hooks.json` registers this hook against the ten fleet agents and nothing else:
 
 ```
-^(claude-agents:)?(lead|scout|spec-writer|coder|reviewer|ui-designer|tech-writer|researcher|fleet-steward)$
+^(claude-agents:)?(lead|scout|spec-writer|coder|reviewer|ui-designer|tech-writer|researcher|fleet-steward|refuter)$
 ```
 
 The optional prefix is there because a plugin agent arrives as `scout` or as `claude-agents:scout` depending on how it was named.
@@ -373,7 +373,7 @@ Recorded here rather than discovered later. Every one of them is a decision this
 9. **`cd`, `pwd`, `echo` and `true`** added to scout's Bash allowlist, and the quote-stripping and `2>/dev/null` softenings.
 10. **`fleet-steward`'s repo-root resolution** by walking up from the plugin directory, and the git verb list, which is read off its Invariants prose.
 11. **`Notion-Version: 2022-06-28`.** No version is named anywhere in the plan.
-12. **The `SubagentStop` matcher.** The plan gives the hook to every subagent. Scoping it to the nine fleet agents is this layer's decision, made because the workflows spawn `Plan` and `general-purpose` lanes that return JSON.
+12. **The `SubagentStop` matcher.** The plan gives the hook to every subagent. Scoping it to the ten fleet agents is this layer's decision, made because the workflows spawn `Plan` and `general-purpose` lanes that return JSON.
 13. **`reviewer` and `ui-designer` scoping rules**, including the read-only git allowlist both share and the install-verb matching that keeps `ui-designer` able to build and serve a prototype.
 14. **The comment length cap.** `NOTION_COMMENT_MAX_CHARS`, its default of 8000 and the `NOTION_COMMENT_HARD_MAX` clamp. Notion documents a per-object and a per-array limit but nothing specific to comments, so where to cut is this layer's choice; see "Comment length" above.
 15. **Field names - settled, September 2026.** This entry used to say the brief and the published examples disagreed, that the hooks read both spellings, and that someone should confirm which was real. Carrying both did not hedge the risk; it hid that *neither* was real.
@@ -410,7 +410,7 @@ This was measured, not read. A probe spawned one agent definition twice, identic
     | with `schema` | key absent | `exit 2`, "the final message is empty" |
     | without `schema` | the Markdown handoff | `exit 0` |
 
-The hook read `.last_assistant_message // ""`, which erased the difference between *absent* and *empty*, treated the absent `status` as success, and failed `validate_handoff`. Since the `SubagentStop` matcher covers all nine fleet names, and every workflow spawns fleet agents with schemas - `scout` and `reviewer` in `review-round.js`, `researcher` at five sites in `deep-research.js`, `scout` and `spec-writer` in `spec-to-plan.js` - the gate had been refusing to let those runs stop and telling them to re-emit a handoff they were never asked for. Item 12 scoped the matcher away from the built-in `Plan` and `general-purpose` lanes; that fix cannot reach a schema-carrying agent which is itself a fleet agent.
+The hook read `.last_assistant_message // ""`, which erased the difference between *absent* and *empty*, treated the absent `status` as success, and failed `validate_handoff`. Since the `SubagentStop` matcher covers all ten fleet names, and every workflow spawns fleet agents with schemas - `scout` and `reviewer` in `review-round.js`, `researcher` at five sites in `deep-research.js`, `scout` and `spec-writer` in `spec-to-plan.js` - the gate had been refusing to let those runs stop and telling them to re-emit a handoff they were never asked for. Item 12 scoped the matcher away from the built-in `Plan` and `general-purpose` lanes; that fix cannot reach a schema-carrying agent which is itself a fleet agent.
 
 The hook now separates the two cases and does it once, at the read:
 

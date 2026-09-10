@@ -79,6 +79,284 @@ command_str="$(printf '%s' "$input" | jq -r '.tool_input.command // ""')"
 # leading token was not the command - and was skipped entirely.
 command_str="${command_str//\\$'\n'/}"
 
+# --------------------------------------------------------- quoting the command
+# Quoting a word does not change which command the shell runs. Adjacent quoted
+# and unquoted pieces are joined into ONE word before the shell decides what to
+# execute, so `""git`, `''git`, `g""it`, `"g"it`, `gi''t` and `"git"` are all
+# the word `git` - verified by running each of them, not assumed - and so is
+# `b""ash`. Two characters were enough to retire the refuter's git rule,
+# coder's worktree guard, ui-designer's install ban and fleet-steward's merge
+# ban at once, because every one of those is a targeted check rather than a
+# command allowlist: `bash -c "\"\"git commit -m x"` recovered a payload whose
+# leading token read as `""git`, which matches no branch, and a real shell ran
+# git commit.
+#
+# The quotes come off here, before anything else reads the string, because that
+# is the one place that serves leading_token, sub_verb and install_verb at the
+# same time - and because strip_quoted, further down, ERASES a quoted span, so
+# by the time a segment exists the `g` of `"g"it` is already gone and no
+# per-parser fix could get it back.
+#
+# Only INERT quotes go: a span whose content is empty or is made entirely of
+# the characters a command name or a plain path can hold. Everything else keeps
+# its quotes, because for everything else the quotes are load-bearing -
+# `grep -R '=>' src`, `find . -name "*.ts"` and `git commit -m "a message"` all
+# depend on strip_quoted still erasing that span, and unquoting them would hand
+# a redirection, a glob or a word split to a check that would then deny honest
+# work.
+#
+# The backslash-escaped forms go first and in the same pass, because that is
+# how the shape arrives from an interpreter payload: the recovery below appends
+# a payload exactly as written, backslashes intact, so the pair to remove in
+# `bash -c "\"\"git commit"` is `\"\"` rather than `""`.
+#
+# A lone escaped quote that is left over then has to be hidden from the plain
+# rules, or they pair it with the real quote that follows and eat the payload's
+# terminator: `bash -c "git commit -m \"a b\""` would lose its closing quote,
+# the recovery would find no terminated payload, and a command that denies
+# today would allow. Hence the two placeholders. A guard on the pattern instead
+# (`(^|[^\\])"`) was tried and is wrong for a different reason: consuming the
+# preceding character stops adjacent pairs matching, so `""""git` collapsed one
+# pair per pass and stayed `""git`.
+#
+# The placeholders are two control bytes, and a command that already contains
+# one has it handed back as `\"` or `\'`. That is not a way through: the shell
+# has no meaning for those bytes either, so a word holding one names a command
+# that does not exist, whichever of the two ways this reads it.
+#
+# An ODD number of quotes is deliberately left alone. `bash -c "\"\"\"\"\"git
+# commit -m x"` leaves the payload unterminated and a real shell refuses to run
+# it - "unexpected EOF while looking for matching quote" - so denying it would
+# add a case no real command can reach, which is the same stance this file
+# already takes for a lone unterminated quote. Removing pairs leaves the odd
+# one standing, the leading token stays `"git`, and nothing fires.
+#
+# What this is not: a shell. It reads a quote as inert on the content between
+# it and the next one of its kind, with no notion of which quote is inside
+# which. That is the same trade the rest of this file makes, and it errs the
+# safe way - an unrecognised shape keeps its quotes and is erased by
+# strip_quoted exactly as it was before.
+INERT_DQ=$'\001'
+INERT_SQ=$'\002'
+strip_inert_quotes() {
+  printf '%s' "$1" | sed -E \
+    -e 's/\\"([A-Za-z0-9_./-]*)\\"/\1/g' \
+    -e "s/\\\\'([A-Za-z0-9_./-]*)\\\\'/\1/g" \
+    -e "s/\\\\\"/$INERT_DQ/g" \
+    -e "s/\\\\'/$INERT_SQ/g" \
+    -e 's/"([A-Za-z0-9_./-]*)"/\1/g' \
+    -e "s/'([A-Za-z0-9_./-]*)'/\1/g" \
+    -e "s/$INERT_DQ/\\\\\"/g" \
+    -e "s/$INERT_SQ/\\\\'/g"
+}
+
+# Every enforce_* function below finds its segments the same way: strip_quoted
+# erases quoted spans, THEN the result is split on shell operators. That order
+# is exactly what let `bash -c "git commit -m x"` past every check that is not
+# a plain command allowlist - strip_quoted turned the payload into
+# `bash -c ""`, so the leading token of every segment was "bash", and no
+# per-verb rule (the refuter's git rule, coder's worktree guard, ui-designer's
+# install ban, fleet-steward's merge/push ban) concerns itself with bash. An
+# allowlist role such as scout or reviewer is untouched either way, because
+# bash and sh are not on their allowed-commands list and they deny on the
+# outer segment before a payload would ever matter.
+#
+# The fix recovers the payload BEFORE strip_quoted runs, from the raw string,
+# and appends it as its own newline-separated line, so it is picked up by
+# every function's existing segment scan without any per-role change. The
+# original segment is left in place and is still scanned as written; only the
+# payload is added, never removed. This does not run a shell and is not a
+# parser - it looks for the one shape named here and nothing cleverer, the
+# same stance the rest of this file takes (see sub_verb's header comment).
+#
+# Two things one keystroke away from the plain shape are folded in rather
+# than left as a second hole: a path-qualified interpreter (`/bin/bash -c`)
+# is recognised on its basename, the way leading_token recognises one
+# elsewhere in this file - the boundary check accepts "/" as well as
+# whitespace and the shell's own operators immediately before the name, so
+# it need not be spelled out as its own alternative. And bash reads its
+# script from the next argument for any short-option cluster ending in `c`,
+# not only the bare flag - `-lc`, `-ec`, `-xc` are all "-c plus something
+# else", so the cluster is matched rather than the literal two characters.
+# `env bash -c "..."` was already covered before either of those two
+# changes: the boundary before "bash" is the space after "env", and that
+# space does not care what token preceded it.
+#
+# Interpreters covered: bash, sh, zsh, dash, ksh, plain or path-qualified.
+# Known and deliberately uncovered: a payload built from a variable
+# (`bash -c "$VAR"`), `eval`, a heredoc, and a flag cluster that is not the
+# interpreter's first argument (`bash --rcfile x -c "..."`, `bash -x -c
+# "..."` as two separate arguments rather than one cluster). Each is a
+# genuine gap; this hook is a role reminder, not a containment boundary, and
+# none of the four can be closed by pattern-matching the command string.
+#
+# Also deliberately uncovered: an unterminated quote, e.g.
+# `bash -c "git commit -m x`. A real shell rejects that with "unexpected EOF
+# while looking for matching quote" and never runs it, so treating it as a
+# bypass would add a case no real command can reach.
+#
+# A single pass over the whole string finds every SIBLING occurrence - two
+# unrelated `-c` invocations side by side - but not a NESTED one, because the
+# recovered payload of `bash -c "sh -c 'git commit -m x'"` is itself
+# `sh -c 'git commit -m x'`, and a real shell runs that nesting exactly as
+# written. So the single pass below is repeated over whatever the previous
+# pass just found, until a pass finds nothing new, capped at a small fixed
+# number of passes rather than "until empty" so a command built to nest the
+# same shape many times cannot turn this into a loop. The cap bounds the work.
+# It is NOT what bounds the depth, and an earlier version of this comment said
+# it was - it claimed the cap caught two levels and no more, and that raising
+# it would only move the limit from depth three to depth four. That was wrong
+# in both halves: depths four through ten deny today, and the one shape that
+# was escaping had nothing to do with the number of passes.
+#
+# What actually bounds the recovery is ESCAPING. A recovered payload is
+# appended exactly as it appeared in the command, without undoing the
+# backslash escapes a real shell strips when it reads that payload. So a quote
+# still carrying its backslash is invisible to the next pass: the pattern
+# below looks for a real `'` or `"` after the `-c`, and `\"` is not one.
+#
+# The rule that falls out of that is about quoting, not about how many
+# interpreters are stacked:
+#
+#   Caught, however deep, when the innermost payload is single-quoted - the
+#   levels above it never had to escape those quotes, so they survive as real
+#   quote characters for a later pass to find. Verified to ten levels:
+#     zsh -c "sh -c \"bash -c 'git commit -m x'\""
+#
+#   Not caught, when reaching the innermost payload would mean unescaping a
+#   layer first:
+#     sh -c "bash -c \"git commit -m x\""
+#     bash -c "sh -c 'sh -c \"git commit -m x\"'"
+#
+# Closing those would mean unescaping each recovered payload between passes.
+# That is a real option, deliberately not taken: it is another step further
+# into emulating a shell, and it would buy nothing against someone actually
+# trying, who has `bash -c "$VAR"`, `eval` and a heredoc available - all
+# simpler to write than an escaped nesting, and none of them closable by
+# pattern-matching the command string at all (see the uncovered-gaps list
+# above). Restated once more because it is the premise this whole function
+# rests on: this hook is a role reminder, not a containment boundary.
+#
+# The double-quoted alternative in the pattern is therefore escape-aware -
+# `"([^"\\]|\\.)*"`, which ends only on an unescaped quote - while the
+# single-quoted one stays `'[^']*'`. That asymmetry is deliberate and matches
+# the shell: inside single quotes a backslash is not an escape, so `'a\b'` is
+# a complete literal that ends at its closing quote. The same escape-aware
+# form appears twice below, once in the grep pattern and once in the small
+# regex that strips the quotes off a match; both must agree, or the match
+# succeeds and the payload comes back empty.
+#
+# The single pass finds every occurrence with grep, not with a bash `while
+# [[ =~ ]]` loop that peels one match off the front and re-searches the
+# remainder. That first version was correct but not linear: advancing past a
+# found match used `${rest#*"$match"}`, and bash's own glob-pattern removal
+# for a leading-wildcard pattern against a long string is quadratic - each
+# call rescans from the start, so N matches (or one match near the end of a
+# long, otherwise-unmatching string) cost O(length^2). Measured: a 100
+# thousand character command took over 14 seconds against this hook's own 10
+# second timeout, and a command that exceeds the timeout renders no decision
+# at all - for every governed role, not only the one that triggered it. The
+# regex match itself was never the slow part; a command with no interpreter
+# shape in it stayed fast at any length, which is what pointed at the
+# advance-the-cursor step rather than the search. grep finds every
+# non-overlapping match in one linear pass and prints each one on its own
+# line; the second, small regex below only ever runs against one already-found
+# match, never against the original string, so nothing here is proportional
+# to the command's length except the one initial grep.
+recover_interpreter_payloads_once() {
+  local text="$1" extra="" line payload
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    if [[ "$line" =~ (\'[^\']*\'|\"([^\"\\]|\\.)*\")$ ]]; then
+      payload="${BASH_REMATCH[1]}"
+      payload="${payload:1:${#payload}-2}"
+    elif [[ "$line" =~ [[:space:]]([^[:space:]\'\"]+)$ ]]; then
+      # An unquoted payload is one word by definition - `bash -c git commit`
+      # runs `git` and hands "commit" to it as $0 - and it is the shape a
+      # one-word payload arrives in once strip_inert_quotes has taken the
+      # inert quotes off `bash -c "git"`. Without this alternative that
+      # normalisation would quietly stop those payloads being recovered at
+      # all, which would be a fix that broke something on its way past.
+      payload="${BASH_REMATCH[1]}"
+    else
+      continue
+    fi
+    extra="$extra"$'\n'"$payload"
+  done < <(printf '%s' "$text" | grep -Eo "(^|[^[:alnum:]_.-])(bash|sh|zsh|dash|ksh)[[:space:]]+-[A-Za-z]*c[[:space:]]+('[^']*'|\"([^\"\\\\]|\\\\.)*\"|[^[:space:]'\"]+)")
+  printf '%s' "$extra"
+}
+
+recover_interpreter_payloads() {
+  local all pass=0 found
+  all="$(recover_interpreter_payloads_once "$1")"
+  found="$all"
+  while [ -n "$found" ] && [ "$pass" -lt 3 ]; do
+    found="$(recover_interpreter_payloads_once "$found")"
+    [ -n "$found" ] && all="$all"$'\n'"$found"
+    pass=$((pass + 1))
+  done
+  printf '%s' "$all"
+}
+
+# ------------------------------------------------------------- the scan bound
+# Every enforce_* branch below reads a command the same way: strip the quoted
+# spans, split the result on the shell's operators, then walk each segment.
+# That work is superlinear in the length of a segment, and this hook is
+# registered in hooks.json with "timeout": 10. Measured end to end on
+# `bash -c "` + N x `\"` + `git commit -m x"`, before this bound:
+#
+#     command   refuter   coder   ui-designer
+#      16 KB      1.2s     1.2s      1.3s
+#      32 KB      2.2s     2.1s      3.0s
+#      48 KB      3.8s     4.0s      5.5s
+#      64 KB      6.4s     6.3s      9.1s
+#      80 KB      9.4s     9.0s     13.6s   <- ui-designer already past the timeout
+#
+# A hook that blows its timeout renders no decision at all, so a single absurd
+# command does not merely evade the role that was slow - it turns every guard
+# off for that call, for every role. That is the failure this bounds against.
+#
+# The length is bounded rather than the cost chased. 8192 bytes, because:
+# the longest command in this repo's entire eval corpus is under 200 bytes;
+# a deliberately generous real one - a long commit message, a find with a
+# dozen paths - is a few hundred more; and nothing a person or an agent types
+# comes near 8 KB. It also keeps the whole hook under a second, which a cap in
+# the tens of KB does not - 16 KB of scanned text measures 1.2s.
+#
+# Truncating is not skipping, and the difference matters. The head of the
+# command is still scanned, so `git commit -m x && <80 KB of padding>` is
+# still caught; skipping the checks on an over-long command would catch
+# nothing and would make length itself the bypass. What a truncated scan
+# gives up is a verb hiding past the bound, which is a real gap and is the
+# price of not having the timeout take every role's guard down with it.
+#
+# The bound is applied twice, because there are two texts and either can be
+# the long one: the command as submitted, and the interpreter payloads
+# recovered from it. Bounding only the first would let a command just under
+# the bound recover several times its own length. So the scanned text is at
+# most two bounds' worth, whatever the input.
+SCAN_MAX=8192
+
+# Prints its text, truncated to the bound, and says so loudly when it does.
+# $1 the text, $2 what it is, for the log line.
+bound_scan() {
+  local text="$1"
+  if [ "${#text}" -le "$SCAN_MAX" ]; then printf '%s' "$text"; return 0; fi
+  log "$2 is ${#text} bytes, $(( ${#text} - SCAN_MAX )) over the ${SCAN_MAX}-byte scan bound; scanning the first ${SCAN_MAX} bytes only, so a verb past that point will not be seen"
+  printf '%s' "${text:0:$SCAN_MAX}"
+}
+
+if [ -n "$command_str" ]; then
+  command_str="$(bound_scan "$command_str" "command")"
+  # Bounded first, so the normalisation is paid on at most SCAN_MAX bytes, and
+  # BEFORE the recovery, so a quoted interpreter name (`b""ash -c "..."`) is the
+  # interpreter the recovery is looking for. Applied to the recovered payloads
+  # too, for the same reason the bound is: either text can be the one carrying
+  # the shape.
+  command_str="$(strip_inert_quotes "$command_str")"
+  command_str="$command_str$(bound_scan "$(strip_inert_quotes "$(recover_interpreter_payloads "$command_str")")" "recovered interpreter payload")"
+fi
+
 # A plugin agent can arrive as "scout" or as "plugin-name:scout".
 agent="${agent_type##*:}"
 
@@ -106,6 +384,25 @@ enforce_spec_writer() {
     */docs/specs/*) return 0 ;;
   esac
   deny "spec-writer invariant: \"Never write anywhere except under docs/specs/: not source, not config, not tests, and never a plan under docs/plans/.\" $tool_name targeted $abs. Write the spec to docs/specs/<issue>.md instead. Anything else belongs to the lead."
+}
+
+# What a backslash does, in the shell's order: before whitespace it makes that
+# whitespace part of the word; anywhere else it quotes the next character and
+# disappears. The placeholder keeps an escaped space from splitting a path into
+# two words without pretending to know what the path says.
+#
+# The line-continuation case is NOT handled here - it is joined out of
+# command_str before anything splits on newlines, because deleting the backslash
+# without joining is what stranded the verb on a second segment.
+#
+# Three callers, and they used to disagree. sub_verb did this and the other two
+# did not, so `git \merge main` was caught while `\git merge main` and
+# `npm \install react` were not - a backslash is quoting, and quoting the
+# command word or the install verb hid it from exactly the checks that read
+# those words. Both were verified to run: `\git --version` prints a version,
+# `npm \install` reaches npm's install.
+unescape_words() {
+  printf '%s' "$1" | sed -e 's/\\\([[:space:]]\)/_/g' -e 's/\\\(.\)/\1/g'
 }
 
 # The subcommand a segment would actually run: the first word after the command
@@ -139,17 +436,7 @@ enforce_spec_writer() {
 sub_verb() {
   local seg tok skip_next=no
   seg="$(command_words "$1")"
-  # Undo what a backslash does, in the shell's own order: a trailing one
-  # continues the line and vanishes; one before whitespace joins that
-  # whitespace into the word; any other quotes the next character and
-  # disappears. The placeholder keeps an escaped space from splitting a path
-  # into two words without pretending to know what the path says.
-  # What a backslash does, in the shell's order: before whitespace it makes that
-  # whitespace part of the word; anywhere else it quotes the next character and
-  # disappears. The line-continuation case is NOT handled here - it is joined
-  # out of command_str before anything splits on newlines, because deleting the
-  # backslash without joining is what stranded the verb on a second segment.
-  seg="$(printf '%s' "$seg" | sed -e 's/\\\([[:space:]]\)/_/g' -e 's/\\\(.\)/\1/g')"
+  seg="$(unescape_words "$seg")"
   # shellcheck disable=SC2086 # deliberate word splitting: this is a word scan
   set -- $seg
   [ "$#" -gt 0 ] || { printf ''; return 0; }
@@ -273,6 +560,9 @@ command_words() {
 leading_token() {
   local tok
   tok="$(printf '%s' "$(command_words "$1")" | awk '{print $1}')"
+  # Unescaped before the basename, the way the shell removes quoting before it
+  # resolves the name: `\git` is the command `git`, and `/bin/\git` is too.
+  tok="$(unescape_words "$tok")"
   printf '%s\n' "${tok##*/}"
 }
 
@@ -642,6 +932,39 @@ enforce_coder() {
   return 0
 }
 
+# --------------------------------------------------------------------- refuter
+# Invariants: "Never write inside the project" and "Never fix what you find."
+#
+# The only role that may run anything and the only one whose write rule is a
+# denial rather than an allowlist. Both are deliberate. Mutation testing is
+# copy, change, run, so a command allowlist would have to be wide enough to
+# express nothing, and the writes that matter are the ones that would land in
+# the tree under test. check-write-scope.py holds that half.
+#
+# What is left for here is git: read-only, the same verbs the reviewer has. It
+# mutates a scratch copy and never moves a ref in the real repository.
+REFUTER_ALLOWED_GIT=" log show blame diff ls-files status shortlog describe rev-parse rev-list cat-file grep whatchanged "
+
+enforce_refuter() {
+  [ "$tool_name" = "Bash" ] || return 0
+  [ -n "$command_str" ] || return 0
+
+  local scan seg verb
+  scan="$(strip_quoted "$command_str")"
+  scan="$(printf '%s' "$scan" | sed -E 's/(\|\||&&|;|\||&)/\n/g')"
+  while IFS= read -r seg; do
+    seg="$(printf '%s' "$seg" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+    [ -n "$seg" ] || continue
+    [ "$(leading_token "$seg")" = "git" ] || continue
+    verb="$(sub_verb "$seg")"
+    case "$REFUTER_ALLOWED_GIT" in
+      *" $verb "*) ;;
+      *) deny "refuter invariant: \"Never fix what you find.\" \"git $verb\" is not a read-only verb, and a refutation is a finding with a reproduction rather than a patch. Mutate a copy outside the project and report what survived." ;;
+    esac
+  done <<< "$scan"
+  return 0
+}
+
 # ----------------------------------------------------------------- ui-designer
 # Invariant: "Never run a git command that writes, and never install anything
 # into the product repo."
@@ -662,7 +985,7 @@ UI_DESIGNER_INSTALL_VERBS=" install i ci add require get remove uninstall update
 # still reads `install`.
 install_verb() {
   local seg tok prev=""
-  seg="$(command_words "$1")"
+  seg="$(unescape_words "$(command_words "$1")")"
   # shellcheck disable=SC2086 # deliberate word splitting: this is a word scan
   set -- $seg
   [ "$#" -gt 0 ] || { printf ''; return 0; }
@@ -731,14 +1054,29 @@ enforce_ui_designer() {
 # glob above cannot do - `*/docs/specs/*` matched another repository's specs
 # directory just as happily as this one's.
 case "$agent" in
-  spec-writer|ui-designer|tech-writer|fleet-steward)
+  spec-writer|ui-designer|tech-writer|fleet-steward|refuter)
     if is_write_tool "$tool_name"; then
+      # Four of these five roles hold an allowlist of roots inside the
+      # project, so a checker that cannot run merely widens that allowlist to
+      # everything - unwelcome, but bounded by the project it already had to
+      # be in. The refuter is the opposite shape: its rule is a denial, the
+      # default it falls back to has to be the same denial, or "cannot tell"
+      # quietly becomes "cannot be stopped" for the one role whose write rule
+      # exists to keep it out of the tree it is attacking.
       if ! command -v python3 >/dev/null 2>&1; then
+        if [ "$agent" = "refuter" ]; then
+          deny "refuter invariant: \"Never write inside the project.\" python3 is not installed, so the checker that tells outside from inside cannot run. No checker means no write - mutate a copy somewhere this hook does not have to guess."
+        fi
         log "python3 is not installed, so write-scope checking cannot run for $agent. Allowing, consistent with this hook failing open."
       else
         checker="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/check-write-scope.py"
-        if [ -f "$checker" ] && ! printf '%s' "$input" | python3 "$checker"; then
-          deny "$agent invariant: that write destination is outside the role's approved output scope, or the scope could not be established. spec-writer writes only under this project's docs/specs/; tech-writer writes documentation under docs/ or a Markdown file at the project root; ui-designer writes prototypes/ and a commissioned article under docs/runs/; fleet-steward writes only inside its own working copy. Name the file you need in the handoff and let the lead commission it."
+        if [ ! -f "$checker" ]; then
+          if [ "$agent" = "refuter" ]; then
+            deny "refuter invariant: \"Never write inside the project.\" The write-scope checker is missing, so this cannot tell outside from inside. No checker means no write - mutate a copy somewhere this hook does not have to guess."
+          fi
+          log "the write-scope checker is missing at $checker, so write-scope checking cannot run for $agent. Allowing, consistent with this hook failing open."
+        elif ! printf '%s' "$input" | python3 "$checker"; then
+          deny "$agent invariant: that write destination is outside the role's approved output scope, or the scope could not be established. spec-writer writes only under this project's docs/specs/; tech-writer writes documentation under docs/ or a Markdown file at the project root; ui-designer writes prototypes/ and a commissioned article under docs/runs/; fleet-steward writes only inside its own working copy; the refuter writes only OUTSIDE the project, because it mutates copies and a mutation written back into the tree under test is a change rather than a mutation. Name the file you need in the handoff and let the lead commission it."
         fi
       fi
     fi
@@ -752,6 +1090,7 @@ case "$agent" in
   reviewer)      enforce_reviewer ;;
   ui-designer)   enforce_ui_designer ;;
   coder)         enforce_coder ;;
+  refuter)       enforce_refuter ;;
   *)             ;;
 esac
 

@@ -60,7 +60,7 @@ color: red
 skills: glossary, handoff, using-memory, looping, run-article
 ```
 
-The colour is a collision and there is no way around it: the palette has eight values and this makes ten agents, with `cyan` already doubled between `scout` and `fleet-steward`. Sharing `red` with `reviewer` is the least confusing of the available collisions, since the two roles sit next to each other in the pipeline. The plan should confirm that rather than assume it.
+The colour is a collision and there is no way around it: the palette has eight values and this makes ten agents, with `cyan` already doubled between `scout` and `fleet-steward`. `red`, shared with `reviewer`, is Alex's decision and the right one - the two roles sit next to each other in the pipeline and both report on work without touching it, so a reader seeing red learns something true either way.
 
 `model: opus` and `effort: high` because this is judgement work and the night's evidence came from opus-class agents. `memory` and `isolation` are omitted: it writes nothing in the project, so there is nothing to isolate.
 
@@ -145,7 +145,11 @@ It carries the procedure the invariants imply:
 
 Three, all in the existing shape.
 
-**A refuter stage, after the verdict, and only under `fix: true`.** An ordinary single-round review is unchanged, so nothing that runs today gets slower or more expensive. Under `fix: true`, a round is not clean because the reviewer found nothing blocking. It is clean because the reviewer found nothing blocking **and** the refuter failed to break it. The stage carries a schema, like the other lanes, and its verdict gates the round.
+**A refuter stage, after the verdict.** It is mandatory under `fix: true` and available on an ordinary single-round review through `refute: true`, which defaults off so that nothing running today gets slower or more expensive without being asked.
+
+Making it reachable outside a loop is deliberate and is the cheapest way to learn whether the role works at all: a refuter pointed at an ordinary review costs one agent and produces real evidence about its behaviour, where a refuter first exercised inside a loop is being trusted with compounding errors on its first outing. Expect the opt-in form to be how it earns its place before anything depends on it.
+
+Under `fix: true`, a round is not clean because the reviewer found nothing blocking. It is clean because the reviewer found nothing blocking **and** the refuter failed to break it. The stage carries a schema, like the other lanes, and its verdict gates the round.
 
 **The gate fails closed.** A refuter that returns nothing stops the run with its own reason, in the same register as every other branch there. The alternative is an advisory refutation, which makes the safety mechanism optional exactly when things are going badly.
 
@@ -173,7 +177,7 @@ Twenty files reference the roster, and eighteen lines say "nine" in so many word
 
 New: `claude-agents/agents/refuter.md`, `claude-agents/skills/looping/SKILL.md`, `evals/refuter/` with `rubric.md`, `baseline.json`, `checks.sh` and `prompts/`.
 
-This is the `fleet-steward`'s kind of sweep, and the plan should say whether the steward does it or the round does it by hand.
+This is the `fleet-steward`'s kind of sweep and it is not going to it: Alex's decision is that this round does it by hand. That is the right call for two reasons. The steward's editing scope excludes several of these files, so handing it the job would mean widening that scope to do it - reopening a question deliberately left open last week. And a roster change is exactly the kind of edit where the twenty files are not twenty find-and-replaces: eighteen lines say "nine" and can be replaced, and the rest have to be read.
 
 ## 11. What this rests on that has not been observed
 
@@ -191,7 +195,12 @@ Not in this round: extending the refuter to anything but loop work. It is expens
 
 Not in this round: changing `reviewer`'s invariants or `coder`'s permissions.
 
-## 13. Open questions for Alex
+## 13. Decisions taken
 
-1. Does the `fleet-steward` do the nine-to-ten sweep as its own pull request, or does this round do it by hand? The steward's editing scope currently excludes some of the files in section 10.
-2. Should the refuter also run outside loops - on an ordinary `review-round` without `fix: true` - as an optional stage? It would be the cheapest way to get real evidence about whether the role works before trusting it with a loop.
+Recorded here rather than left implicit, because each one changed the shape of the plan.
+
+1. **This round does the nine-to-ten sweep by hand**, rather than commissioning the `fleet-steward`. Section 10.
+2. **The refuter runs outside loops too**, opt-in through `refute: true`, mandatory under `fix: true`. Section 8.
+3. **The refuter is `red`**, shared with `reviewer`. Section 4.2.
+
+Alex, 10 September 2026.
