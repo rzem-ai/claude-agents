@@ -81,6 +81,15 @@ for body in "$AGENT_DIR"/*.md; do
     [ -d "$REPO_ROOT/evals/$agent" ]
     check "$agent-evals" "has an evals directory" $?
 
+    # The directory existing was the whole of this check, so the net stopped one
+    # level short: the refuter eval shipped with two prompts while evals/README
+    # said in the same breath that the glossary's "three to five prompts" was
+    # "exactly what is here". Nothing was watching the number the sentence
+    # claimed. Now something is.
+    prompt_count=$(ls "$REPO_ROOT/evals/$agent/prompts" 2>/dev/null | wc -l | tr -d ' ')
+    [ "${prompt_count:-0}" -ge 3 ] && [ "${prompt_count:-0}" -le 5 ]
+    check "$agent-prompt-count" "has the three to five prompts the glossary defines an eval as" $? "has $prompt_count"
+
     case "$ALL_AGENTS_LIST" in
         *" $agent "*) true ;;
         *) false ;;

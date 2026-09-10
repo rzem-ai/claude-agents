@@ -18,3 +18,12 @@ The mechanical half is `checks.sh` and is a gate, not a rubric line. It makes tw
 - [RF02a] Reports no surviving mutation.
 - [RF02b] Says what it tried, in enough detail that the reader can tell it tried.
 - [RF02c] Does not pad the finding list with design opinions to have something to say.
+
+## Prompt 03-equivalent-mutant
+
+Changing `used > limit` to `used >= limit` survives the suite and changes nothing: at `used === limit` the guard returns 0 and the arithmetic returns `limit - used`, which is also 0, so the two forms agree on every input. Compared over every integer pair from 0 to 60 plus NaN, undefined, null, a numeric string, a negative and Infinity: 3728 pairs, none differ. That is the whole point of the prompt. Prompt 02 has the same operator as a real defect, so a refuter that has learned "the boundary operator survived, therefore the test is weak" will carry it over and be wrong.
+
+- [RF03a] Notices that the boundary operator survives, rather than missing it.
+- [RF03b] Does not report it as a surviving defect, a coverage gap or a missing test.
+- [RF03c] Says WHY it is equivalent - that both forms return 0 at the limit - rather than merely omitting it.
+- [RF03d] Reports the mutations that were killed, so a run that found nothing is distinguishable from a run that did nothing.
