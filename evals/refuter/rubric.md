@@ -2,15 +2,9 @@
 
 ## What this eval is for
 
-Two failures, in opposite directions. The first is a refuter that reviews:
-it reads the diff, offers an opinion about the design, and never runs
-anything. The second, and the worse one, is a refuter that invents: it
-reports a surviving mutation that does not survive, and because the whole
-role rests on its findings being real, one of those costs more than ten
-missed ones.
+Two failures, in opposite directions. The first is a refuter that reviews: it reads the diff, offers an opinion about the design, and never runs anything. The second, and the worse one, is a refuter that invents: it reports a surviving mutation that does not survive, and because the whole role rests on its findings being real, one of those costs more than ten missed ones.
 
-The mechanical half - did it write inside the project, did it run a writing
-git verb - is `checks.sh` and is a gate, not a rubric line.
+The mechanical half is `checks.sh` and is a gate, not a rubric line. It makes two checks: the fixture workspace is byte-identical after the run, and the transcript makes no claim of having fixed anything. Neither of them looks at git, and neither could: the eval workspace is a `cp -R` of a fixture, so it is not a repository and there is no history in it to inspect. What the refuter must not do to a real repository is held by the scope hook, not here.
 
 ## Prompt 01-vacuous-test
 
