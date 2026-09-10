@@ -642,6 +642,39 @@ enforce_coder() {
   return 0
 }
 
+# --------------------------------------------------------------------- refuter
+# Invariants: "Never write inside the project" and "Never fix what you find."
+#
+# The only role that may run anything and the only one whose write rule is a
+# denial rather than an allowlist. Both are deliberate. Mutation testing is
+# copy, change, run, so a command allowlist would have to be wide enough to
+# express nothing, and the writes that matter are the ones that would land in
+# the tree under test. check-write-scope.py holds that half.
+#
+# What is left for here is git: read-only, the same verbs the reviewer has. It
+# mutates a scratch copy and never moves a ref in the real repository.
+REFUTER_ALLOWED_GIT=" log show blame diff ls-files status shortlog describe rev-parse rev-list cat-file grep whatchanged "
+
+enforce_refuter() {
+  [ "$tool_name" = "Bash" ] || return 0
+  [ -n "$command_str" ] || return 0
+
+  local scan seg verb
+  scan="$(strip_quoted "$command_str")"
+  scan="$(printf '%s' "$scan" | sed -E 's/(\|\||&&|;|\||&)/\n/g')"
+  while IFS= read -r seg; do
+    seg="$(printf '%s' "$seg" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
+    [ -n "$seg" ] || continue
+    [ "$(leading_token "$seg")" = "git" ] || continue
+    verb="$(sub_verb "$seg")"
+    case "$REFUTER_ALLOWED_GIT" in
+      *" $verb "*) ;;
+      *) deny "refuter invariant: \"Never fix what you find.\" \"git $verb\" is not a read-only verb, and a refutation is a finding with a reproduction rather than a patch. Mutate a copy outside the project and report what survived." ;;
+    esac
+  done <<< "$scan"
+  return 0
+}
+
 # ----------------------------------------------------------------- ui-designer
 # Invariant: "Never run a git command that writes, and never install anything
 # into the product repo."
@@ -731,14 +764,14 @@ enforce_ui_designer() {
 # glob above cannot do - `*/docs/specs/*` matched another repository's specs
 # directory just as happily as this one's.
 case "$agent" in
-  spec-writer|ui-designer|tech-writer|fleet-steward)
+  spec-writer|ui-designer|tech-writer|fleet-steward|refuter)
     if is_write_tool "$tool_name"; then
       if ! command -v python3 >/dev/null 2>&1; then
         log "python3 is not installed, so write-scope checking cannot run for $agent. Allowing, consistent with this hook failing open."
       else
         checker="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/check-write-scope.py"
         if [ -f "$checker" ] && ! printf '%s' "$input" | python3 "$checker"; then
-          deny "$agent invariant: that write destination is outside the role's approved output scope, or the scope could not be established. spec-writer writes only under this project's docs/specs/; tech-writer writes documentation under docs/ or a Markdown file at the project root; ui-designer writes prototypes/ and a commissioned article under docs/runs/; fleet-steward writes only inside its own working copy. Name the file you need in the handoff and let the lead commission it."
+          deny "$agent invariant: that write destination is outside the role's approved output scope, or the scope could not be established. spec-writer writes only under this project's docs/specs/; tech-writer writes documentation under docs/ or a Markdown file at the project root; ui-designer writes prototypes/ and a commissioned article under docs/runs/; fleet-steward writes only inside its own working copy; the refuter writes only OUTSIDE the project, because it mutates copies and a mutation written back into the tree under test is a change rather than a mutation. Name the file you need in the handoff and let the lead commission it."
         fi
       fi
     fi
@@ -752,6 +785,7 @@ case "$agent" in
   reviewer)      enforce_reviewer ;;
   ui-designer)   enforce_ui_designer ;;
   coder)         enforce_coder ;;
+  refuter)       enforce_refuter ;;
   *)             ;;
 esac
 

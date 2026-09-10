@@ -45,7 +45,7 @@ import os
 import sys
 from pathlib import Path
 
-ROLES = {'spec-writer', 'ui-designer', 'tech-writer', 'fleet-steward'}
+ROLES = {'spec-writer', 'ui-designer', 'tech-writer', 'fleet-steward', 'refuter'}
 
 
 def resolve(path):
@@ -118,6 +118,13 @@ def main():
         return 0 if inside(target, resolve(root)) else 1
 
     project = resolve(os.environ.get('CLAUDE_PROJECT_DIR') or cwd)
+
+    if role == 'refuter':
+        # The inverse of every scope below: the refuter may write anywhere
+        # EXCEPT the project. It mutates copies, and a mutation written back
+        # into the tree it is testing is not a mutation, it is a change.
+        # Physically resolved, so a symlink pointing back in resolves back in.
+        return 1 if inside(target, project) else 0
 
     if role == 'spec-writer':
         # Anchor to the physical specs directory of *this* project. If it

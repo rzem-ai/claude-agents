@@ -409,6 +409,34 @@ allow_bash ui-designer 'npm run install-deps'
 deny_bash_saying ui-designer 'npm -g install react' 'npm install'
 allow_bash ui-designer 'npx serve prototypes/'
 
+printf '\nThe refuter runs anything and writes nowhere near the project\n'
+
+# The inverse of every other write scope. Everyone else has an allowlist of
+# roots inside the project; the refuter's rule is that the project is the one
+# place it may not write. What bounds "outside" is the sandbox's own denyWrite,
+# which already covers ~/.ssh and friends - this layer expresses the role
+# boundary, that one expresses the credential boundary.
+deny_write  refuter "$PROJECT/src/a.ts"
+deny_write  refuter "$PROJECT/evals/lib/check-all.sh"
+deny_write  refuter "$PROJECT/docs/notes.md"
+allow_write refuter "$TMP/refuter-scratch/mutant.sh"
+allow_write refuter "$TMP/scratch/copy-of-review-round.js"
+
+# Running things is the job, so there is no command allowlist. This is the one
+# role where that is deliberate rather than an omission.
+allow_bash refuter 'bash evals/lib/check-all.sh'
+allow_bash refuter 'node evals/lib/workflow-logic.mjs'
+allow_bash refuter 'python3 -c "print(1)"'
+allow_bash refuter 'cp claude-agents/workflows/review-round.js /tmp/mutant.js'
+
+# Read-only git, the same verbs the reviewer has. It mutates a scratch copy; it
+# never moves a ref in the real repository.
+allow_bash refuter 'git diff main...HEAD'
+allow_bash refuter 'git log --oneline -20'
+deny_bash_saying refuter 'git commit -m x' 'git commit'
+deny_bash_saying refuter 'git switch -c mutant' 'git switch'
+deny_bash_saying refuter 'git -C /tmp/mutant reset --hard' 'git reset'
+
 printf '\n%s passed, %s failed\n' "$PASSED" "$FAILED"
 if [ "$FAILED" -ne 0 ]; then
     printf 'The scope hook admits something a role forbids, or blocks work the role exists to do.\n'
