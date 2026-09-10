@@ -462,6 +462,27 @@ fi
 deny_bash_saying scout    'bash -c "git commit -m x"' '"bash" is not on that list'
 deny_bash_saying reviewer "sh -c 'git push --force'" '"sh" is not one of the commands'
 
+printf '\nA cluster ending in c, and a path in front of the name, are the same shape\n'
+
+# Two ways to be one keystroke from the plain form above, both closed the
+# same way as the plain form: bash reads its script from the next argument
+# for ANY short-option cluster ending in c, not only the bare flag, so -lc,
+# -ec and -xc are "-c plus something else" rather than a different shape. And
+# an interpreter named by its full path is still the same interpreter - the
+# boundary check accepts "/" immediately before the name, the way
+# leading_token strips a path down to a basename elsewhere in this file.
+deny_bash_saying refuter       'bash -lc "git reset --hard"' 'git reset'
+deny_bash_saying refuter       'bash -ec "git commit -m x"' 'git commit'
+deny_bash_saying refuter       'bash -xc "git push --force"' 'git push'
+deny_bash_saying refuter       '/bin/bash -c "git commit -m x"' 'git commit'
+deny_bash_saying fleet-steward '/bin/sh -c "git merge main"' 'git merge'
+
+# Unaffected, confirming the fix did not narrow what was already caught: a
+# wrapper's own space is a boundary regardless of what token sits before it,
+# and zsh was already on the interpreter list before this round.
+deny_bash_saying refuter 'env bash -c "git commit -m x"' 'git commit'
+deny_bash_saying refuter 'zsh -c "git commit -m x"' 'git commit'
+
 printf '\nThe project root itself is inside the project\n'
 
 # inside() excludes the root itself (path == root), which is correct for

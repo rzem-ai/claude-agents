@@ -97,12 +97,30 @@ command_str="${command_str//\\$'\n'/}"
 # payload is added, never removed. This does not run a shell and is not a
 # parser - it looks for the one shape named here and nothing cleverer, the
 # same stance the rest of this file takes (see sub_verb's header comment).
-# Interpreters covered: bash, sh, zsh, dash, ksh. Not covered: an interpreter
-# invoked by absolute path, one wrapped in `env`/`command`, or `-c` preceded
-# by other flags - each is a real gap, left for the next thing that finds it.
+#
+# Two things one keystroke away from the plain shape are folded in rather
+# than left as a second hole: a path-qualified interpreter (`/bin/bash -c`)
+# is recognised on its basename, the way leading_token recognises one
+# elsewhere in this file - the boundary check accepts "/" as well as
+# whitespace and the shell's own operators immediately before the name, so
+# it need not be spelled out as its own alternative. And bash reads its
+# script from the next argument for any short-option cluster ending in `c`,
+# not only the bare flag - `-lc`, `-ec`, `-xc` are all "-c plus something
+# else", so the cluster is matched rather than the literal two characters.
+# `env bash -c "..."` was already covered before either of those two
+# changes: the boundary before "bash" is the space after "env", and that
+# space does not care what token preceded it.
+#
+# Interpreters covered: bash, sh, zsh, dash, ksh, plain or path-qualified.
+# Known and deliberately uncovered: a payload built from a variable
+# (`bash -c "$VAR"`), `eval`, a heredoc, and a flag cluster that is not the
+# interpreter's first argument (`bash --rcfile x -c "..."`, `bash -x -c
+# "..."` as two separate arguments rather than one cluster). Each is a
+# genuine gap; this hook is a role reminder, not a containment boundary, and
+# none of the four can be closed by pattern-matching the command string.
 recover_interpreter_payloads() {
   local rest="$1" payload extra=""
-  while [[ "$rest" =~ (^|[^[:alnum:]_./-])(bash|sh|zsh|dash|ksh)[[:space:]]+-c[[:space:]]+(\'[^\']*\'|\"[^\"]*\") ]]; do
+  while [[ "$rest" =~ (^|[^[:alnum:]_.-])(bash|sh|zsh|dash|ksh)[[:space:]]+-[A-Za-z]*c[[:space:]]+(\'[^\']*\'|\"[^\"]*\") ]]; do
     payload="${BASH_REMATCH[3]}"
     payload="${payload:1:${#payload}-2}"
     extra="$extra"$'\n'"$payload"
