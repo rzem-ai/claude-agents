@@ -787,6 +787,36 @@ expect_variant decide_no_python allow \
     "fleet-steward -> $REPO_ROOT/docs/scratch-note.md (python3 missing, unaffected)" \
     "$(write_event fleet-steward "$REPO_ROOT/docs/scratch-note.md" "$REPO_ROOT")" "$REPO_ROOT"
 
+# Third way it cannot tell: CLAUDE_PROJECT_DIR unset. The checker fell back to
+# the event's cwd, so with cwd pointed anywhere but the project, "outside the
+# project" resolved to the wrong project and a write into the tree under test
+# was ALLOWED - the one role designed to fail closed failing open. The other
+# four survive an unset variable because their rule is "inside this root", and
+# a wrong root only widens an allowance that still has to be inside something.
+decide_no_project_dir() {
+    # $1 event JSON, $2 ignored. Like decide(), but CLAUDE_PROJECT_DIR is unset.
+    local out
+    out=$(printf '%s' "$1" | env -u CLAUDE_PROJECT_DIR CLAUDE_AGENTS_REPO="$REPO_ROOT" \
+        "$HOOK" 2>/dev/null)
+    if [ -z "$out" ]; then printf 'allow\n'; else
+        printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecision // "allow"'
+    fi
+}
+
+expect_variant decide_no_project_dir deny \
+    "refuter -> $PROJECT/README.md (CLAUDE_PROJECT_DIR unset, cwd elsewhere)" \
+    "$(write_event refuter "$PROJECT/README.md" "$TMP/other")" "$PROJECT"
+# Not merely "denies everything": with the variable set, the same event decides
+# on where the file is, and a scratch path outside the project still writes.
+expect deny "refuter -> $PROJECT/README.md (CLAUDE_PROJECT_DIR set)" \
+    "$(write_event refuter "$PROJECT/README.md" "$TMP/other")" "$PROJECT"
+allow_write refuter "$TMP/refuter-scratch/mutant.js"
+# Unaffected: an allowlist role still falls back to cwd, because its rule has a
+# floor that a denial does not.
+expect_variant decide_no_project_dir allow \
+    "spec-writer -> $PROJECT/docs/specs/x.md (CLAUDE_PROJECT_DIR unset, unaffected)" \
+    "$(write_event spec-writer "$PROJECT/docs/specs/x.md" "$PROJECT")" "$PROJECT"
+
 if [ -f "$CHECKER_PATH" ]; then
     mv "$CHECKER_PATH" "$CHECKER_PATH.disabled-for-test"
     trap 'mv "$CHECKER_PATH.disabled-for-test" "$CHECKER_PATH" 2>/dev/null; rm -rf "$TMP"' EXIT
