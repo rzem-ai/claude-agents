@@ -357,8 +357,9 @@ bound_scan() {
   printf '%s' "${text:0:$SCAN_MAX}"
 }
 
-# 16 segments, chosen by measuring rather than by taste. On this machine, scout,
-# which is the slowest role, against the 10 second timeout:
+# 16 segments, chosen by measuring rather than by taste. With this bound removed,
+# on this machine, scout, which is the slowest role, against the 10 second
+# timeout:
 #
 #     segments   `git log` each   `A=1 B=2 env xargs git -C /tmp/x log` each
 #         16          1.8s                      3.8s
@@ -369,9 +370,13 @@ bound_scan() {
 # The right-hand column is the most expensive segment shape found: leading
 # assignments and wrapper commands make command_words loop, spawning two more
 # processes per word, before either parser reaches a command word. 16 is the
-# largest cap that leaves that shape comfortably inside the timeout - 3.8s here,
-# so still inside it on hardware two and a half times slower. 32 measures 7.2s
-# and leaves no such room.
+# largest cap that leaves that shape comfortably inside the timeout, so it is
+# still inside it on hardware two and a half times slower. 32 measures 7.2s and
+# leaves no such room.
+#
+# With the bound in, the 16-segment row is what the hook pays whatever arrives:
+# 1.8s and 4.0s, the second having risen from 3.8s when strip_leading_syntax
+# was added below. Everything above 16 segments measures the same as 16.
 #
 # It is generous against real work by a wide margin. This repo's whole scope-hook
 # corpus tops out at four segments, and the longest realistic command anyone has
@@ -569,7 +574,61 @@ sed_writes() {
 # allowlist, which had refused it purely because sudo was not on the list.
 # permissions.deny backstops sudo, but the per-agent layer is precisely the half
 # permissions.deny cannot express, so it should not be the looser of the two.
-COMMAND_WRAPPERS=" command env builtin exec nohup time xargs "
+#
+# NOT `script` either, and for the same asymmetry rather than a different one.
+# `script cat` does not run cat: it starts a shell and writes the typescript to
+# a file called `cat`. Making it transparent would hand scout a way to create a
+# file, which is exactly the sudo shape. It closes nothing in return, because
+# the form that runs a command - `script -q /dev/null git commit` - has the
+# typescript file between the wrapper and the command word, so the token is
+# `/dev/null` either way. It stays on the open-items list instead.
+#
+# The five additions are scheduling wrappers, and they are transparent in the
+# sense that matters: `nice cat x` is the same act as `cat x`, none of them
+# writes anything of its own, and each was confirmed to actually run git.
+COMMAND_WRAPPERS=" command env builtin exec nohup time xargs timeout nice stdbuf setsid ionice "
+
+# Shell syntax that can legally sit in front of a command word, which the shell
+# consumes before it decides what to run. leading_token read the first of these
+# AS the command name, so `{ git commit -m x; }`, `( git commit -m x )`,
+# `! git commit -m x`, `>/tmp/out git commit -m x` and the body of any if, for
+# or while had a command word that no rule was looking for - which retires the
+# refuter's git rule, coder's worktree guard, ui-designer's install ban and
+# fleet-steward's merge ban all at once, the same four the quoting work above
+# exists to protect. Every form was confirmed to actually run git.
+#
+# Stripped in a loop, because they stack: `then ! >/tmp/x git commit -m x` is
+# one segment with three of them in front. Only ever at the FRONT of a segment,
+# so nothing that is an argument is touched.
+#
+# What it does not reach is command substitution. `$(git commit -m x)` has no
+# leading token to remove - the `$` is part of the word - so it stays open for
+# every role without a substitution check of its own, which is refuter, coder
+# and ui-designer. That is on the open-items list rather than papered over here.
+#
+# No subprocess: this runs once per segment, and the segment bound above exists
+# because per-segment spawns are what reach the hook's timeout.
+# The closers are here too, and not for symmetry. Splitting `{ ls -la; }` on the
+# shell's `;` leaves a segment that is just `}`, and an allowlist role denied
+# that segment because `}` is not a command it may run - so a brace group around
+# a plain read was refused for the wrong reason. A segment made only of closing
+# syntax is not a command at all, and after the strip it is empty and skipped.
+# Hence the whitespace-or-end match rather than the whitespace the openers need.
+LEADING_KEYWORD_RE='^(!|\{|\}|then|do|else|elif|if|while|until|fi|done|esac)([[:space:]].*)?$'
+# A redirection and its target. The target excludes parens so that `<(cmd)` and
+# `>(cmd)` are left whole for the process-substitution checks to see.
+LEADING_REDIRECT_RE='^[0-9]*(>>?|<)[[:space:]]*[^[:space:];|&<>()]+(.*)$'
+strip_leading_syntax() {
+  local s="$1"
+  while :; do
+    if [[ $s =~ ^[[:space:]]+(.*)$ ]]; then s="${BASH_REMATCH[1]}"; continue; fi
+    if [[ $s =~ ^\((.*)$ ]]; then s="${BASH_REMATCH[1]}"; continue; fi
+    if [[ $s =~ $LEADING_KEYWORD_RE ]]; then s="${BASH_REMATCH[2]}"; continue; fi
+    if [[ $s =~ $LEADING_REDIRECT_RE ]]; then s="${BASH_REMATCH[2]}"; continue; fi
+    break
+  done
+  printf '%s' "$s"
+}
 
 # The segment with leading assignments and wrapper commands removed. Both
 # parsers below start from this, so they cannot disagree about which word is the
@@ -578,7 +637,8 @@ COMMAND_WRAPPERS=" command env builtin exec nohup time xargs "
 # the verb. `NODE_ENV=production npm install react` walked past the install ban
 # on that disagreement alone.
 command_words() {
-  local seg="$1" first next after_wrapper=no
+  local seg first next after_wrapper=no
+  seg="$(strip_leading_syntax "$1")"
   while :; do
     first="$(printf '%s' "$seg" | awk '{print $1}')"
     case "$first" in
@@ -590,6 +650,15 @@ command_words() {
       # never mistaken for something to skip.
       -*)
         if [ "$after_wrapper" = yes ]; then :; else break; fi
+        ;;
+      # `timeout` takes a DURATION between itself and the command, so listing it
+      # as a wrapper alone left the token as `5` and closed nothing. A bare
+      # number with an optional s/m/h/d suffix, and only directly after a
+      # wrapper, is that duration: no command is named `5` or `30s`, and
+      # `nice -n 10 git merge` gets the same treatment for free. `env 7z x`
+      # keeps its command word, because `7z` is not a duration.
+      [0-9]*)
+        if [ "$after_wrapper" = yes ] && [[ $first =~ ^[0-9]+(\.[0-9]+)?[smhd]?$ ]]; then :; else break; fi
         ;;
       *)
         case "$COMMAND_WRAPPERS" in
@@ -986,8 +1055,21 @@ enforce_coder() {
 # The only role that may run anything and the only one whose write rule is a
 # denial rather than an allowlist. Both are deliberate. Mutation testing is
 # copy, change, run, so a command allowlist would have to be wide enough to
-# express nothing, and the writes that matter are the ones that would land in
-# the tree under test. check-write-scope.py holds that half.
+# express nothing.
+#
+# Be exact about what holds the write half, because this comment used to say
+# check-write-scope.py held it and that is more than it does.
+# check-write-scope.py only ever sees Write, Edit, MultiEdit and NotebookEdit,
+# which is the TOOL half. It holds nothing at all against Bash, and Bash is
+# where this role spends its whole working life: `echo mutated >
+# claude-agents/agents/coder.md`, `cp /tmp/x claude-agents/workflows/
+# review-round.js` and `rm -rf claude-agents` are every one of them allowed for
+# refuter today, confirmed against this hook.
+#
+# enforce_fleet_steward below resolves and checks redirection targets for an
+# equivalent rule, so the pattern exists in this file and is simply not applied
+# here. Narrowing it is a real change rather than a comment fix, and it would
+# still only reach redirections, not `cp` or `rm`. It is on the open-items list.
 #
 # What is left for here is git: read-only, the same verbs the reviewer has. It
 # mutates a scratch copy and never moves a ref in the real repository.

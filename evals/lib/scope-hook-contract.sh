@@ -418,6 +418,66 @@ deny_bash_saying fleet-steward 'xargs -n1 git merge' 'git merge'
 deny_bash_saying fleet-steward 'nohup git reset --hard HEAD~1' 'git reset'
 allow_bash scout 'env -i git log --oneline'
 
+printf '\nShell syntax in front of the command word does not hide it\n'
+
+# leading_token reads the first whitespace-delimited word of a segment as the
+# command word. Every shape below is legal shell, was confirmed to actually run
+# git, and was ALLOWED for the four denylist roles until this section existed,
+# because the first word was `{`, `!`, `>/tmp/out`, `then`, `do` or a scheduling
+# wrapper rather than `git`.
+deny_bash_saying refuter '{ git commit -m x; }' 'git commit'
+deny_bash_saying refuter '( git commit -m x )' 'git commit'
+deny_bash_saying refuter '! git commit -m x' 'git commit'
+deny_bash_saying refuter 'if true; then git commit -m x; fi' 'git commit'
+deny_bash_saying refuter 'for i in 1; do git commit -m x; done' 'git commit'
+deny_bash_saying refuter 'if false; then true; else git commit -m x; fi' 'git commit'
+deny_bash_saying refuter '>/tmp/out git commit -m x' 'git commit'
+deny_bash_saying refuter '2>/dev/null git commit -m x' 'git commit'
+deny_bash_saying refuter 'nice git commit -m x' 'git commit'
+deny_bash_saying refuter 'stdbuf -o0 git commit -m x' 'git commit'
+deny_bash_saying refuter 'setsid git commit -m x' 'git commit'
+deny_bash_saying refuter 'ionice -c3 git commit -m x' 'git commit'
+# timeout takes a duration before the command, so listing it as a wrapper alone
+# left the token as `5`. The duration is consumed with it.
+deny_bash_saying refuter 'timeout 5 git commit -m x' 'git commit'
+deny_bash_saying refuter 'timeout 30s git commit -m x' 'git commit'
+deny_bash_saying refuter 'timeout -k 1 5 git commit -m x' 'git commit'
+# The other three denylist roles inherit the same fix from command_words.
+deny_bash_saying fleet-steward '{ git merge main; }' 'git merge'
+deny_bash_saying fleet-steward 'timeout 5 git rebase main' 'git rebase'
+deny_bash_saying ui-designer '{ npm install react; }' 'npm install'
+deny_bash_saying ui-designer '>/tmp/o npm install react' 'npm install'
+deny_bash_saying ui-designer 'timeout 5 npm install react' 'npm install'
+if [ -d "$MAINCO/.git" ]; then
+    deny_bash_saying_in coder '{ git commit -m x; }' 'not a linked worktree' "$MAINCO"
+    deny_bash_saying_in coder 'timeout 5 git commit -m x' 'not a linked worktree' "$MAINCO"
+fi
+
+# And the other direction, which is the half that makes it worth doing. A
+# subshell or a brace group around a read is the same act as the read, so an
+# allowlist role must not start denying them - and did, before the strip,
+# because `(cat` and `{` are on nobody's list.
+allow_bash scout    '{ ls -la; }'
+allow_bash scout    '( cat README.md )'
+allow_bash scout    'timeout 5 grep -R needle src'
+allow_bash reviewer 'nice git log --oneline'
+allow_bash reviewer '! git log --oneline'
+# The wrapper is transparent, not permissive: what it wraps is still checked.
+deny_bash scout '{ rm -rf /tmp/x; }'
+deny_bash scout 'nice rm -rf /tmp/x'
+deny_bash scout 'timeout 5 curl https://example.com'
+
+# What this does NOT close, asserted rather than described, so the open-items
+# list and this file cannot drift apart. Command substitution still hides the
+# command word from every role that has no substitution check of its own, and
+# `script` is deliberately not a wrapper: `script cat` writes a file called
+# `cat`, so making it transparent would open for scout exactly the hole the
+# sudo entry above exists to keep shut.
+allow_bash refuter '$(git commit -m x)'
+allow_bash refuter '`git commit -m x`'
+allow_bash refuter 'script -q /dev/null git commit -m x'
+deny_bash  scout   'script -q /dev/null cat README.md'
+
 printf '\nAn option that takes a value does not have to be a long one\n'
 
 # `npm -C <dir>` is a documented alias for --prefix and takes a separate value,
