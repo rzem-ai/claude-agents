@@ -316,12 +316,23 @@ recover_interpreter_payloads() {
 # command does not merely evade the role that was slow - it turns every guard
 # off for that call, for every role. That is the failure this bounds against.
 #
-# The length is bounded rather than the cost chased. 8192 bytes, because:
-# the longest command in this repo's entire eval corpus is under 200 bytes;
-# a deliberately generous real one - a long commit message, a find with a
-# dozen paths - is a few hundred more; and nothing a person or an agent types
-# comes near 8 KB. It also keeps the whole hook under a second, which a cap in
-# the tens of KB does not - 16 KB of scanned text measures 1.2s.
+# The length is bounded at 8192 bytes, because: the longest command in this
+# repo's entire eval corpus is under 200 bytes; a deliberately generous real one
+# - a long commit message, a find with a dozen paths - is a few hundred more;
+# and nothing a person or an agent types comes near 8 KB.
+#
+# What that bound does NOT do is keep the hook fast. Length is not the cost.
+# The table above is a single segment, where the parsing is paid once; the cost
+# is dominated by how many segments there are, because every segment pays six to
+# ten subprocess spawns of its own through leading_token, command_words,
+# unescape_words and sub_verb. Measured after the byte bound shipped, scout:
+#
+#     200 x `git log` chained with `;`   2000 bytes    13.8s
+#     200 x `ls -la`  chained with `;`   1800 bytes     9.6s
+#
+# Both are a quarter of SCAN_MAX and both reach the 10 second timeout. So the
+# segment count is bounded too, below, and the two bounds are separate because
+# they bound different quantities.
 #
 # Truncating is not skipping, and the difference matters. The head of the
 # command is still scanned, so `git commit -m x && <80 KB of padding>` is
@@ -344,6 +355,43 @@ bound_scan() {
   if [ "${#text}" -le "$SCAN_MAX" ]; then printf '%s' "$text"; return 0; fi
   log "$2 is ${#text} bytes, $(( ${#text} - SCAN_MAX )) over the ${SCAN_MAX}-byte scan bound; scanning the first ${SCAN_MAX} bytes only, so a verb past that point will not be seen"
   printf '%s' "${text:0:$SCAN_MAX}"
+}
+
+# 16 segments, chosen by measuring rather than by taste. On this machine, scout,
+# which is the slowest role, against the 10 second timeout:
+#
+#     segments   `git log` each   `A=1 B=2 env xargs git -C /tmp/x log` each
+#         16          1.8s                      3.8s
+#         32          2.7s                      7.2s
+#         64          4.9s                     13.5s
+#        128          9.1s                        -
+#
+# The right-hand column is the most expensive segment shape found: leading
+# assignments and wrapper commands make command_words loop, spawning two more
+# processes per word, before either parser reaches a command word. 16 is the
+# largest cap that leaves that shape comfortably inside the timeout - 3.8s here,
+# so still inside it on hardware two and a half times slower. 32 measures 7.2s
+# and leaves no such room.
+#
+# It is generous against real work by a wide margin. This repo's whole scope-hook
+# corpus tops out at four segments, and the longest realistic command anyone has
+# written against this fleet - copy the tree, change it, run the tests - is three.
+SEGMENT_MAX=16
+
+# Prints at most SEGMENT_MAX segments of its newline-separated input, and says
+# so loudly when it drops the rest. $1 the segments.
+#
+# Blank segments are dropped BEFORE the count rather than after it. Every loop
+# below skips them anyway, and counting them would have made `;;;;;;;;;;;;;;;;`
+# in front of a command a one-line way of pushing the verb past this bound -
+# a bound that creates its own bypass is not a bound.
+bound_segments() {
+  local segs total
+  segs="$(printf '%s\n' "$1" | grep -v '^[[:space:]]*$' || true)"
+  total="$(printf '%s' "$segs" | grep -c '' || true)"
+  [ "$total" -le "$SEGMENT_MAX" ] && { printf '%s' "$segs"; return 0; }
+  log "the command splits into $total segments, $(( total - SEGMENT_MAX )) over the ${SEGMENT_MAX}-segment scan bound; scanning the first ${SEGMENT_MAX} only, so a verb in a later segment will not be seen"
+  printf '%s' "$segs" | head -n "$SEGMENT_MAX"
 }
 
 if [ -n "$command_str" ]; then
@@ -600,7 +648,7 @@ enforce_scout() {
   esac
 
   # Split on the shell operators that start a new command.
-  scan="$(printf '%s' "$scan" | sed -E 's/(\|\||&&|;|\||&)/\n/g')"
+  scan="$(bound_segments "$(printf '%s' "$scan" | sed -E 's/(\|\||&&|;|\||&)/\n/g')")"
   while IFS= read -r seg; do
     seg="$(printf '%s' "$seg" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
     [ -n "$seg" ] || continue
@@ -754,7 +802,7 @@ enforce_fleet_steward() {
       deny "fleet-steward invariant: \"Never touch anything outside the claude-agents working copy.\" A command substitution hides where its inner command writes, so this check cannot confirm the write stays inside the working copy. Run the inner command on its own line." ;;
   esac
 
-  scan="$(printf '%s' "$scan" | sed -E 's/(\|\||&&|;|\||&)/\n/g')"
+  scan="$(bound_segments "$(printf '%s' "$scan" | sed -E 's/(\|\||&&|;|\||&)/\n/g')")"
   while IFS= read -r seg; do
     seg="$(printf '%s' "$seg" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
     # leading_token, not the raw first word: an assignment or a wrapper in front
@@ -830,7 +878,7 @@ enforce_reviewer() {
       deny "reviewer invariant: no process substitution. Run the commands separately." ;;
   esac
 
-  scan="$(printf '%s' "$scan" | sed -E 's/(\|\||&&|;|\||&)/\n/g')"
+  scan="$(bound_segments "$(printf '%s' "$scan" | sed -E 's/(\|\||&&|;|\||&)/\n/g')")"
   while IFS= read -r seg; do
     seg="$(printf '%s' "$seg" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
     [ -n "$seg" ] || continue
@@ -907,7 +955,7 @@ enforce_coder() {
 
   local scan seg verb target gitdir
   scan="$(strip_quoted "$command_str")"
-  scan="$(printf '%s' "$scan" | sed -E 's/(\|\||&&|;|\||&)/\n/g')"
+  scan="$(bound_segments "$(printf '%s' "$scan" | sed -E 's/(\|\||&&|;|\||&)/\n/g')")"
   while IFS= read -r seg; do
     seg="$(printf '%s' "$seg" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
     [ -n "$seg" ] || continue
@@ -951,7 +999,7 @@ enforce_refuter() {
 
   local scan seg verb
   scan="$(strip_quoted "$command_str")"
-  scan="$(printf '%s' "$scan" | sed -E 's/(\|\||&&|;|\||&)/\n/g')"
+  scan="$(bound_segments "$(printf '%s' "$scan" | sed -E 's/(\|\||&&|;|\||&)/\n/g')")"
   while IFS= read -r seg; do
     seg="$(printf '%s' "$seg" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
     [ -n "$seg" ] || continue
@@ -1015,7 +1063,7 @@ enforce_ui_designer() {
 
   local scan seg tok verb
   scan="$(strip_quoted "$command_str")"
-  scan="$(printf '%s' "$scan" | sed -E 's/(\|\||&&|;|\||&)/\n/g')"
+  scan="$(bound_segments "$(printf '%s' "$scan" | sed -E 's/(\|\||&&|;|\||&)/\n/g')")"
   while IFS= read -r seg; do
     seg="$(printf '%s' "$seg" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//')"
     [ -n "$seg" ] || continue
