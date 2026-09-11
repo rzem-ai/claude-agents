@@ -8,6 +8,10 @@ The version in `.claude-plugin/plugin.json` is load-bearing. Clients keep the ca
 
 ## [Unreleased]
 
+### Changed
+
+- **The plan moved from the root `README.md` to `docs/fleet-plan.md`, and the README became a front door.** A repository whose README is a 302-line plan tells a newcomer nothing about what the repo is or how to use it. The plan is unchanged and still canonical - "plan section N" anywhere in the repo means `docs/fleet-plan.md` now - with only its own location lines corrected: the header sentence that named `README.md` as its home, and the section 10 tree, which gains `docs/fleet-plan.md` and re-describes `README.md`. The name is `fleet-plan` rather than `plan` because `docs/plans/` already holds the glossary's per-issue plans and the vocabulary does not need a third thing called plan. The steward's editing list in `agents/fleet-steward.md` follows the file. Everything that records what was true when written - the released entries below, `docs/runs/`, `docs/plans/`, the plan's own "Changelog since" sections - is untouched, as are the eval fixtures that use `README.md` as a path under test, because the file still exists and they exercise the scope hook, not the plan.
+
 ## [0.7.1] - 2026-09-10
 
 The round that read 0.7.0's own claims back and found four of them wrong. Most of what is below is a correction rather than a feature, including a bound that did not bound what it said it bounded and a test that did not test what its comment said it tested. The suite goes from 627 numbered checks to 682, and the ways past `enforce-agent-scope.sh` that are known are now five rather than three, because looking properly found two more.
