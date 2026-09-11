@@ -34,6 +34,8 @@ If the human declines the interview, fill the markers you inferred with confiden
 
 ## 4. Report
 
-End with a short report: what was created, what was merged and which keys, what was skipped and why, any settings conflicts, and any markers still unfilled. Remind the human to commit `.claude/settings.json` (and the rest) so every clone and every Claude Code on the web session gets the same fleet, and that a restart plus trusting the folder is what actually installs the plugin if it was not installed before.
+End with a short report: what was created, what was merged and which keys, what was skipped and why, any settings conflicts, and any markers still unfilled. Remind the human to commit `.claude/settings.json` (and the rest) so every clone and every Claude Code on the web session gets the same fleet.
+
+Then say what comes next, exactly: restart Claude Code and trust the folder - the new settings, `CLAUDE.md` and (if it was not already installed) the plugin all load at session start, so nothing done here is live until then - and in the new session run `/claude-agents:kickoff` to verify the install and start the first piece of work.
 
 Re-running this command is safe: every step skips what already exists, and step 3 only offers markers still present.

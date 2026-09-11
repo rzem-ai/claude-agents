@@ -8,6 +8,22 @@ The version in `.claude-plugin/plugin.json` is load-bearing. Clients keep the ca
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-09-11
+
+The release that closes the gap 0.10.0 opened. Init runs in the old session, but nothing it writes - settings, `CLAUDE.md`, the plugin itself - is live until the next one, and the first live session had no obvious way to start working. The restart is structural and cannot be engineered away, so the fix is a bridge across it.
+
+### Added
+
+- **`/claude-agents:kickoff`, the other side of the restart.** It preflights the install - the ten agents visible, `agent` set to the lead, `CLAUDE.md` present with no `<FILL: ...>` marker surviving, the glossary rule and work directories in place, the board reachable only if one is configured - and collects every failure with its one-line fix rather than stopping at the first. On a green preflight it takes the idea typed after the command, or asks for one and waits, and starts the fleet's own intake: recall, scout if the idea touches existing code, then `spec-writer` with the idea verbatim, the spec-to-plan flow the lead's routing already prescribes. On a red preflight it stops. It deliberately does not brainstorm in the main session - the interview lives in `spec-writer` since 0.8.2, and kickoff routes to it rather than duplicating it.
+
+### Changed
+
+- **Init's report now ends with the bridge.** Restart, trust the folder, run `/claude-agents:kickoff` - stated as the reason (everything loads at session start) rather than bare instructions. The README's command route says the same.
+
+### Fixed
+
+- A stray empty `skills/brainstorming/` directory left behind when 0.8.3 removed the skill.
+
 ## [0.10.0] - 2026-09-11
 
 The release that turns the README's per-project setup into one command. Wiring a project used to mean copying a settings template, copying a skeleton, copying a rule and then filling markers by hand - four manual steps documented in prose, and a fresh project this week showed how easily the sequence stalls halfway. Now the plugin does its own induction.
