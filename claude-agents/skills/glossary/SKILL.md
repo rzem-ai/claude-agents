@@ -1,17 +1,17 @@
 ---
 name: glossary
-description: The fleet's shared vocabulary - the agreed meaning of Initiative, Project, Milestone, Issue, Sub-issue, Task, Spec, Plan, Phase, Round, Session, Lead, Subagent, Teammate, Handoff, Run article, Gate, Board, Human queue, Eval and Sprite, and what each maps to in Notion, Claude Code and the repo. Preloaded into every fleet agent; use these words with these meanings and no others.
+description: The fleet's shared vocabulary - the agreed meaning of Initiative, Project, Milestone, Issue, Sub-issue, Task, Spec, Plan, Phase, Round, Session, Lead, Subagent, Teammate, Handoff, Run article, Gate, Board, Human queue, Eval and Sprite, and what each maps to in Linear, Claude Code and the repo. Preloaded into every fleet agent; use these words with these meanings and no others.
 ---
 
 Canonical copy. `claude-agents/templates/rules/glossary.md` is generated from this file - edit here, never there.
 
 | Term | Meaning | Maps to |
 |---|---|---|
-| Initiative | A goal spanning several projects (e.g. "agent platform v5") | Select field on the Projects database |
-| Project | A bounded body of work in one repo or product area | Row in the Projects database |
-| Milestone | A checkpoint inside a project with a date or a deliverable | Field on a Tasks row |
-| Issue | The unit of tracked work a human cares about. Has a spec or is trivial | Row in the Tasks database |
-| Sub-issue | A child of an issue, still tracked on the board | Self-relation on the Tasks database |
+| Initiative | A goal spanning several projects (e.g. "agent platform v5") | Linear initiative |
+| Project | A bounded body of work in one repo or product area | Linear project |
+| Milestone | A checkpoint inside a project with a date or a deliverable | Linear project milestone |
+| Issue | The unit of tracked work a human cares about. Has a spec or is trivial | Linear issue (`RZE-123`) |
+| Sub-issue | A child of an issue, still tracked on the board | Linear sub-issue |
 | Task | The unit of agent execution inside a session. Cheap, many, never on the board | Claude Code task list item (`TaskCreate`) |
 | Spec | What and why, human-approved before planning. Written by `spec-writer` | `docs/specs/<issue>.md` |
 | Plan | How, in phases, produced from a spec. Written by the lead, approved by the human | `docs/plans/<issue>.md` |
@@ -24,8 +24,8 @@ Canonical copy. `claude-agents/templates/rules/glossary.md` is generated from th
 | Handoff | The structured result a subagent returns. Always four headings: Done, Not done, Unverified, Decisions needed. Lines under the last are typed: `Blocker:`, `Propose item:`, `Propose memory:` | Agent tool result, `handoff` skill |
 | Run article | The readable account of one run - what was tried, abandoned and why - written only when the spawn prompt asks for one | `docs/runs/<date>-<agent>-<issue>.md`, `run-article` skill |
 | Gate | A point where a human must approve before the next phase | `TaskCompleted` hook or plan approval |
-| Board | The Tasks database as five columns: to do, doing, blocked, blocked by human, done | Notion board view |
-| Human queue | The "blocked by human" column. The one thing the human monitors | Notion board column |
+| Board | The team's issues as five columns: to do, doing, blocked, blocked by human, done | Linear board view, grouped by workflow state |
+| Human queue | The "blocked by human" column. The one thing the human monitors | Linear workflow state |
 | Eval | A smoke test for one agent: three to five prompts, a rubric, a baseline score. Run in CI on every definition change | `claude -p` in `claude-agents` CI |
 | Sprite | A home-lab AI personal assistant with a persistent identity. Out of scope here; the fleet has no Sprites | Agent SDK agent |
 

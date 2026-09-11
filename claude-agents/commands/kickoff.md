@@ -1,5 +1,5 @@
 ---
-description: Preflight the fleet in this project - plugin, agents, settings, skeleton - check or set up the Notion board, then take the first idea and start the spec pipeline on it
+description: Preflight the fleet in this project - plugin, agents, settings, skeleton - check or set up the Linear board and state its conventions, then take the first idea and start the spec pipeline on it
 argument-hint: [the idea, in a sentence or a brain dump]
 ---
 
@@ -14,19 +14,31 @@ Check each of these, collecting results rather than stopping at the first failur
 3. **Skeleton.** `CLAUDE.md` exists at the project root and contains no `<FILL: ...>` markers. A marker left in place is a line the session reads literally on every turn, so surviving markers are a failure, not a note.
 4. **Glossary rule.** `.claude/rules/glossary.md` exists.
 5. **Work directories.** `docs/specs/` and `docs/plans/` exist.
-6. **Board.** The full check-and-setup is its own step below; here just note whether the Notion tools are available at all. No Notion connector means no board, which is fine and is not a failure.
+6. **Board.** The full check-and-setup is its own step below; here just note whether the Linear tools are available at all. No Linear connector means no board, which is fine and is not a failure.
 
 If anything failed: report every failure with its one-line fix (`/claude-agents:init` for missing skeleton pieces, restart-and-trust for a plugin or agent problem, edit the marker for a surviving `<FILL: ...>`), and stop. Do not start work on a red preflight.
 
 ## Board
 
-Run this step only when the Notion tools are available. Read the `board` skill first; it is the contract this step is verifying. No board is a legitimate outcome throughout - most work is not board work, and the human declining any part of this is a note in the report, never a failure.
+Run this step only when the Linear tools are available. Read the `board` skill first; it is the contract this step is verifying. No board is a legitimate outcome throughout - most work is not board work, and the human declining any part of this is a note in the report, never a failure.
 
-**Check.** Search Notion for the two databases the board skill describes, **Projects** and **Tasks**. If both exist, verify the Tasks schema: a Status property whose options carry the five names the hooks expect by default - `To do`, `Doing`, `Blocked`, `Blocked by human`, `Done` - plus a relation to Projects, a Milestone field, a sub-issue self-relation and an Outcome field. Report drift precisely: a misspelled option's fix is renaming it in Notion or overriding `BOARD_COL_*` in `~/.config/claude-agents/board.env`, and the two fixes are not equivalent - the override leaves every other tool seeing the odd name.
+**Check.** Resolve the workspace and its team, then verify the pieces the fleet leans on:
 
-**Setup.** If either database is missing, say what would be created and ask the human before creating anything - these are writes to their workspace. On a yes: create Projects, then Tasks with the schema above and a board view grouped by Status. Create Status as a `select` property, not `status`: the Notion API cannot create options on a `status` property, and the hooks already try both types and pin the one that works. If the human prefers a `status` property, create the databases without it and hand them the five option names to add by hand.
+- The team's workflow states cover the five columns - `To do`, `Doing`, `Blocked`, `Blocked by human`, `Done`. The hooks match state names ignoring case and spaces, so `Todo` satisfies `To do`; anything further apart needs either a rename in Linear or a `BOARD_COL_*` override in `~/.config/claude-agents/board.env`, and the two fixes are not equivalent - the override leaves every other tool seeing the odd name. `Blocked` and `Blocked by human` are the ones a team usually lacks.
+- A Linear project exists for this repo. Match by name against the repo, or by a label naming it.
+- The outcome labels `outcome/shipped`, `outcome/abandoned` and `outcome/superseded` exist on the team.
 
-**What this step cannot do, said out loud.** The hooks authenticate with their own integration token at `~/.config/claude-agents/notion.token`, which every agent is denied by design - so this step can never test that token, and a board green here can still fail in the hooks. End the board section of the report with the two manual checks: the databases are shared with the hooks' Notion integration, and the token file exists at that path with mode 600 (rendered by `scripts/install-home.sh`). A `no board item` or HTTP-error line in `~/.local/state/claude-agents/log/hooks.log` after the first real spawn is the symptom of either one missing.
+**Setup.** Say what is missing and ask the human before creating anything - these are writes to their workspace. On a yes: create the project for this repo (with a label naming the repo) and the outcome labels. Workflow states are the one thing the Linear MCP cannot create - if `Blocked` or `Blocked by human` is missing, hand the human the exact instruction instead: add both in the team's workflow settings with the `started` type, since an item in either is picked up, not waiting to start.
+
+**State the conventions.** End the board section by saying, concretely for this workspace, what the fleet will use - so the session and the human agree before the first issue is filed:
+
+- the team and its key (which is what an issue ref like `RZE-123` carries),
+- the project this repo's issues go in,
+- the five column names as this team spells them, and any `BOARD_COL_*` override that implies,
+- labels: the repo label on the project, `outcome/*` on issues at close, nothing else load-bearing,
+- and the binding reminder: a board session launches with `CLAUDE_AGENTS_BOARD_PAGE_ID=<issue ref>`, and only a task subject carrying `[board:<issue ref>]` closes an issue.
+
+**What this step cannot do, said out loud.** The hooks authenticate with their own API key at `~/.config/claude-agents/linear.token`, which every agent is denied by design - so this step can never test that key, and a board green here can still fail in the hooks. End with the one manual check: the key file exists at that path with mode 600 (rendered by `scripts/install-home.sh`). A `no board item` or HTTP-error line in `~/.local/state/claude-agents/log/hooks.log` after the first real spawn is the symptom of it missing.
 
 ## The idea
 

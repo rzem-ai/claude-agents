@@ -30,17 +30,17 @@
 #      are strict on purpose and are the same rules evals/lib/handoff-check.sh
 #      applies in CI: see hooks/README.md, "The handoff-format check".
 #
-# Every Notion failure is soft. The only thing that exits 2 here is a malformed
-# handoff, and it exits 2 for that reason alone - never because Notion was
+# Every board failure is soft. The only thing that exits 2 here is a malformed
+# handoff, and it exits 2 for that reason alone - never because Linear was
 # unreachable.
 set -euo pipefail
 
 HOOK=SubagentStop
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=lib/notion.sh
-. "$HOOK_DIR/lib/notion.sh"
+# shellcheck source=lib/linear.sh
+. "$HOOK_DIR/lib/linear.sh"
 
-trap 'notion_tmp_cleanup' EXIT
+trap 'linear_tmp_cleanup' EXIT
 trap 'board_log "$HOOK" "unexpected error on line $LINENO; session continues"; exit 0' ERR
 
 # --------------------------------------------------------------- the validator

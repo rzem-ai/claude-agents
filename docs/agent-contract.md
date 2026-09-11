@@ -119,7 +119,7 @@ The fleet uses three servers today, all reached as claude.ai connectors. A conne
 | Server | Granted as | Carried by | Where the name came from |
 |---|---|---|---|
 | rzem-memory, the "Memory" connector at memory-mcp.rzem.ai | `mcp__claude_ai_Memory__<tool>` | all ten agents | `claude mcp list` on the human's laptop, 9 September 2026 |
-| Notion | `mcp__claude_ai_Notion`, and `mcp__claude_ai_Notion__<tool>` in `disallowedTools` | `spec-writer`, `fleet-steward`, the lead | `claude mcp list` on the human's laptop, 9 September 2026 |
+| Linear | `mcp__claude_ai_Linear__<tool>`, granted per tool and denied per tool | `spec-writer`, `fleet-steward`, the lead | tool listing in a live session, 12 September 2026 |
 | Hugging Face | `mcp__claude_ai_Hugging_Face` | `researcher` | `claude mcp list` on the human's laptop, 9 September 2026 |
 
 Context7 is not installed, so `coder` does not carry it. When it is, it arrives either as a connector (`mcp__claude_ai_Context7`) or, from the official plugin, as `mcp__plugin_context7_<server>`. Add the entry to the body only once `claude mcp list` shows it, and record the spelling here first.

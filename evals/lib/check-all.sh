@@ -2,7 +2,7 @@
 #
 # check-all.sh - every deterministic check in the repository, in one command.
 #
-# None of these calls a model, opens a network connection, or touches Notion,
+# None of these calls a model, opens a network connection, or touches Linear,
 # so this is the thing to run before a commit and the thing CI should run. The
 # model evals under evals/run.sh are separate and cost money.
 #

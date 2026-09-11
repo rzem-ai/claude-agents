@@ -12,7 +12,7 @@
 # marker file, and the output - so the comment says only those things.
 #
 # The board write happens on both paths, and it happens before the exit, so the
-# gate firing never costs the board its update. Notion being unreachable never
+# gate firing never costs the board its update. Linear being unreachable never
 # changes the verdict: the exit 2 is about the tests and nothing else.
 #
 # "Tests pass" is not something the harness tells us, so it is resolved in
@@ -22,10 +22,10 @@ set -euo pipefail
 
 HOOK=TaskCompleted
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=lib/notion.sh
-. "$HOOK_DIR/lib/notion.sh"
+# shellcheck source=lib/linear.sh
+. "$HOOK_DIR/lib/linear.sh"
 
-trap 'notion_tmp_cleanup' EXIT
+trap 'linear_tmp_cleanup' EXIT
 trap 'board_log "$HOOK" "unexpected error on line $LINENO; task allowed through"; exit 0' ERR
 
 CLAUDE_AGENTS_TEST_GATE="${CLAUDE_AGENTS_TEST_GATE:-lenient}"
@@ -174,8 +174,8 @@ fi
 # Which run this was, for the archive a cut comment points at. This hook's own
 # comment is bounded well under the cap - the test detail is at most fifteen
 # lines cut to 200 characters each - so it should never be the one that cuts.
-# It can be if board.env lowers NOTION_COMMENT_MAX_CHARS, and the archiving
-# lives in notion_comment either way, so all this hook owes it is a label.
+# It can be if board.env lowers BOARD_COMMENT_MAX_CHARS, and the archiving
+# lives in linear_comment either way, so all this hook owes it is a label.
 BOARD_RUN_SESSION="$session_id"
 BOARD_RUN_STATUS="test gate: $verdict"
 

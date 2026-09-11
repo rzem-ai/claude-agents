@@ -20,7 +20,7 @@
 #
 # Usage:  evals/lib/board-hook-contract.sh [-v]
 #
-# Nothing here touches Notion: CLAUDE_AGENTS_BOARD=off, a throwaway config and
+# Nothing here touches Linear: CLAUDE_AGENTS_BOARD=off, a throwaway config and
 # state directory, and no token is ever loaded.
 
 set -uo pipefail
@@ -98,6 +98,20 @@ run_hook board-task-completed.sh \
     "$(jq -nc --arg a "Real [board:$PAGE_A]" --arg b "Stale [board:$PAGE_B]" --arg c "$TMP" \
         '{session_id:"s1",cwd:$c,task_id:"t1",task_subject:$a,task_title:$b}')"
 log_has "names board item $PAGE_A_H" && ! log_has "$PAGE_B_H"; check subject-wins "task_subject wins over a conflicting task_title" $?
+
+# The board backend is Linear, so a ref is most often an identifier or an
+# issue URL, and both must normalise: the identifier uppercased, the URL to
+# the identifier in its path with the title slug ignored even when the slug
+# itself is identifier-shaped.
+run_hook board-task-completed.sh \
+    "$(jq -nc --arg s "Ship the refresh [board:rze-123]" --arg c "$TMP" \
+        '{session_id:"s1",cwd:$c,task_id:"t1",task_subject:$s}')"
+log_has "names board item RZE-123"; check identifier-binds "a Linear identifier in the marker resolves, uppercased" $?
+
+run_hook board-task-completed.sh \
+    "$(jq -nc --arg s "Ship [board:https://linear.app/rzemai/issue/RZE-123/fix-thing-2]" --arg c "$TMP" \
+        '{session_id:"s1",cwd:$c,task_id:"t1",task_subject:$s}')"
+log_has "names board item RZE-123" && ! log_has "THING-2"; check issue-url-binds "a Linear issue URL resolves to its identifier, not its slug" $?
 
 printf '\nTaskCompleted: only an explicit issue task closes an issue\n'
 

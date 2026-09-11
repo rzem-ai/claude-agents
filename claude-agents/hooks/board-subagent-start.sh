@@ -4,15 +4,15 @@
 # can find it again.
 #
 # Fails soft, always. SubagentStart cannot block a spawn, and nothing about
-# Notion is allowed to matter to the session.
+# the board is allowed to matter to the session.
 set -euo pipefail
 
 HOOK=SubagentStart
 HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=lib/notion.sh
-. "$HOOK_DIR/lib/notion.sh"
+# shellcheck source=lib/linear.sh
+. "$HOOK_DIR/lib/linear.sh"
 
-trap 'notion_tmp_cleanup' EXIT
+trap 'linear_tmp_cleanup' EXIT
 trap 'board_log "$HOOK" "unexpected error on line $LINENO; session continues"; exit 0' ERR
 
 input="$(cat)"
@@ -59,7 +59,7 @@ if [ -z "$page_id" ] && [ -n "${CLAUDE_AGENTS_BOARD_PAGE_ID:-}" ]; then
   if page_id="$(normalise_page_id "$CLAUDE_AGENTS_BOARD_PAGE_ID")"; then
     source_of_id="CLAUDE_AGENTS_BOARD_PAGE_ID"
   else
-    board_log "$HOOK" "CLAUDE_AGENTS_BOARD_PAGE_ID is set but is not a Notion page id or URL"
+    board_log "$HOOK" "CLAUDE_AGENTS_BOARD_PAGE_ID is set but is not a Linear issue id, identifier or URL"
     page_id=""
   fi
 fi

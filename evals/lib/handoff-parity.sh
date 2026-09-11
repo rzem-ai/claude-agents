@@ -19,7 +19,7 @@
 # Usage:  evals/lib/handoff-parity.sh [-v]
 #           -v  also print each implementation's reasons for every case
 #
-# Nothing here touches Notion: the hook runs with CLAUDE_AGENTS_BOARD=off and a
+# Nothing here touches Linear: the hook runs with CLAUDE_AGENTS_BOARD=off and a
 # throwaway config and state directory.
 
 set -uo pipefail
@@ -45,8 +45,8 @@ command -v jq >/dev/null 2>&1 || {
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/handoff-parity.XXXXXX") || exit 2
 trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/config" "$TMP/state"
-printf 'not-a-real-token\n' > "$TMP/config/notion.token"
-chmod 600 "$TMP/config/notion.token"
+printf 'not-a-real-token\n' > "$TMP/config/linear.token"
+chmod 600 "$TMP/config/linear.token"
 
 export CLAUDE_AGENTS_CONFIG_DIR="$TMP/config"
 export CLAUDE_AGENTS_STATE_DIR="$TMP/state"

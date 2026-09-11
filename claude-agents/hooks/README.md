@@ -1,6 +1,6 @@
 # Hooks
 
-The machinery that writes the Notion board and enforces per-agent tool scoping. Four hooks, one shared library, no agent ever asked to remember anything.
+The machinery that writes the Linear board and enforces per-agent tool scoping. Four hooks, one shared library, no agent ever asked to remember anything.
 
 | File | Event | What it does |
 |---|---|---|
@@ -8,7 +8,7 @@ The machinery that writes the Notion board and enforces per-agent tool scoping. 
 | `board-subagent-stop.sh` | `SubagentStop` | **Blocked** on failure or cancellation, **Blocked by human** on a `Blocker:` line, a comment lifted from the handoff on every outcome, and the handoff-format check. Matched to the fleet agents only |
 | `board-task-completed.sh` | `TaskCompleted` | Tests pass, **Done**. Tests fail, **Blocked** with the failure as a comment, and exit 2 |
 | `enforce-agent-scope.sh` | `PreToolUse` | Denies tool calls that violate an agent's own Invariants |
-| `lib/notion.sh` | - | Token handling, the Notion calls, state files, page-id parsing |
+| `lib/linear.sh` | - | Token handling, the Linear GraphQL calls, state files, issue-ref parsing |
 | `hooks.json` | - | Registers the four above with Claude Code |
 
 Board writes are section 7 of the plan. `permissions.deny` is session-scoped, so `enforce-agent-scope.sh` is the per-agent half that settings cannot express; it is an addition to the plan, approved separately.
@@ -24,11 +24,11 @@ This is the part the plan left open. It says the hook "is expected to know the i
 **A board session is bound to one item at launch**, by environment variable:
 
 ```sh
-CLAUDE_AGENTS_BOARD_PAGE_ID=24f1a3b9c1d24e6f8a0b1c2d3e4f5061 \
+CLAUDE_AGENTS_BOARD_PAGE_ID=RZE-123 \
   claude --agent claude-agents:lead
 ```
 
-The value is a Notion page id, dashed or undashed, or the page URL copied straight out of Notion. `SubagentStart` normalises it to a dashed UUID and records it in a state file keyed by `session_id` and `agent_id`; `SubagentStop` reads that file back.
+The value is a Linear issue reference in any of the shapes a human has in hand: the identifier (`RZE-123`, any case), the issue URL copied straight out of Linear, or the issue's UUID, dashed or not. `SubagentStart` normalises it - identifier uppercased, UUID re-dashed lowercase - and records it in a state file keyed by `session_id` and `agent_id`; `SubagentStop` reads that file back.
 
 This is narrower than the convention it replaces, and it should not be sold as the same thing: all delegated work in that session belongs to that one item, so unrelated work starts in an unbound session. An unbound session moves no column, logs one line saying so, and exits 0 - which is also the right behaviour for the `scout` you spawned to answer a question. Most spawns are not board items.
 
@@ -39,8 +39,8 @@ Restoring per-agent binding needs a supported correlation between the Agent tool
 ### What must be wired up
 
 1. ~~The lead's body, or the `board` skill, must tell the lead to emit that line.~~ Done, in both: `agents/lead.md` step 6 carries the rule and `skills/board/SKILL.md`, "Telling the hooks which item", carries the full convention. Neither is a file this layer owns, so if either is rewritten without that content, every board write goes back to being a no-op and the log fills with "no board item" lines.
-2. ~~`scripts/install-home.sh` must render `~/.config/claude-agents/notion.token` at mode 600 (plan section 12).~~ Done. It rendered `notion-token` with a hyphen until 8 September 2026, which meant a correctly installed machine never had a token where `lib/notion.sh` looks for one.
-3. The Tasks database needs a status property whose options are named exactly `To do`, `Doing`, `Blocked`, `Blocked by human`, `Done`. If they are spelled differently, override the names in `board.env` (below).
+2. ~~`scripts/install-home.sh` must render the hooks' API token at mode 600 (plan section 12).~~ Done; the file is `~/.config/claude-agents/linear.token`, a Linear personal API key. (Its Notion predecessor was rendered as `notion-token` with a hyphen until 8 September 2026, which meant a correctly installed machine never had a token where the lib looked for one - the dot in the name is load-bearing.)
+3. The team's workflow states need to cover `To do`, `Doing`, `Blocked`, `Blocked by human` and `Done`. Matching ignores case and spaces, so a team's `Todo` satisfies `To do`; anything further apart is a rename in Linear or a `BOARD_COL_*` override in `board.env` (below). `Blocked` and `Blocked by human` are the two a team usually has to add, with the `started` type.
 
 ### The fallbacks, in order
 
@@ -81,16 +81,13 @@ Everything has a default. `~/.config/claude-agents/board.env` overrides them and
 
 ```sh
 # ~/.config/claude-agents/board.env
-NOTION_VERSION=2022-06-28
-BOARD_STATUS_PROPERTY=Status        # the property the board view groups by
-BOARD_STATUS_TYPE=status            # "status" or "select" - see below
 BOARD_COL_TODO="To do"
 BOARD_COL_DOING=Doing
 BOARD_COL_BLOCKED=Blocked
 BOARD_COL_BLOCKED_HUMAN="Blocked by human"
 BOARD_COL_DONE=Done
 
-NOTION_COMMENT_MAX_CHARS=8000       # how much of a card comment survives; see below
+BOARD_COMMENT_MAX_CHARS=8000        # how much of a card comment survives; see below
 
 CLAUDE_AGENTS_TEST_COMMAND=""       # empty means fall through to the marker file
 CLAUDE_AGENTS_TEST_GATE=lenient     # or "strict"
@@ -99,12 +96,12 @@ CLAUDE_AGENTS_TEST_STATUS_MAX_AGE=3600
 CLAUDE_AGENTS_REPO=""               # the claude-agents working copy, for fleet-steward
 ```
 
-A Notion board can be grouped by a `status` property or by a `select` property, and the PATCH body differs between them. The hooks try the configured type, and on a 400 retry once with the other, logging which one worked so you can pin it in `board.env` and skip the round trip.
+A column is a Linear workflow state, and a state move is two GraphQL calls: resolve the issue and its team's states, then `issueUpdate` with the state's UUID. State names are matched ignoring case and spaces, so the defaults find a conventionally named team without configuration; `BOARD_COL_*` covers the rest. GraphQL delivers most failures as an `errors` array inside a 200, so the lib checks the body on every call and never trusts the HTTP code alone.
 
 Two escape hatches:
 
 - `CLAUDE_AGENTS_BOARD=off`, or `touch ~/.local/state/claude-agents/disabled`, turns every board write into a log line. The test gate and the handoff check still run.
-- `BOARD_DRY_RUN=1` logs what would have been written without calling Notion, and prints the comment it would have posted to stderr in full rather than first line only, so a cut comment can be read as well as counted. This is how the tests below work. A dry run still writes an archive when a comment is cut, because a note naming a file that was never written is the bug this fixed.
+- `BOARD_DRY_RUN=1` logs what would have been written without calling Linear, and prints the comment it would have posted to stderr in full rather than first line only, so a cut comment can be read as well as counted. This is how the tests below work. A dry run still writes an archive when a comment is cut, because a note naming a file that was never written is the bug this fixed.
 
 ## What the card says
 
@@ -130,9 +127,9 @@ Three things worth knowing:
 
 ### Comment length
 
-Notion's [request limits](https://developers.notion.com/reference/request-limits) cap one rich text object at **2000 characters** and any rich text array at **100 elements**, inside a 500KB request. No limit is documented for comments specifically, so the real ceiling on one comment is 100 x 2000 characters.
+A Linear comment is one markdown body, no chunked rich-text array, so the cap here is for the reader rather than the API: a card comment is a summary, and the whole text of a long run belongs in the archive, not on the card.
 
-Nothing that belongs on a card is near that, and a request over either cap comes back 400, which loses the whole comment rather than its tail. So `notion_comment` cuts to `NOTION_COMMENT_MAX_CHARS` (default 8000) first and chunks at 1900 after: five objects at the default, never near the array cap, with `NOTION_COMMENT_HARD_MAX` clamping an over-generous `board.env` value back to 95 chunks. The cut happens inside `jq`, which counts Unicode codepoints the way Notion's limit does, so a multi-byte character is never split in half. No comment is ever posted empty.
+`linear_comment` cuts to `BOARD_COMMENT_MAX_CHARS` (default 8000), with `BOARD_COMMENT_HARD_MAX` clamping an over-generous `board.env` value. The cut happens inside `jq`, which counts Unicode codepoints, so a multi-byte character is never split in half. No comment is ever posted empty.
 
 ### Where the overflow goes
 
@@ -141,7 +138,7 @@ A cut comment used to end with a line saying the rest was "in the run transcript
 So a comment that has to be cut is archived whole first, and the note names the file it was archived in:
 
 ```
-[Cut to fit a Notion comment. The other 11750 characters, and this text in full,
+[Cut to fit a board comment. The other 11750 characters, and this text in full,
 are in ~/.local/state/claude-agents/archives/sess-91/20260908T140020Z-coder.md]
 ```
 
@@ -158,7 +155,7 @@ Four things it does deliberately:
 - **Fails soft, like every other board write.** If the directory cannot be made or the file cannot be written, the reason is logged, the note says the overflow was dropped and could not be archived, the cut comment still goes on the card, and the hook still exits 0. Archiving is not a new way to break a session and it is not a third exit 2.
 - **Writes nothing when the board is off.** `CLAUDE_AGENTS_BOARD=off` posts no comment, so there is no note for an archive to be the rest of.
 
-`TaskCompleted` is covered by the same code, because the archiving lives in `notion_comment` and every comment goes through it. Its own comment cannot reach the default cap - the test detail is at most fifteen lines cut to 200 characters each, so about 3KB with the headline - and it will only ever cut if `board.env` lowers `NOTION_COMMENT_MAX_CHARS`. It labels its run anyway, so if that day comes the archive says which session and which verdict rather than nothing.
+`TaskCompleted` is covered by the same code, because the archiving lives in `linear_comment` and every comment goes through it. Its own comment cannot reach the default cap - the test detail is at most fifteen lines cut to 200 characters each, so about 3KB with the headline - and it will only ever cut if `board.env` lowers `BOARD_COMMENT_MAX_CHARS`. It labels its run anyway, so if that day comes the archive says which session and which verdict rather than nothing.
 
 Nothing prunes the archives and nothing backs them up. A run worth keeping permanently gets promoted into the repo by a human; the `compound` skill says where.
 
@@ -273,22 +270,22 @@ This hook **fails open**. Bad input, a missing `jq`, an unexpected error: it log
 
 ## Security
 
-- The token is read from `~/.config/claude-agents/notion.token` (mode 600), rendered once by `scripts/install-home.sh`. **No hook ever calls `op`.** Plan section 12 is explicit: it adds latency to every subagent start and stop, and a locked `op` silently stops the board updating.
+- The token is read from `~/.config/claude-agents/linear.token` (mode 600), a Linear personal API key rendered once by `scripts/install-home.sh`. **No hook ever calls `op`.** Plan section 12 is explicit: it adds latency to every subagent start and stop, and a locked `op` silently stops the board updating.
 - The token never reaches a command line. `curl` is driven from a `--config` file written inside a 0700 temp directory and deleted immediately, so the Authorization header never appears in `ps` output. Passing it as `-H` would.
-- Nothing echoes it. `lib/notion.sh` runs `set +x` on load, API error text is passed through a redaction filter before it is logged, and `NOTION_TOKEN` is cleared after each write.
+- Nothing echoes it. `lib/linear.sh` runs `set +x` on load, API error text is passed through a redaction filter (anything `lin_api_`/`lin_oauth_`-shaped) before it is logged, and `LINEAR_TOKEN` is cleared after each write.
 - The token file's mode is checked and a warning logged if it is not 600 or 400.
 - `board.env` is sourced, which is code execution. It lives in the same 0700 directory as the token, which `permissions.deny` and the sandbox `denyRead`/`denyWrite` lists already keep away from every agent. If that directory is writable by something else, the token was gone first anyway.
 
 ## Failure behaviour
 
-Every board write fails soft: log to stderr, exit 0. Notion being down, the token being missing, `jq` not being installed, the page id being wrong - none of it stops a session.
+Every board write fails soft: log to stderr, exit 0. Linear being down, the token being missing, `jq` not being installed, the issue ref being wrong - none of it stops a session.
 
 Exactly two things exit 2, and each for its own reason:
 
 1. `SubagentStop`, when a successful run's handoff does not parse.
 2. `TaskCompleted`, when the tests fail (or when the gate is strict and no result is available).
 
-Neither exits 2 because Notion was unreachable. That separation is the point: a board that cannot be written is an inconvenience, a coder marking itself done on a red suite is not.
+Neither exits 2 because Linear was unreachable. That separation is the point: a board that cannot be written is an inconvenience, a coder marking itself done on a red suite is not.
 
 ## Testing
 
@@ -300,8 +297,8 @@ export CLAUDE_AGENTS_CONFIG_DIR=/tmp/ca/config
 export CLAUDE_AGENTS_STATE_DIR=/tmp/ca/state
 export BOARD_DRY_RUN=1
 mkdir -p "$CLAUDE_AGENTS_CONFIG_DIR"
-printf 'not-a-real-token\n' > "$CLAUDE_AGENTS_CONFIG_DIR/notion.token"
-chmod 600 "$CLAUDE_AGENTS_CONFIG_DIR/notion.token"
+printf 'not-a-real-token\n' > "$CLAUDE_AGENTS_CONFIG_DIR/linear.token"
+chmod 600 "$CLAUDE_AGENTS_CONFIG_DIR/linear.token"
 
 # 1. spawn: binds the agent and moves the item to Doing
 jq -n '{session_id:"s1",agent_id:"a1",agent_type:"coder",
@@ -351,11 +348,11 @@ To watch the real thing, run Claude Code with `--debug` - hook stderr goes to th
 
 - **`jq` or `curl` missing.** Both are checked and named in the log. The board stops updating; the session does not stop. macOS has `curl` but not `jq`.
 - **The lead not emitting `Board-Item:`.** Everything runs, nothing moves. This is the most likely failure and the log line for it is explicit.
-- **Column names that do not match.** Notion returns 400 and the log says so. Fix the names in `board.env`; do not rename the columns to match the code.
-- **The integration not being shared with the page.** Notion returns 404 for a page the integration cannot see, which reads as "wrong page id" but usually is not. Share the Tasks database with the integration.
+- **Column names that do not match.** The log says the team has no workflow state matching the column. Add the state in Linear or point `BOARD_COL_*` in `board.env` at the name the team uses; do not rename the fleet's columns to match the code.
+- **A key without workspace access.** Linear answers with an authentication error in the `errors` array, which the log carries after redaction. A personal API key sees what its user sees, so there is no share-the-database step - if the user can open the issue, the key can move it.
 - **Renaming or moving a script** without updating `hooks.json`. The paths there are literal.
 - **Dropping the execute bit.** `git update-index --chmod=+x` if it happens.
-- **`set -x` anywhere in these scripts.** It would print the token. `lib/notion.sh` disables it on load; do not turn it back on.
+- **`set -x` anywhere in these scripts.** It would print the token. `lib/linear.sh` disables it on load; do not turn it back on.
 - **Editing an agent's Invariants without editing `enforce-agent-scope.sh`.** The deny messages quote those invariants verbatim. If they drift apart, an agent gets told off for breaking a rule its body no longer states. The `migration-checklist` run is the place to catch that.
 
 ## Things the plan did not specify
@@ -363,7 +360,7 @@ To watch the real thing, run Claude Code with `--debug` - hook stderr goes to th
 Recorded here rather than discovered later. Every one of them is a decision this layer had to make on its own:
 
 1. **The `Board-Item:` spawn-prompt convention**, the `[board:<id>]` task-title marker, `CLAUDE_AGENTS_BOARD_PAGE_ID` and the state-file layout. The plan says the hook "is expected to know the item from the spawn context" and stops there.
-2. **`board.env` and every default in it.** The plan never names the status property, its type, or how the column labels are spelled in Notion.
+2. **`board.env` and every default in it.** The plan never names the workflow states or how the column labels are spelled in Linear.
 3. **How "tests pass" is decided**, the lenient default, the marker file and its staleness window. The plan asserts the gate and never says what it reads.
 4. **A comment on the card at every transition**, and where each one's text comes from. The plan specifies a comment only for the `Blocker:` path. A card that says nothing but which column it is in is a status light, not a board.
 5. **Where the overflow of a cut comment goes.** The plan says nothing about comment length, let alone about the part that does not fit. This layer's answer is one file per cut comment under the state directory, at `archives/<session_id>/<stamp>-<agent>.md`, and the state directory rather than the working directory because a worktree agent's cwd does not survive its own session. See "What the card says" above; the handoff format was not touched to get it.
@@ -372,10 +369,10 @@ Recorded here rather than discovered later. Every one of them is a decision this
 8. **The handoff check runs on success only**, and tolerates preamble prose, which is unparsed. Everything else in the skill is enforced strictly, including the blank-line rule and where a typed line may appear. See above for why.
 9. **`cd`, `pwd`, `echo` and `true`** added to scout's Bash allowlist, and the quote-stripping and `2>/dev/null` softenings.
 10. **`fleet-steward`'s repo-root resolution** by walking up from the plugin directory, and the git verb list, which is read off its Invariants prose.
-11. **`Notion-Version: 2022-06-28`.** No version is named anywhere in the plan.
+11. **The GraphQL endpoint and its error shape.** The plan names neither; `LINEAR_API` and the errors-in-a-200 check are this layer's choice.
 12. **The `SubagentStop` matcher.** The plan gives the hook to every subagent. Scoping it to the ten fleet agents is this layer's decision, made because the workflows spawn `Plan` and `general-purpose` lanes that return JSON.
 13. **`reviewer` and `ui-designer` scoping rules**, including the read-only git allowlist both share and the install-verb matching that keeps `ui-designer` able to build and serve a prototype.
-14. **The comment length cap.** `NOTION_COMMENT_MAX_CHARS`, its default of 8000 and the `NOTION_COMMENT_HARD_MAX` clamp. Notion documents a per-object and a per-array limit but nothing specific to comments, so where to cut is this layer's choice; see "Comment length" above.
+14. **The comment length cap.** `BOARD_COMMENT_MAX_CHARS`, its default of 8000 and the `BOARD_COMMENT_HARD_MAX` clamp. Linear imposes no limit a card comment would meet, so where to cut is this layer's choice, made for the reader; see "Comment length" above.
 15. **Field names - settled, September 2026.** This entry used to say the brief and the published examples disagreed, that the hooks read both spellings, and that someone should confirm which was real. Carrying both did not hedge the risk; it hid that *neither* was real.
 
 The docs pages truncate before the event sections, so the answer came from the zod schemas in the shipped CLI binary:

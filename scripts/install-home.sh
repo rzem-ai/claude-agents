@@ -8,7 +8,7 @@
 #      local agent copies. Copies, never symlinks: Cowork skips a symlinked
 #      ~/.claude/CLAUDE.md (section 8).
 #   2. Render the fleet secrets out of 1Password with `op read` into
-#      ~/.config/claude-agents/ at mode 600 - the Notion token the hooks use and
+#      ~/.config/claude-agents/ at mode 600 - the Linear API key the hooks use and
 #      the ten per-agent rzem-memory credentials (section 6).
 #
 # What it never touches: ~/.claude/projects/, sessions, history, todos, debug,
@@ -42,16 +42,16 @@ set -euo pipefail
 # ever need editing.
 #
 # Shape:  op://<vault>/<item>/<field>
-# Check one with:  op read 'op://Fleet/notion/credential'
+# Check one with:  op read 'op://Fleet/linear/credential'
 #
 # The vault holds fleet secrets only (section 12), so a service account scoped
 # to it cannot reach anything personal.
 
 OP_VAULT="Fleet"   # PLACEHOLDER: the dedicated fleet vault's name
 
-# The Notion integration token the board hooks read. Hooks read this file; the
+# The Linear API key the board hooks read. Hooks read this file; the
 # agents cannot, because ~/.config/claude-agents is in permissions.deny.
-OP_REF_NOTION_TOKEN="op://Fleet/notion/credential"                     # PLACEHOLDER
+OP_REF_LINEAR_TOKEN="op://Fleet/linear/credential"                     # PLACEHOLDER
 
 # Ten per-agent rzem-memory credentials. One identity per agent, because the
 # credential is what fixes the memory namespace (section 6).
@@ -68,11 +68,11 @@ OP_REF_MEMORY_FLEET_STEWARD="op://Fleet/rzem-memory-fleet-steward/credential"   
 
 # destination filename | op:// reference. The destination names are the contract
 # with the hooks and the MCP config, so change them together or not at all.
-# `notion.token` is read by claude-agents/hooks/lib/notion.sh - that dot is not a
+# `linear.token` is read by claude-agents/hooks/lib/linear.sh - that dot is not a
 # typo, and renaming it here silently stops every board write.
 secret_specs() {
     printf '%s\n' \
-        "notion.token|$OP_REF_NOTION_TOKEN" \
+        "linear.token|$OP_REF_LINEAR_TOKEN" \
         "rzem-memory-lead|$OP_REF_MEMORY_LEAD" \
         "rzem-memory-scout|$OP_REF_MEMORY_SCOUT" \
         "rzem-memory-spec-writer|$OP_REF_MEMORY_SPEC_WRITER" \

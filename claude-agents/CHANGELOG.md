@@ -8,6 +8,21 @@ The version in `.claude-plugin/plugin.json` is load-bearing. Clients keep the ca
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-09-12
+
+The board moves to Linear, reversing the plan's v0.2 choice of Notion. The reversal is the fleet's vocabulary catching up with itself: Initiative, Project, Milestone, Issue and Sub-issue were Linear's ontology all along, and the Notion board was a hand-built simulation of an issue tracker - two databases, a faked sub-issue relation, a view pretending to be a board. The simulation stopped paying for itself the day a real tracker arrived as a connector.
+
+### Changed
+
+- **`hooks/lib/notion.sh` is retired and `hooks/lib/linear.sh` replaces it.** Same architecture - `board_write` and `board_comment` as the only entry points, every failure soft, the token in a 0600 file under the config directory agents are denied, curl driven from a config file so the key never touches a command line - over a different protocol: GraphQL, one endpoint, where a status move is resolve-then-`issueUpdate` with a state UUID and errors arrive as an `errors` array inside a 200, so every call checks the body and never trusts the HTTP code alone. State names are matched ignoring case and spaces, so the default `To do` finds a team's `Todo` without configuration. In exchange the auth story collapses to one personal API key with no share-the-database-with-the-integration step - which also deletes kickoff's biggest "cannot verify" caveat, since a key sees what its user sees.
+- **An item ref is now an issue identifier first.** `CLAUDE_AGENTS_BOARD_PAGE_ID`, the `Board-Item:` line and the `[board:...]` marker all take `RZE-123` in any case, the issue URL pasted straight out of Linear (the identifier is read from the path; a title slug that is itself identifier-shaped cannot mislead it), or the issue UUID, dashed or not. Two new contract-suite cases pin the identifier and URL forms; the suite is 41 checks.
+- **The comment machinery sheds Notion's shape.** One markdown body per comment, no 1900-character chunking, and the cap - now `BOARD_COMMENT_MAX_CHARS`, same 8000 default - exists for the reader rather than the API. The cut-and-archive discipline is unchanged, and the cut note now says "board comment".
+- **The `board` skill, the glossary, the fleet plan, both READMEs and the kickoff command speak Linear.** Projects are Linear projects, issues are issues, milestones and sub-issues are native, the board is the team's issues grouped by workflow state, and the Outcome field becomes `outcome/shipped`, `outcome/abandoned` and `outcome/superseded` labels, because Linear has no free-form issue fields and a label is queryable. Kickoff's board step now checks states, project and outcome labels, offers to create what the MCP can create - workflow states it cannot, so those come with the exact manual instruction (add `Blocked` and `Blocked by human` with the `started` type) - and ends by stating the conventions for the workspace: team and key, project, column spellings, labels, binding. The fleet plan carries a dated note reversing its own v0.2 section; the v0.2 note stands as history.
+- **Agent tool grants move from server-wide-minus-denylist to explicit per-tool allowlists.** Linear's `save_issue` both creates and updates, so Notion's create-allowed-update-denied split cannot be expressed in tool names; `spec-writer` gets read tools only, `fleet-steward` gets reads plus `save_issue` and `save_comment` with its create-only licence enforced by its body as before, and the write tools neither should hold are denied by name.
+- **`scripts/install-home.sh` renders `linear.token`** from `op://Fleet/linear/credential`, and `home/settings.json` denies `LINEAR_TOKEN`/`LINEAR_API_KEY` to sandboxed commands and allowlists `api.linear.app`.
+
+Existing Notion cards are not migrated; the Linear projects were created by hand first, and history stays where it happened.
+
 ## [0.12.0] - 2026-09-12
 
 ### Added
