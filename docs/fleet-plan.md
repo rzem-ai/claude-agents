@@ -207,7 +207,7 @@ claude-agents/
     hooks/hooks.json                  # SubagentStart -> Doing; SubagentStop handoff check -> Blocked / Blocked by human; TaskCompleted gate -> Done / Blocked
     workflows/                        # spec-to-plan, review-round, deep-research variants
     commands/init.md                  # /claude-agents:init - per-project setup in one pass
-    commands/kickoff.md               # /claude-agents:kickoff - preflight the install, then start the spec pipeline
+    commands/kickoff.md               # /claude-agents:kickoff - preflight the install, check or set up the board, then start the spec pipeline
     templates/
       project-settings.json           # extraKnownMarketplaces + enabledPlugins + agent, merged into each repo's .claude/settings.json
       CLAUDE.md                       # skeleton with the glossary pointer

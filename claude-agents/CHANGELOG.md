@@ -8,6 +8,12 @@ The version in `.claude-plugin/plugin.json` is load-bearing. Clients keep the ca
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-09-12
+
+### Added
+
+- **Kickoff checks and sets up the board.** A new step between the preflight and the idea, run only when the Notion tools are available: find the Projects and Tasks databases, verify the Tasks schema - the five status option names the hooks expect, the Projects relation, Milestone, the sub-issue self-relation, Outcome - and report drift with its two distinct fixes, renaming the option or overriding `BOARD_COL_*`, which are not equivalent. Missing databases are offered for creation, with the human's yes required before anything writes to their workspace, and Status is created as a `select` property deliberately: the Notion API cannot create options on a `status` property, and the hooks already try both types on a 400 and pin the winner. The step is explicit about its blind spot - the hooks' integration token is denied to every agent by design, so a green board here can still fail in the hooks, and the report ends with the two manual checks (databases shared with the integration, token file in place) and the log line that is the symptom of either missing. Declining any of it is a note, never a failure: most work is not board work.
+
 ## [0.11.1] - 2026-09-12
 
 Every handoff in a failing run was structurally perfect - four headings, right order, `- None` for empty sections, correctly typed Decisions needed lines - and rejected over two trailing spaces on a heading, the markdown hard-line-break idiom no renderer shows and no human sees. The contract was strict about bytes where it meant to be strict about meaning.

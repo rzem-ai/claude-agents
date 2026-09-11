@@ -1,5 +1,5 @@
 ---
-description: Preflight the fleet in this project - plugin, agents, settings, skeleton - then take the first idea and start the spec pipeline on it
+description: Preflight the fleet in this project - plugin, agents, settings, skeleton - check or set up the Notion board, then take the first idea and start the spec pipeline on it
 argument-hint: [the idea, in a sentence or a brain dump]
 ---
 
@@ -14,9 +14,19 @@ Check each of these, collecting results rather than stopping at the first failur
 3. **Skeleton.** `CLAUDE.md` exists at the project root and contains no `<FILL: ...>` markers. A marker left in place is a line the session reads literally on every turn, so surviving markers are a failure, not a note.
 4. **Glossary rule.** `.claude/rules/glossary.md` exists.
 5. **Work directories.** `docs/specs/` and `docs/plans/` exist.
-6. **Board, only if configured.** If the session carries `CLAUDE_AGENTS_BOARD_PAGE_ID` or the project documents a Notion board, confirm the Notion tools respond. No board configured is fine and is not a failure.
+6. **Board.** The full check-and-setup is its own step below; here just note whether the Notion tools are available at all. No Notion connector means no board, which is fine and is not a failure.
 
 If anything failed: report every failure with its one-line fix (`/claude-agents:init` for missing skeleton pieces, restart-and-trust for a plugin or agent problem, edit the marker for a surviving `<FILL: ...>`), and stop. Do not start work on a red preflight.
+
+## Board
+
+Run this step only when the Notion tools are available. Read the `board` skill first; it is the contract this step is verifying. No board is a legitimate outcome throughout - most work is not board work, and the human declining any part of this is a note in the report, never a failure.
+
+**Check.** Search Notion for the two databases the board skill describes, **Projects** and **Tasks**. If both exist, verify the Tasks schema: a Status property whose options carry the five names the hooks expect by default - `To do`, `Doing`, `Blocked`, `Blocked by human`, `Done` - plus a relation to Projects, a Milestone field, a sub-issue self-relation and an Outcome field. Report drift precisely: a misspelled option's fix is renaming it in Notion or overriding `BOARD_COL_*` in `~/.config/claude-agents/board.env`, and the two fixes are not equivalent - the override leaves every other tool seeing the odd name.
+
+**Setup.** If either database is missing, say what would be created and ask the human before creating anything - these are writes to their workspace. On a yes: create Projects, then Tasks with the schema above and a board view grouped by Status. Create Status as a `select` property, not `status`: the Notion API cannot create options on a `status` property, and the hooks already try both types and pin the one that works. If the human prefers a `status` property, create the databases without it and hand them the five option names to add by hand.
+
+**What this step cannot do, said out loud.** The hooks authenticate with their own integration token at `~/.config/claude-agents/notion.token`, which every agent is denied by design - so this step can never test that token, and a board green here can still fail in the hooks. End the board section of the report with the two manual checks: the databases are shared with the hooks' Notion integration, and the token file exists at that path with mode 600 (rendered by `scripts/install-home.sh`). A `no board item` or HTTP-error line in `~/.local/state/claude-agents/log/hooks.log` after the first real spawn is the symptom of either one missing.
 
 ## The idea
 
