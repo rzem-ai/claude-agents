@@ -4,7 +4,10 @@
     a fifth job, or move both to the lead at compound time. Say which and I'll do it.
   - Two skills have diverging copies (using-memory across the agent-memory repos, alex-voice across angus and weekly-roundup). When you do move them in, one copy has to be declared canonical.
   - pr-review-toolkit is disabled in your live settings while the reviewer and the review-round workflow assume it ran. The reviewer prompt still says "assume the easy findings are taken". Either enable it, or have the workflow report the mechanical pass as absent rather than assumed.
-  - v0.7.0 is untagged, so the `[0.7.0]` compare link at the foot of CHANGELOG.md does not resolve yet. That is the ordinary shape of a release-prep commit rather than a defect, and it closes the moment someone tags v0.7.0. Nothing in this branch tags it, because tagging is an outward-facing change to the repository that nobody asked for.
+
+  Closed on 11 September 2026, when Alex asked for the tags:
+
+  - ~~v0.7.0 is untagged, so the `[0.7.0]` compare link at the foot of CHANGELOG.md does not resolve yet.~~ Every release tag through v0.8.0 is on origin now - v0.4.0 had been sitting local-only alongside it - so all the compare links resolve. It closed the way the item said it would: someone asked.
 
   Closed on 9 September 2026, in the fleet review fix round (branch fix/fleet-review-2026-09-09):
 
