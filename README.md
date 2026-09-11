@@ -51,6 +51,7 @@ docs/fleet-plan.md                the plan: what the fleet is and why, in fiftee
 docs/agent-contract.md            the shape every agent body conforms to
 docs/runs/                        run articles, one per substantial run
 docs/plans/                       per-issue implementation plans (the glossary kind, not the fleet plan)
+docs/TODO.md                      open items each round has deliberately left, with the reason
 home/                             user-scope files the install script places
 scripts/                          install-home.sh, gen-glossary-rule.sh, merge-settings.py
 templates/                        project settings, CLAUDE.md skeleton, the generated glossary rule
@@ -58,4 +59,4 @@ templates/                        project settings, CLAUDE.md skeleton, the gene
 
 ## Where things are decided
 
-The plan, [`docs/fleet-plan.md`](docs/fleet-plan.md), is the canonical document - "plan section N" anywhere in this repo means that file. [`docs/agent-contract.md`](docs/agent-contract.md) is what the migration checklist checks agent bodies against, and it records which preloaded skill names are still forward references. [`claude-agents/CHANGELOG.md`](claude-agents/CHANGELOG.md) records every release, corrections included. And [`Still open, deliberately not touched.md`](<Still open, deliberately not touched.md>) is exactly what it says: the open items each release has looked at and chosen to leave.
+The plan, [`docs/fleet-plan.md`](docs/fleet-plan.md), is the canonical document - "plan section N" anywhere in this repo means that file. [`docs/agent-contract.md`](docs/agent-contract.md) is what the migration checklist checks agent bodies against, and it records which preloaded skill names are still forward references. [`claude-agents/CHANGELOG.md`](claude-agents/CHANGELOG.md) records every release, corrections included. And [`docs/TODO.md`](docs/TODO.md) is the open-items list: what each round has looked at and deliberately chosen to leave, with the reason.

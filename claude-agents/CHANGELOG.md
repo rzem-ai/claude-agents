@@ -8,6 +8,10 @@ The version in `.claude-plugin/plugin.json` is load-bearing. Clients keep the ca
 
 ## [Unreleased]
 
+### Changed
+
+- The open-items list moved from `Still open, deliberately not touched.md` at the repo root to `docs/TODO.md`, open items only; the closed-item record stays in the old file's git history. The one plugin reference, the worktree-cost note in `hooks/README.md`, follows it.
+
 ## [0.8.0] - 2026-09-11
 
 A documentation release. The repo gained a front door and the plan gained its own file. Nothing in the plugin's runtime behaviour changed, but the steward's body did, and a body change only reaches a machine when the number moves.
