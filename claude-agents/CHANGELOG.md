@@ -8,6 +8,23 @@ The version in `.claude-plugin/plugin.json` is load-bearing. Clients keep the ca
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-09-11
+
+Two skills move into the plugin, the interview that was going to be a third folds into `spec-writer`'s body instead, the README's install section becomes a guide someone other than its author can follow, and the fleet's prose stops naming its human. The claude-agents repo also went public, which retires the credential walkthrough the prerequisites carried.
+
+### Added
+
+- **`brainstorming`** now ships in the plugin instead of resolving from the superpowers plugin. It is preloaded by one body, `spec-writer`, whose interview opens with it, and a preloaded name that resolves nowhere is a silent no-op - so until now the spec-writer's open-out step existed only on machines that happened to have superpowers installed, and vanished without a trace on the ones that did not. It lands with its visual-companion mode and the scripts that serve it (a frame template, a helper and a local server with start and stop scripts) plus a spec-document reviewer prompt.
+- **`humanize`**, the copy-editing skill: thirty rules across six categories for removing the signs of AI writing, drawn from Wikipedia's "Signs of AI writing" guide, with one reference file per rule and Australian English throughout. Preloaded by `tech-writer`, where the name had been a forward reference since the roster was written.
+
+### Changed
+
+- **The grilling interview folded into `spec-writer`'s body, and `grilling` left every list that named it.** The skill never existed - the name was a forward reference preloaded by exactly one body - so the method now lives in the body it serves rather than waiting to be a directory: one question at a time, each carrying a recommended answer and a one-line reason so the reasoning is exposed to challenge; load-bearing decisions before details, with a conflict surfaced the moment a later answer changes an earlier premise; research before asking, so a question the code or the board item can answer arrives as a confirmation rather than cold; push-back on a vague or deferred answer to a load-bearing question, because accepting it defeats the session; tangents followed when they expose risk and parked when they do not; and the silent ground probed - assumptions, failure modes, scale, permissions, what would make the work not worth doing - adapted to the subject, never run as a checklist. Decisions land in the spec's sections, never in a chat wrap-up. The contract's section 1.4, the plan's roster row and its borrow-don't-install paragraph follow.
+- **The prose says "the human" and "the claude-agents repo", never a name and never "this repo".** Agent bodies, skills, workflows, hook and workflow comments, docs, eval rubrics and fixtures, the fleet guide and the install script now read the same on any machine and for any reader: the person in the loop is "the human", and the repository names itself, so a sentence copied into another context keeps its referent. Author and metadata lines keep the name, because authorship is a fact rather than prose. `alex-voice` leaves the plan's migration list and `tech-writer`'s roster row with the sweep. The sweep deliberately reached the released entries below, which the never-rewrite convention normally leaves alone: every fact in them is untouched, only the two namings changed.
+- **The README's "Using it" section became "Installing", an actual guide.** Four dense paragraphs that assumed the reader was their author became prerequisites plus three numbered layers - use the fleet in a project (the template route and the manual `claude plugin` route, ending in the same place), set up a machine with `install-home.sh`, and the secrets - each with a verify step, plus staying-current and how to test a local checkout as a plugin against the GitHub release.
+- **The claude-agents repo is public, and the prerequisites stop asking for credentials.** The git bullet walked through `gh auth setup-git` and ssh-agent because a private marketplace made every clone an authenticated one and background marketplace refreshes fail silently without a credential helper. Plain HTTPS reaches a public repo, for the refreshes too, so the bullet now asks for git and nothing else.
+- **The contract's resolution paragraph shipped this round crediting `brainstorming` to the superpowers plugin while this same round moved it into this one.** Corrected in the release commit under the rule that the current release's own errors are fixed in place: the shipped list is now nine skills, and superpowers is noted as a second resolver rather than the only one.
+
 ## [0.8.1] - 2026-09-11
 
 A one-pointer patch: the open-items list left the claude-agents repo root and the hooks README follows it.
@@ -206,7 +223,8 @@ Initial scaffolding. The claude-agents repo became a plugin marketplace with one
 - The directory structure the plan calls for: `agents/`, `skills/`, `hooks/` and `workflows/` inside the plugin, and `evals/`, `scripts/`, `templates/`, `templates/rules/` and `home/` in the claude-agents repo.
 - This changelog.
 
-[Unreleased]: https://github.com/rzem-ai/claude-agents/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/rzem-ai/claude-agents/compare/v0.8.2...HEAD
+[0.8.2]: https://github.com/rzem-ai/claude-agents/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/rzem-ai/claude-agents/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/rzem-ai/claude-agents/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/rzem-ai/claude-agents/compare/v0.7.0...v0.7.1

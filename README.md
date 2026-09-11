@@ -38,7 +38,7 @@ The claude-agents repo is a Claude Code plugin marketplace named `rzem` with one
 ### Prerequisites
 
 - **Claude Code** with plugin support. `claude plugin --help` should list `marketplace` and `install`; if it does not, update Claude Code first.
-- **git**, with credentials that can reach `github.com/rzem-ai/claude-agents`. The marketplace is private, so Claude Code needs the same access git already has on the machine: `gh auth login` followed by `gh auth setup-git`, or an SSH key loaded in `ssh-agent` with `github.com` in `known_hosts`. Without this the marketplace add fails with a clone error, and background marketplace refreshes fail silently because credential helpers are off for those - `gh auth setup-git` is the fix for both.
+- **git**. The claude-agents repo is public, so the clone, the marketplace add and background marketplace refreshes all work over plain HTTPS with no credentials. Only pushing changes back needs auth.
 - **jq**. Every board hook and the eval runner use it.
 - **python3**. The install script's settings merge and the scope hook's write-path check.
 - **node**. Only for `evals/lib/check-all.sh`, which syntax-checks the workflows and runs their logic tests.
