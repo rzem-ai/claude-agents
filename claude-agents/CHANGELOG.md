@@ -8,6 +8,10 @@ The version in `.claude-plugin/plugin.json` is load-bearing. Clients keep the ca
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-11
+
+A documentation release. The repo gained a front door and the plan gained its own file. Nothing in the plugin's runtime behaviour changed, but the steward's body did, and a body change only reaches a machine when the number moves.
+
 ### Changed
 
 - **The plan moved from the root `README.md` to `docs/fleet-plan.md`, and the README became a front door.** A repository whose README is a 302-line plan tells a newcomer nothing about what the repo is or how to use it. The plan is unchanged and still canonical - "plan section N" anywhere in the repo means `docs/fleet-plan.md` now - with only its own location lines corrected: the header sentence that named `README.md` as its home, and the section 10 tree, which gains `docs/fleet-plan.md` and re-describes `README.md`. The name is `fleet-plan` rather than `plan` because `docs/plans/` already holds the glossary's per-issue plans and the vocabulary does not need a third thing called plan. The steward's editing list in `agents/fleet-steward.md` follows the file. Everything that records what was true when written - the released entries below, `docs/runs/`, `docs/plans/`, the plan's own "Changelog since" sections - is untouched, as are the eval fixtures that use `README.md` as a path under test, because the file still exists and they exercise the scope hook, not the plan.
@@ -194,7 +198,8 @@ Initial scaffolding. The repo became a plugin marketplace with one plugin in it.
 - The directory structure the plan calls for: `agents/`, `skills/`, `hooks/` and `workflows/` inside the plugin, and `evals/`, `scripts/`, `templates/`, `templates/rules/` and `home/` in the repo.
 - This changelog.
 
-[Unreleased]: https://github.com/rzem-ai/claude-agents/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/rzem-ai/claude-agents/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/rzem-ai/claude-agents/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/rzem-ai/claude-agents/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/rzem-ai/claude-agents/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/rzem-ai/claude-agents/compare/v0.5.0...v0.6.0
