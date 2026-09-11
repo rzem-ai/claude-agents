@@ -8,6 +8,15 @@ The version in `.claude-plugin/plugin.json` is load-bearing. Clients keep the ca
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-09-11
+
+The patch that matters more than everything above it: in a live session, none of the hooks ran. Every hook command failed open, non-blocking, on every tool call - the board writes and the scope guard together - and the bug shipped in the first commit the hooks ever made.
+
+### Fixed
+
+- **All four hook commands single-quoted `${CLAUDE_PLUGIN_ROOT}`, which hands the shell a literal.** The command-string form of a hook runs through a shell, and the placeholder is resolved as an expansion; single quotes are precisely the quoting that forbids expansion, so a session looked for a file literally named `${CLAUDE_PLUGIN_ROOT}/hooks/enforce-agent-scope.sh`, found nothing, and failed open. For the scope hook that means every role's guard was down - the failure mode 0.7.1 documented for a timeout, delivered permanently by two quote characters. Double quotes now: they expand, they keep a spaced install path whole, and they are the form the runtime's own examples use. Present since `1e080fd`, the commit that built the fleet, and found live in an ordinary session on 11 September - the unexpanded variable name sitting verbatim in the error message was the whole diagnosis.
+- **Two checks in `board-hook-contract`, because 682 checks missed this.** The suite runs the hook scripts directly by path, so it validated everything about them except whether a session could find them. The commands in `hooks.json` are now checked against single-quoting the placeholder and for locating their script by it at all, and the first check was mutation-tested the way this suite expects: run against the pre-fix `hooks.json`, it fails. The suite is 684 checks; `board-hook-contract` goes 37 to 39.
+
 ## [0.9.0] - 2026-09-11
 
 The release that prepares the plugin for strangers, ahead of a community-marketplace submission. Submitting means people who have never seen the claude-agents repo running what ships, so everything in the plugin that assumed its owner's machines stops assuming: the memory server loses its personal name, the board skill loses its owner's workspace and clock, and the glossary loses two houseguests. The rules are unchanged throughout, because they were never the personal part.
@@ -248,7 +257,8 @@ Initial scaffolding. The claude-agents repo became a plugin marketplace with one
 - The directory structure the plan calls for: `agents/`, `skills/`, `hooks/` and `workflows/` inside the plugin, and `evals/`, `scripts/`, `templates/`, `templates/rules/` and `home/` in the claude-agents repo.
 - This changelog.
 
-[Unreleased]: https://github.com/rzem-ai/claude-agents/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/rzem-ai/claude-agents/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/rzem-ai/claude-agents/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/rzem-ai/claude-agents/compare/v0.8.3...v0.9.0
 [0.8.3]: https://github.com/rzem-ai/claude-agents/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/rzem-ai/claude-agents/compare/v0.8.1...v0.8.2

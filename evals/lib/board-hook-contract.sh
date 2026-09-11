@@ -334,6 +334,23 @@ for agent in lead scout spec-writer coder reviewer ui-designer tech-writer resea
     check "matcher-$agent" "the matcher names $agent" $?
 done
 
+printf '\nhooks.json: the plugin-root placeholder must survive to the runtime\n'
+
+# ${CLAUDE_PLUGIN_ROOT} is resolved after the command string reaches a shell,
+# and single quotes are precisely the quoting that forbids expansion: the
+# session looks for a file literally named ${CLAUDE_PLUGIN_ROOT}/... and every
+# hook fails open, non-blocking, on every tool call - the board writes and the
+# scope guard together. Found live on 11 September 2026, not by this suite,
+# because the suite runs the hook scripts directly by path and so validated
+# everything about them except whether a session could find them.
+RC=0
+jq -r '.hooks[][].hooks[].command' "$HOOKS/hooks.json" | grep -qF "'\${CLAUDE_PLUGIN_ROOT}" && RC=1
+check commands-not-single-quoted "no command single-quotes the plugin-root placeholder" $RC
+
+RC=0
+jq -r '.hooks[][].hooks[].command' "$HOOKS/hooks.json" | grep -qvF '${CLAUDE_PLUGIN_ROOT}' && RC=1
+check commands-use-plugin-root "every command locates its script by the plugin root" $RC
+
 printf '\n%s passed, %s failed\n' "$PASSED" "$FAILED"
 if [ "$FAILED" -ne 0 ]; then
     printf 'A board hook is reading a field the runtime does not send, or moving a card without evidence.\n'

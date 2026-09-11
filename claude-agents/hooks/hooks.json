@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "'${CLAUDE_PLUGIN_ROOT}/hooks/board-subagent-start.sh'",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/board-subagent-start.sh\"",
             "timeout": 20,
             "statusMessage": "Moving the board item to Doing"
           }
@@ -19,7 +19,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "'${CLAUDE_PLUGIN_ROOT}/hooks/board-subagent-stop.sh'",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/board-subagent-stop.sh\"",
             "timeout": 30,
             "statusMessage": "Checking the handoff and updating the board"
           }
@@ -31,7 +31,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "'${CLAUDE_PLUGIN_ROOT}/hooks/board-task-completed.sh'",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/board-task-completed.sh\"",
             "timeout": 600,
             "statusMessage": "Running the test gate"
           }
@@ -44,7 +44,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "'${CLAUDE_PLUGIN_ROOT}/hooks/enforce-agent-scope.sh'",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/enforce-agent-scope.sh\"",
             "timeout": 10
           }
         ]
