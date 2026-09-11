@@ -35,7 +35,7 @@ Canonical copy. `templates/rules/glossary.md` is generated from this file - edit
 | Board | The Tasks database as five columns: to do, doing, blocked, blocked by human, done | Notion board view |
 | Human queue | The "blocked by human" column. The one thing the human monitors | Notion board column |
 | Eval | A smoke test for one agent: three to five prompts, a rubric, a baseline score. Run in CI on every definition change | `claude -p` in `claude-agents` CI |
-| Sprite | A home lab AI personal assistant with a persistent identity (Angus, Mabel). Out of scope here; the fleet has no Sprites | Agent SDK agent |
+| Sprite | A home-lab AI personal assistant with a persistent identity. Out of scope here; the fleet has no Sprites | Agent SDK agent |
 
 Consequences of those definitions that are routinely got wrong:
 

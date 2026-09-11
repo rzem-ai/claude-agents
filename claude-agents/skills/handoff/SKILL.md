@@ -42,7 +42,7 @@ Every line under Decisions needed carries one of exactly three prefixes. Case-se
 
 - `- Blocker: ` - the work is stopped until the human answers. This and only this moves the board item into "blocked by human". Use it only when you genuinely cannot proceed; it costs them an interruption.
 - `- Propose item: ` - suggested new board work. The lead files it. It never touches the human queue.
-- `- Propose memory: ` - worth filing into the shared rzem-memory corpus. Only `researcher` and the lead can write there, so one of them actions it.
+- `- Propose memory: ` - worth filing into the shared memory corpus. Only `researcher` and the lead can write there, so one of them actions it.
 
 Anchor: `^- (Blocker|Propose item|Propose memory): `.
 
@@ -73,5 +73,5 @@ The harness sends `SubagentStop` no status field - not `success`, not `failure`,
 ## Decisions needed
 - Blocker: Refresh token TTL is unspecified and phase 3 depends on it. 7 days or 30?
 - Propose item: Migrate the legacy /token endpoint onto the same rotation logic.
-- Propose memory: We chose rotation-on-reuse over sliding expiry for rzem services.
+- Propose memory: We chose rotation-on-reuse over sliding expiry for the project's services.
 ```

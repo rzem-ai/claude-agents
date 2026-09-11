@@ -13,8 +13,8 @@
       "name": "claude-agents",
       "displayName": "Claude Agents",
       "source": "./claude-agents",
-      "description": "The rzem subagent fleet: role-shaped agents, shared skills, board hooks and workflows.",
-      "version": "0.8.3",
+      "description": "A role-shaped subagent fleet: agents, shared skills, board hooks and workflows.",
+      "version": "0.9.0",
       "author": {
         "name": "Alex",
         "email": "alex@rzem.com"

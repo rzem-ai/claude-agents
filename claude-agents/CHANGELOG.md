@@ -8,6 +8,18 @@ The version in `.claude-plugin/plugin.json` is load-bearing. Clients keep the ca
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-11
+
+The release that prepares the plugin for strangers, ahead of a community-marketplace submission. Submitting means people who have never seen the claude-agents repo running what ships, so everything in the plugin that assumed its owner's machines stops assuming: the memory server loses its personal name, the board skill loses its owner's workspace and clock, and the glossary loses two houseguests. The rules are unchanged throughout, because they were never the personal part.
+
+### Changed
+
+- **The memory server is "the memory server", not `rzem-memory`.** Twelve agent-body lines, four workflow lines and the `handoff`, `compound` and `migration-checklist` skills said the name of one person's server; a stranger's machine has never heard of it. The prose now says "the memory server" and "the shared memory corpus". The tool identifiers stay `mcp__claude_ai_Memory__*` deliberately - that is the spelling any claude.ai "Memory" connector registers, so they were already the generic form; a machine without such a connector grants nothing and the recall steps no-op, which was already the degradation story. `docs/agent-contract.md` section 6 still names the actual server the fleet's own machines use, because repo-side documents record facts and do not ship.
+- **The board skill stops describing its owner's Notion.** The workspace inventory reduced to the principle it illustrated - one workspace, because a board you have to mentally join to another board is not one place to look. The queue digest happens "twice a day" with escalation "during working hours" rather than at two Sydney clock times, and the Cowork paragraph's named assistant became "the assistant". The three-rule discipline, the four-hour escalation and the false-blocker cost are untouched.
+- **The glossary's Sprite row keeps the term and loses the names.** The definition exists to say the fleet has no Sprites, and that stays; the two named examples were the personal part. `templates/rules/glossary.md` regenerated to match.
+- **The manifests introduce the plugin instead of naming its owner.** plugin.json's description says what the fleet is rather than whose it is, the marketplace entry's description follows, `hooks/hooks.json` writes "the fleet" rather than "the rzem fleet", and the keywords gain `hooks` and `notion` for catalog search. The author block, homepage and repository stay: authorship is a fact rather than prose, and they are required manifest fields besides.
+- The `handoff` skill's example memory line said "for rzem services"; it says "for the project's services".
+
 ## [0.8.3] - 2026-09-11
 
 The release that removes what 0.8.2 shipped by accident. The `brainstorming` directory was never a migration: it was a skill-export - a 33KB binary `.skill` blob, a local server, scripts and all - that rode into the commit 0.8.2 released, unnoticed until the release summary flagged the blob and the human said drop it.
@@ -236,7 +248,8 @@ Initial scaffolding. The claude-agents repo became a plugin marketplace with one
 - The directory structure the plan calls for: `agents/`, `skills/`, `hooks/` and `workflows/` inside the plugin, and `evals/`, `scripts/`, `templates/`, `templates/rules/` and `home/` in the claude-agents repo.
 - This changelog.
 
-[Unreleased]: https://github.com/rzem-ai/claude-agents/compare/v0.8.3...HEAD
+[Unreleased]: https://github.com/rzem-ai/claude-agents/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/rzem-ai/claude-agents/compare/v0.8.3...v0.9.0
 [0.8.3]: https://github.com/rzem-ai/claude-agents/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/rzem-ai/claude-agents/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/rzem-ai/claude-agents/compare/v0.8.0...v0.8.1

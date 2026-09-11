@@ -126,7 +126,7 @@ if (stage === 'spec') {
   const groundwork = await parallel([
     () =>
       agent(
-        'Search the rzem-memory corpus for anything already decided about "' +
+        'Search the memory corpus for anything already decided about "' +
           issue +
           '". Context: ' +
           context +

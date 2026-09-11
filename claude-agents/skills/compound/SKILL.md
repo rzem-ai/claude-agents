@@ -35,7 +35,7 @@ Never keep a restatement of the task, a summary of what you did, a fact the code
 | A convention this project follows | `.claude/rules/<topic>.md` | Add a `paths:` glob if it only applies to some files. A rule without one loads on every turn, so earn it |
 | A fact that must be true on every turn and fits in a sentence | `CLAUDE.md` | Under 200 lines, facts only, never a procedure |
 | A repeatable procedure, multi-step, worth following again | a skill under `claude-agents/skills/` | Edit an existing skill before you add a new one |
-| A durable decision about the work, and why | the shared rzem-memory corpus | Only `researcher` and the lead can write there. Everyone else writes a `Propose memory:` line and one of them files it |
+| A durable decision about the work, and why | the shared memory corpus | Only `researcher` and the lead can write there. Everyone else writes a `Propose memory:` line and one of them files it |
 | Work you noticed but did not do | a board item | A `Propose item:` line under Decisions needed. The lead files it. Never a rule |
 
 The commonest mistake is filing a procedure as a rule. If it has steps, it is a skill. If it is one sentence a reader either obeys or does not, it is a rule.
@@ -75,6 +75,6 @@ The human asks for it; nothing schedules it. When they do, the lead runs this sk
 1. Name the unit of work in one sentence and confirm it landed and was verified. If it did not, stop.
 2. List the candidate learnings, plainly, before judging any of them.
 3. Apply the three tests to each and discard everything that fails. Say what you discarded, so the discarding is visible rather than invisible.
-4. For each survivor, search `.claude/rules/`, the skills directory and rzem-memory for where it already lives.
+4. For each survivor, search `.claude/rules/`, the skills directory and the memory server for where it already lives.
 5. Edit or add one file per learning, with its provenance line. Keep it as short as the thing allows.
 6. Record it in the handoff - what you wrote goes under Done, a corpus entry you cannot write yourself is a `Propose memory:` line, and new work you noticed is a `Propose item:` line.

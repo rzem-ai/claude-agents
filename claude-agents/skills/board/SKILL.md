@@ -10,7 +10,7 @@ Notion holds two databases and the board is a view on one of them. Nothing sits 
 
 **Projects** - one row per bounded body of work in a repo or product area. Initiative is a select field here, so a goal spanning several projects has somewhere to live.
 
-**Tasks** - one row per tracked unit of work, related to a project, with Milestone as a field, sub-issues as a self-relation, and an Outcome field used once a row reaches done. The board is the five-column view on this database. One workspace holds everything - home lab, the fleet, rzem.guru, client work, personal admin - because a board you have to mentally join to another board is not one place to look.
+**Tasks** - one row per tracked unit of work, related to a project, with Milestone as a field, sub-issues as a self-relation, and an Outcome field used once a row reaches done. The board is the five-column view on this database. One workspace holds everything, because a board you have to mentally join to another board is not one place to look.
 
 ## What earns an item
 
@@ -42,7 +42,7 @@ Two environments share this board and they write it differently. Know which one 
 
 A comment ending in a `[Cut to fit a Notion comment ...]` line names a file under `~/.local/state/claude-agents/archives/<session-id>/` on the human's machine: that is the whole comment, written by the hook at the moment it cut it, and it is the only copy of the part the card is missing.
 
-**In Cowork there are no hooks, so the assistant layer writes the board by instruction.** Angus moves items himself, and the discipline the hooks provide has to come from three rules instead. First, move an item to doing when you actually start it and to done when it is finished and verified, in the turn it happens, never batched up at the end of a day. Second, the only thing that goes into blocked by human is something genuinely waiting on the human, with the reason as a comment on the row. Third, never file an item for a step you are about to take in the same turn - that is a task.
+**In Cowork there are no hooks, so the assistant layer writes the board by instruction.** The assistant moves items itself, and the discipline the hooks provide has to come from three rules instead. First, move an item to doing when you actually start it and to done when it is finished and verified, in the turn it happens, never batched up at the end of a day. Second, the only thing that goes into blocked by human is something genuinely waiting on the human, with the reason as a comment on the row. Third, never file an item for a step you are about to take in the same turn - that is a task.
 
 ## Telling the hooks which item
 
@@ -89,7 +89,7 @@ Every handoff ends with a Decisions needed heading carrying typed lines, and onl
 
 `Blocker:` moves the item into blocked by human and the blocker text lands as a comment on the row, so the queue answers what is blocked, on what, and for how long, without anyone opening a transcript. `Propose item:` becomes a new row in to do, filed by the lead - or by `fleet-steward` for its own scheduled sweep, per What earns an item above. `Propose memory:` never touches the board at all - it is corpus work for the researcher or the lead.
 
-A false blocker is not free. The queue is read out to the human at 8am and 4pm Sydney time, and anything sitting in it for more than four hours between 8am and 6pm escalates immediately. Park a routine suggestion there and you have interrupted them for nothing; miss a real one and they never learn they were needed.
+A false blocker is not free. The queue is read out to the human twice a day, and anything sitting in it for more than four hours during working hours escalates immediately. Park a routine suggestion there and you have interrupted them for nothing; miss a real one and they never learn they were needed.
 
 ## Done, and the outcome field
 
