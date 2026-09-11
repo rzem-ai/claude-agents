@@ -21,7 +21,7 @@ Four sections. Always these four, always this order, always all four present:
 
 Rules a `grep`/`sed` parser depends on:
 
-- Heading lines are exactly `## ` plus the wording above. Level 2, one space, that capitalisation, no trailing punctuation, no numbering, no bold. Anchor: `^## (Done|Not done|Unverified|Decisions needed)$`.
+- Heading lines are exactly `## ` plus the wording above. Level 2, one space, that capitalisation, no trailing punctuation, no numbering, no bold. Anchor: `^## (Done|Not done|Unverified|Decisions needed)$`, applied after every line is right-trimmed - trailing whitespace is invisible and never changes what a line means, but leading whitespace still does.
 - Use no other level-2 heading anywhere in the final message.
 - Every item is one markdown list item starting `- ` at column 0. No nesting, no sub-bullets, no code fences, no tables.
 - No blank line inside a section. The only blank line the parser allows is the one before the next heading, as in the example below.

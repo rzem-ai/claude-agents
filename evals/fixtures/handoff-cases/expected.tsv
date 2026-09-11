@@ -29,3 +29,4 @@ bad-trailing-prose	invalid	prose after the last Decisions needed item
 bad-no-handoff	invalid	a final message with no handoff in it
 bad-empty-message	invalid	an empty final message
 bad-whitespace-only	invalid	a final message that is only whitespace
+valid-trailing-whitespace	valid	trailing spaces and tabs on headings and items, the markdown hard-break idiom

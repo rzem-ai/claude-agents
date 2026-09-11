@@ -17,9 +17,10 @@
 # The two implementations are sliced out of their files rather than
 # reimplemented here, so this compares the shipping code and not a copy of it.
 # The known-hard cases are the ones the hook spells out and a naive reader gets
-# wrong: CRLF (the hook strips every \r), an exact heading match ("## Done "
-# with a trailing space opens nothing), and the anchored None filter
-# ("-  None", two spaces, is a real item).
+# wrong: CRLF (the hook strips every \r), right-trimmed headings ("## Done "
+# with a trailing space opens the section - trailing whitespace is invisible
+# and never changes meaning), and the None filter's preserved leading
+# whitespace ("-  None", two spaces after the dash, is a real item).
 #
 # Usage:  evals/lib/handoff-extractor-parity.sh [-v]
 

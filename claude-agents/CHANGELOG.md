@@ -8,6 +8,14 @@ The version in `.claude-plugin/plugin.json` is load-bearing. Clients keep the ca
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-09-12
+
+Every handoff in a failing run was structurally perfect - four headings, right order, `- None` for empty sections, correctly typed Decisions needed lines - and rejected over two trailing spaces on a heading, the markdown hard-line-break idiom no renderer shows and no human sees. The contract was strict about bytes where it meant to be strict about meaning.
+
+### Fixed
+
+- **Handoff lines are right-trimmed before any anchor sees them, in all three readers at once.** The SubagentStop validator and its `extract_section`, the CI gate in `evals/lib/handoff-check.sh`, and `review-round.js`'s `handoffSection` all strip trailing whitespace per line where they already stripped `\r` - which was the tell: a CRLF is precisely a trailing-whitespace heading, and the None filter already tolerated a trailing tab, so the exact heading match was the one place the normalisation was missing rather than a rule of its own. Leading whitespace still means what it meant: `-  None` is a real item and an indented dash is not an item. The `handoff` skill's anchor line, the hooks README contract table and the parity script's known-hard-cases comment now state the trim, and a `valid-trailing-whitespace` fixture - trailing spaces and tabs on headings and items - pins it in `handoff-parity.sh`, failing against the pre-fix readers.
+
 ## [0.11.0] - 2026-09-11
 
 The release that closes the gap 0.10.0 opened. Init runs in the old session, but nothing it writes - settings, `CLAUDE.md`, the plugin itself - is live until the next one, and the first live session had no obvious way to start working. The restart is structural and cannot be engineered away, so the fix is a bridge across it.

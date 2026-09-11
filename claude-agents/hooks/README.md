@@ -184,7 +184,7 @@ The rule that falls out of all this, worth keeping whenever a workflow is writte
 
 ### What it checks
 
-`board-subagent-stop.sh` validates `last_assistant_message` against `skills/handoff/SKILL.md` and exits 2 if it does not parse, which stops the subagent stopping and hands it the list of problems. The anchors come from the skill, quoted rather than reinvented:
+`board-subagent-stop.sh` validates `last_assistant_message` against `skills/handoff/SKILL.md` and exits 2 if it does not parse, which stops the subagent stopping and hands it the list of problems. The anchors come from the skill, quoted rather than reinvented. Every line is right-trimmed before any anchor sees it - trailing whitespace is invisible in rendered markdown and models emit it habitually (two trailing spaces is the hard-line-break idiom), so it never changes what a line means; leading whitespace still does:
 
 | Rule | Regex | Line in `skills/handoff/SKILL.md` |
 |---|---|---|

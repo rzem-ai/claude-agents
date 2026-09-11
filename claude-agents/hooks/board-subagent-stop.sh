@@ -47,10 +47,18 @@ trap 'board_log "$HOOK" "unexpected error on line $LINENO; session continues"; e
 #
 # Anchors quoted from skills/handoff/SKILL.md:
 #   headings   ^## (Done|Not done|Unverified|Decisions needed)$
-#   typed line ^- (Blocker|Propose item|Propose memory): 
+#   typed line ^- (Blocker|Propose item|Propose memory):
 # Items are "one markdown list item starting `- ` at column 0", an empty
 # section is "exactly one line: `- None`", and the handoff is the last thing in
 # the message.
+#
+# Every line is right-trimmed before any anchor sees it. Trailing whitespace
+# is invisible in rendered markdown and models emit it habitually - two
+# spaces after a heading is the markdown hard-line-break idiom - so it can
+# never change what a line means. The \r of a CRLF is the same normalisation,
+# and the None filter already tolerated a trailing tab; this makes the rule
+# uniform. Leading whitespace still matters everywhere ("-  None", two spaces
+# after the dash, is a real item, and an indented dash is not an item).
 RE_HANDOFF_HEADING='^## (Done|Not done|Unverified|Decisions needed)$'
 RE_ANY_H2='^## '
 RE_ITEM='^- '
@@ -78,7 +86,7 @@ validate_handoff() {
   fi
 
   while IFS= read -r line; do
-    line="${line%$'\r'}"
+    line="${line%"${line##*[![:space:]]}"}"
     if [[ $line =~ $RE_ANY_H2 ]]; then
       blank=0
       if [[ $line =~ $RE_HANDOFF_HEADING ]]; then
@@ -183,9 +191,9 @@ extract_blockers() {
 extract_section() {
   printf '%s\n' "$2" \
     | tr -d '\r' \
-    | awk -v want="## $1" '$0 == want {inside=1; next} /^## / {inside=0} inside' \
+    | awk -v want="## $1" '{ sub(/[[:space:]]+$/, "") } $0 == want {inside=1; next} /^## / {inside=0} inside' \
     | grep -E '^- ' \
-    | grep -vE '^- None[[:space:]]*$' \
+    | grep -vE '^- None$' \
     || true
 }
 

@@ -182,26 +182,29 @@ function handoffSection(msg, name) {
   if (typeof msg !== 'string') return []
   // Every line below is the hook's, in the hook's order:
   //   tr -d '\r'
-  //   awk '$0 == want {inside=1; next} /^## / {inside=0} inside'
+  //   awk '{ sub(/[[:space:]]+$/, "") } $0 == want {inside=1; next} /^## / {inside=0} inside'
   //   grep -E '^- '
-  //   grep -vE '^- None[[:space:]]*$'
-  // The heading test is EXACT equality, not a trimmed compare - "## Done "
-  // with a trailing space does not open a section for the hook, so it must not
-  // open one here either. handoff-extractor-parity.sh fails the build if these
-  // two ever disagree on any fixture.
+  //   grep -vE '^- None$'
+  // Every line is right-trimmed before the heading test, exactly as the hook
+  // does - trailing whitespace is invisible in rendered markdown ("## Done  "
+  // is the hard-line-break idiom), so it never changes what a line means.
+  // Leading whitespace still matters: "-  None", two spaces after the dash,
+  // is a real item. handoff-extractor-parity.sh fails the build if these two
+  // ever disagree on any fixture.
   const want = '## ' + name
   const out = []
   let inside = false
   for (const raw of msg.replace(/\r/g, '').split('\n')) {
-    if (raw === want) {
+    const line = raw.replace(/[ \t\v\f]+$/, '')
+    if (line === want) {
       inside = true
       continue
     }
-    if (/^## /.test(raw)) inside = false
+    if (/^## /.test(line)) inside = false
     if (!inside) continue
-    if (!/^- /.test(raw)) continue
-    if (/^- None[ \t\v\f]*$/.test(raw)) continue
-    out.push(raw.slice(2))
+    if (!/^- /.test(line)) continue
+    if (line === '- None') continue
+    out.push(line.slice(2))
   }
   return out
 }

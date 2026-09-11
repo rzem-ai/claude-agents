@@ -58,7 +58,10 @@ BEGIN {
     h[4] = "## Decisions needed"
 }
 
-{ sub(/\r$/, ""); line[NR] = $0 }
+# Right-trim every line before any rule sees it: trailing whitespace is
+# invisible in rendered markdown, so it never changes what a line means.
+# This subsumes the old CRLF strip - the \r is trailing whitespace too.
+{ sub(/[[:space:]]+$/, ""); line[NR] = $0 }
 
 END {
     total = NR
