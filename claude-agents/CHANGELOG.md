@@ -8,6 +8,10 @@ The version in `.claude-plugin/plugin.json` is load-bearing. Clients keep the ca
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-09-11
+
+A one-pointer patch: the open-items list left the repo root and the hooks README follows it.
+
 ### Changed
 
 - The open-items list moved from `Still open, deliberately not touched.md` at the repo root to `docs/TODO.md`, open items only; the closed-item record stays in the old file's git history. The one plugin reference, the worktree-cost note in `hooks/README.md`, follows it.
@@ -202,7 +206,8 @@ Initial scaffolding. The repo became a plugin marketplace with one plugin in it.
 - The directory structure the plan calls for: `agents/`, `skills/`, `hooks/` and `workflows/` inside the plugin, and `evals/`, `scripts/`, `templates/`, `templates/rules/` and `home/` in the repo.
 - This changelog.
 
-[Unreleased]: https://github.com/rzem-ai/claude-agents/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/rzem-ai/claude-agents/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/rzem-ai/claude-agents/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/rzem-ai/claude-agents/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/rzem-ai/claude-agents/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/rzem-ai/claude-agents/compare/v0.6.0...v0.7.0
