@@ -54,7 +54,7 @@ This is the whole per-project story, and it is what makes Claude Code on the web
 ```bash
 git clone https://github.com/rzem-ai/claude-agents.git
 mkdir -p /path/to/your-project/.claude
-cp claude-agents/templates/project-settings.json /path/to/your-project/.claude/settings.json
+cp claude-agents/claude-agents/templates/project-settings.json /path/to/your-project/.claude/settings.json
 ```
 
 The template carries three keys: `extraKnownMarketplaces` (the `rzem` marketplace, sourced from the claude-agents GitHub repo), `enabledPlugins` (`claude-agents@rzem`), and `agent` (`claude-agents:lead`, so the main session runs as the lead). If the project already has a `.claude/settings.json`, merge those three keys into it rather than overwriting the file. Then start Claude Code in the project and trust the folder when asked. On trust, Claude Code adds the marketplace, installs and enables the plugin, and the session runs as the lead - no further prompt. Commit `.claude/settings.json` so every clone, every teammate and every Claude Code on the web session gets the same fleet.
@@ -70,7 +70,9 @@ Append `@<branch-or-tag>` to the claude-agents repo reference (`rzem-ai/claude-a
 
 **Verify.** `claude plugin list` shows `claude-agents@rzem` as enabled. Inside a session, `/agents` lists the ten fleet agents under the plugin. If the plugin installed but the agents are missing, the marketplace cache is stale - see *Staying current* below.
 
-**Optional: the project skeleton.** `templates/CLAUDE.md` is a project CLAUDE.md with `<FILL: ...>` markers for the things that differ per project, and `templates/rules/glossary.md` is the generated glossary rule it refers to. Copy both into the project (`CLAUDE.md` at the root, the rule under `.claude/rules/`) and fill the markers. Never edit the glossary rule by hand - it is generated from the `glossary` skill by `scripts/gen-glossary-rule.sh`.
+**The command route.** With the plugin installed (either route above), `/claude-agents:init` inside a session does the whole per-project setup in one pass: it merges the three settings keys, copies the CLAUDE.md skeleton and the glossary rule into the project, creates `docs/specs/` and `docs/plans/`, then reads the repo and interviews you to fill every `<FILL: ...>` marker. Re-running it is safe - it skips what already exists and only offers to fill markers still present.
+
+**Optional: the project skeleton by hand.** `claude-agents/templates/CLAUDE.md` is a project CLAUDE.md with `<FILL: ...>` markers for the things that differ per project, and `claude-agents/templates/rules/glossary.md` is the generated glossary rule it refers to. Copy both into the project (`CLAUDE.md` at the root, the rule under `.claude/rules/`) and fill the markers. Never edit the glossary rule by hand - it is generated from the `glossary` skill by `scripts/gen-glossary-rule.sh`.
 
 ### 2. Set up a machine
 
@@ -147,7 +149,7 @@ Put the GitHub marketplace back with `claude plugin marketplace add rzem-ai/clau
 
 ```
 .claude-plugin/marketplace.json   the marketplace (name: rzem), one plugin in it
-claude-agents/                    the plugin: agents/, skills/, hooks/, workflows/, CHANGELOG.md
+claude-agents/                    the plugin: agents/, skills/, hooks/, workflows/, commands/, templates/, CHANGELOG.md
 evals/                            one smoke eval per agent, plus lib/ with the deterministic suite
 docs/fleet-plan.md                the plan: what the fleet is and why, in fifteen sections
 docs/agent-contract.md            the shape every agent body conforms to
@@ -156,7 +158,6 @@ docs/plans/                       per-issue implementation plans (the glossary k
 docs/TODO.md                      open items each round has deliberately left, with the reason
 home/                             user-scope files the install script places
 scripts/                          install-home.sh, gen-glossary-rule.sh, merge-settings.py
-templates/                        project settings, CLAUDE.md skeleton, the generated glossary rule
 ```
 
 ## Where things are decided

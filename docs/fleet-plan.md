@@ -181,7 +181,7 @@ CLAUDE.md is for things that must be true on every turn and fit in a sentence: s
 
 Skills are procedures: multi-step, invoked when needed, with their own `allowed-tools`, `model`, `effort`, `context: fork` and `paths:` if they should only trigger in some places. The `skills:` field on an agent preloads the full body at startup, so the agent doesn't have to discover it. That's the mechanism for "copy the skill into the agent": don't. One skill file, preloaded into as many agents as need it, changed in one place. The one exception is a three-line invariant (never force-push, never edit `.env`) which is cheaper as a sentence in the agent body than as a preloaded skill.
 
-The glossary is the test case for that rule, because it needs to be in two places at once: preloaded into every agent, and loaded unconditionally at project scope for the lead session. So `skills/glossary` is canonical and a build step in the claude-agents repo generates `templates/rules/glossary.md` from it. Two copies exist; only one is edited. A Notion copy was planned in v0.3 and dropped: Cowork's Angus gets the board vocabulary from the `board` skill and its system prompt, and a third copy that an agent had to republish was one more thing to drift.
+The glossary is the test case for that rule, because it needs to be in two places at once: preloaded into every agent, and loaded unconditionally at project scope for the lead session. So `skills/glossary` is canonical and a build step in the claude-agents repo generates `claude-agents/templates/rules/glossary.md` from it. Two copies exist; only one is edited. A Notion copy was planned in v0.3 and dropped: Cowork's Angus gets the board vocabulary from the `board` skill and its system prompt, and a third copy that an agent had to republish was one more thing to drift.
 
 Migration of what you have: `brainstorming`, `docwright`, `angus-voice`, `humanize`, `cyber-identity-docs`, `design-studio`, the Electron/React stack suite and `using-memory` all move into the plugin as-is. The grilling interview went the other way, folded into `spec-writer`'s body rather than shipped as a skill. Five new ones: `glossary` (section 3), `handoff` (the four-heading format with typed Decisions needed lines, preloaded into every agent and enforced by the `SubagentStop` hook), `migration-checklist` (section 11), `compound` (section 9) and `board` (the column semantics, the Decisions needed to human-queue mapping, and the item conventions - section 7). Two more the roster assumes and this plan hasn't specified: `tdd` for the coder and `review-checklist` for the reviewer - see section 15. `skill-creator` stays local because it's a workbench, not a dependency.
 
@@ -206,6 +206,11 @@ claude-agents/
     skills/                           # glossary, handoff, board, migration-checklist, compound, plus the migrated set
     hooks/hooks.json                  # SubagentStart -> Doing; SubagentStop handoff check -> Blocked / Blocked by human; TaskCompleted gate -> Done / Blocked
     workflows/                        # spec-to-plan, review-round, deep-research variants
+    commands/init.md                  # /claude-agents:init - per-project setup in one pass
+    templates/
+      project-settings.json           # extraKnownMarketplaces + enabledPlugins + agent, merged into each repo's .claude/settings.json
+      CLAUDE.md                       # skeleton with the glossary pointer
+      rules/glossary.md               # generated, do not edit
     CHANGELOG.md
   evals/                              # one smoke eval per agent, run by claude -p in CI
   evals/lib/check-all.sh              # every deterministic check; no model, no network, no Notion
@@ -213,12 +218,8 @@ claude-agents/
   docs/agent-contract.md              # what every agent body conforms to; the migration checklist checks against it
   docs/runs/                          # run articles, one per substantial run, per the run-article skill
   home/                               # user-scope files: settings.json, CLAUDE.md, rules/, local agent copies
-  scripts/gen-glossary-rule.sh        # skills/glossary -> templates/rules/glossary.md
+  scripts/gen-glossary-rule.sh        # skills/glossary -> claude-agents/templates/rules/glossary.md
   scripts/install-home.sh             # copies home/ into ~/.claude, renders secrets from 1Password
-  templates/
-    project-settings.json             # extraKnownMarketplaces + enabledPlugins, copied into each repo's .claude/settings.json
-    CLAUDE.md                         # skeleton with the glossary pointer
-    rules/glossary.md                 # generated, do not edit
   README.md                           # the front door: what the claude-agents repo is and how to use it
 ```
 

@@ -8,6 +8,18 @@ The version in `.claude-plugin/plugin.json` is load-bearing. Clients keep the ca
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-11
+
+The release that turns the README's per-project setup into one command. Wiring a project used to mean copying a settings template, copying a skeleton, copying a rule and then filling markers by hand - four manual steps documented in prose, and a fresh project this week showed how easily the sequence stalls halfway. Now the plugin does its own induction.
+
+### Added
+
+- **`/claude-agents:init`, the per-project setup as a command.** With the plugin installed, it merges the three settings keys (`agent`, `extraKnownMarketplaces.rzem`, `enabledPlugins`) into `.claude/settings.json`, copies the CLAUDE.md skeleton and the glossary rule into the project, creates `docs/specs/` and `docs/plans/`, then reads the repo - manifests, build and test config, recent commits - and interviews the human to replace every `<FILL: ...>` marker with a confirmed value. It is idempotent by construction: every step skips what exists, an existing `CLAUDE.md` is never touched, a settings key that differs from the template is reported rather than changed, and only the generated glossary rule is ever replaced, because the plugin's copy of a generated file is by definition the current one.
+
+### Changed
+
+- **`templates/` moved into the plugin, at `claude-agents/templates/`.** A command resolves the files it ships with through `${CLAUDE_PLUGIN_ROOT}`, and the repo root is not under it - the templates had to live inside the plugin for `/claude-agents:init` to read them from an installed copy rather than reconstructing them from memory. `scripts/gen-glossary-rule.sh` writes to the new path, and the README, fleet plan and evals README follow. The templates themselves are byte-identical; only their address changed.
+
 ## [0.9.1] - 2026-09-11
 
 The patch that matters more than everything above it: in a live session, none of the hooks ran. Every hook command failed open, non-blocking, on every tool call - the board writes and the scope guard together - and the bug shipped in the first commit the hooks ever made.

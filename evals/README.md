@@ -114,7 +114,7 @@ evals/lib/handoff-parity.sh
 evals/run.sh
 ```
 
-The first two come first because they are free. The generator check catches a stale `templates/rules/glossary.md` before ten agent runs pay for it, and the parity check catches the handoff gate and the production hook drifting apart, which is worse than either being wrong: it means CI fails handoffs the fleet accepts, or passes ones it does not. All three exit non-zero on failure.
+The first two come first because they are free. The generator check catches a stale `claude-agents/templates/rules/glossary.md` before ten agent runs pay for it, and the parity check catches the handoff gate and the production hook drifting apart, which is worse than either being wrong: it means CI fails handoffs the fleet accepts, or passes ones it does not. All three exit non-zero on failure.
 
 Two things to know before wiring it up. The suite makes roughly forty agent calls plus a grader call each, so it is not a per-commit job - run it on changes under `claude-agents/agents/`, `claude-agents/skills/` and `evals/`. And the `lead` eval is the expensive one because the lead can spawn subagents; cap it with `EVAL_CLAUDE_ARGS="--max-turns 30"` or run the other nine on pull requests and the lead nightly.
 

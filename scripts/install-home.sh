@@ -18,7 +18,7 @@
 #
 # The plugin itself is not installed here. That is
 #   claude plugin marketplace update rzem
-# plus a trusted repo carrying templates/project-settings.json.
+# plus a trusted repo carrying claude-agents/templates/project-settings.json.
 #
 # Usage:
 #   scripts/install-home.sh                 install everything

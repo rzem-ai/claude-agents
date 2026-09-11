@@ -11,7 +11,7 @@ Generated from `claude-agents/skills/glossary/SKILL.md` by `scripts/gen-glossary
 
 This rule carries no `paths:` key, so it loads on every turn in any project that installs it.
 
-Canonical copy. `templates/rules/glossary.md` is generated from this file - edit here, never there.
+Canonical copy. `claude-agents/templates/rules/glossary.md` is generated from this file - edit here, never there.
 
 | Term | Meaning | Maps to |
 |---|---|---|
