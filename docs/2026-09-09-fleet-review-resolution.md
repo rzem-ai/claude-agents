@@ -343,7 +343,7 @@ This narrows the supported workflow. It does not preserve the current multi-item
 
 The spec-writer rule accepts any path containing `/docs/specs/`, including another project's directory, and lexical normalisation does not follow existing symlinks. Meanwhile ui-designer immediately returns for non-Bash tools, and tech-writer has no hook branch at all. Both have Write, which can replace source files despite Edit being denied. Consequently the stated document/prototype-only scopes are not enforced at the actual write operation.
 
-**Reproduced:** spec-writer Write to `/tmp/other-project/docs/specs/new.md`, ui-designer Write to this repository's `src/app.ts`, and tech-writer Write to the same source path were all accepted by the hook. No Write was executed.
+**Reproduced:** spec-writer Write to `/tmp/other-project/docs/specs/new.md`, ui-designer Write to the claude-agents repo's `src/app.ts`, and tech-writer Write to the same source path were all accepted by the hook. No Write was executed.
 
 **Proposed resolution:** establish trusted output paths before spawning; resolve both roots and targets physically, including existing symlink components; check each role. For tech-writer and ui-designer, explicit files avoid guessing whether a project's `.md`, `.mdx` or HTML file is documentation or executable source. Include a commissioned run-article path in the allowlist when appropriate.
 
@@ -608,9 +608,9 @@ description: How to write a requested run article covering what was tried, aband
 
 ### R14 - [P2] Finish the interview before invoking the spec-drafting agent - claude-agents/workflows/spec-to-plan.js:188
 
-Stage one commissions a draft before its returned `nextStep` asks the lead to interview Alex. Yet `spec-writer.md` makes interviewing before any spec an absolute invariant, and the workflow cannot collect mid-run answers. The normal documented invocation therefore asks the agent to violate its definition or to refuse the workflow's principal deliverable. Labelling guesses as open questions does not resolve that ordering contradiction.
+Stage one commissions a draft before its returned `nextStep` asks the lead to interview the human. Yet `spec-writer.md` makes interviewing before any spec an absolute invariant, and the workflow cannot collect mid-run answers. The normal documented invocation therefore asks the agent to violate its definition or to refuse the workflow's principal deliverable. Labelling guesses as open questions does not resolve that ordering contradiction.
 
-**Proposed resolution:** have the preparation workflow return the interview brief and stop. Once Alex has answered in the main session, invoke spec-writer with those answers. Keep the later approved-spec-to-plan stage.
+**Proposed resolution:** have the preparation workflow return the interview brief and stop. Once the human has answered in the main session, invoke spec-writer with those answers. Keep the later approved-spec-to-plan stage.
 
 Replace the entire `phase('Draft spec')` call and stage-one return with:
 
@@ -622,7 +622,7 @@ Replace the entire `phase('Draft spec')` call and stage-one return with:
     questions,
     context: { decided, located, priorArt },
     nextStep:
-      'Ask Alex the interview questions in the main session. Then commission spec-writer with the recorded answers to draft ' +
+      'Ask the human the interview questions in the main session. Then commission spec-writer with the recorded answers to draft ' +
       specPath +
       '. Obtain approval of that spec before running the plan stage.',
   }
@@ -631,10 +631,10 @@ Replace the entire `phase('Draft spec')` call and stage-one return with:
 Complete subsequent spawn prompt template:
 
 ```text
-Draft docs/specs/<issue>.md using the interview record below. Alex has answered these questions in the main session. Separate his explicit answers from unresolved questions; do not infer approval for an unanswered point. Write the spec with status draft and return it for Alex to edit and approve. Do not write a plan.
+Draft docs/specs/<issue>.md using the interview record below. The human has answered these questions in the main session. Separate their explicit answers from unresolved questions; do not infer approval for an unanswered point. Write the spec with status draft and return it for the human to edit and approve. Do not write a plan.
 
 Interview record:
-<verbatim questions and Alex's answers>
+<verbatim questions and the human's answers>
 
 Prior decisions and repository evidence:
 <verified preparation results>
@@ -642,7 +642,7 @@ Prior decisions and repository evidence:
 
 Update the workflow metadata to name preparation, interview handoff and approved-spec planning. Preserve a guard for an empty interview brief: a failed preparation agent is not a completed interview.
 
-**Acceptance:** preparation with no answers writes no spec; an explicit interview handoff can draft one; missing answers stay open; the plan stage requires approval; no workflow attempts to ask Alex a question mid-run.
+**Acceptance:** preparation with no answers writes no spec; an explicit interview handoff can draft one; missing answers stay open; the plan stage requires approval; no workflow attempts to ask the human a question mid-run.
 
 ## Validation and evidence boundaries
 
@@ -680,7 +680,7 @@ The replacement snippets in this document are reviewable proposals. They were no
 - **Installed plugin dependencies were not audited.** The open-items note says pr-review-toolkit was disabled in a previous live snapshot. That host state was not refreshed. The current reviewer prompt still assumes the mechanical pass happened; a future integration test should supply actual pass results or explicitly report their absence.
 - **Unattended scheduling and CI are incomplete.** The repository has eval scripts and instructions but no checked-in CI workflow or scheduler. Baselines remain deliberately unset. The review does not interpret a planned weekly schedule or digest as an operational service.
 - **Scope failure is intentionally open.** Missing jq, parse errors and some runtime errors allow calls. This is explicitly documented, so the choice itself is not labelled an accidental regression. It limits any claim that these hooks form a dependable security boundary.
-- **No claim of a live secret leak.** Secret-related settings were read from the repository, not from the real home configuration. No secret values were printed. Credential-path settings and Bash restrictions still require a real sandbox integration test before being described as complete protection.
+- **No claim of a live secret leak.** Secret-related settings were read from the claude-agents repo, not from the real home configuration. No secret values were printed. Credential-path settings and Bash restrictions still require a real sandbox integration test before being described as complete protection.
 
 ## Resolution order and completion criteria
 

@@ -365,7 +365,7 @@ const FIX = { range: 'main...feature/refresh', issue: 'x', fix: true, maxRounds:
 // because the repo had no remote and worktree.baseRef defaults to branching from
 // origin/<default-branch>. If coder is not isolated the main worktree's HEAD
 // moves, it becomes the only candidate, ancestry passes, and the run would
-// accept a commit made on Alex's real working branch - inverting coder's own
+// accept a commit made on the human's real working branch - inverting coder's own
 // invariant that anything on a shared branch is out of scope.
 {
   const r = responder({
@@ -591,7 +591,7 @@ for (const reported of ['./src/a.ts', 'src/a.ts:88']) {
   const r = responder({
     'verify fix': {
       headCommit: 'bbb2222', containsReviewedHead: true, dirty: false,
-      filesChanged: ['/Users/alex/repo/src/a.ts'], commits: ['c'], isMain: false,
+      filesChanged: ['/Users/human/repo/src/a.ts'], commits: ['c'], isMain: false,
       worktreePath: '/w/fix', candidates: ['bbb2222'], worktrees: [{ path: '/w/fix', head: 'bbb2222', dirty: false, isMain: false }],
     },
   })
@@ -698,7 +698,7 @@ for (const reported of ['./src/a.ts', 'src/a.ts:88']) {
   const { result, calls } = await runWorkflow('review-round.js', FIX, r)
   check('coder-blocker-stops', 'a blocker from the fix run stops the loop', result.stopped === 'coder raised a blocker', result.stopped)
   check('coder-blocker-recorded', 'and the blocker text is carried back', /Refresh TTL/.test(JSON.stringify(result.fixRequest || {})), result.fixRequest)
-  // Alex is being told he is needed. He must also be told where to look.
+  // The human is being told they are needed. They must also be told where to look.
   check('coder-blocker-still-locates-the-work', 'and the run still says where the commits are', calls.some((c) => c.opts.label === 'verify fix'), calls.map((c) => c.opts.label))
 }
 
@@ -718,7 +718,7 @@ for (const reported of ['./src/a.ts', 'src/a.ts:88']) {
   check('explicit-round-past-cap', 'a round past the cap spawns nothing at all', result.stopped === 'round cap' && calls.length === 0, [result.stopped, calls.length])
 }
 
-// --- every stop reason has somewhere to send Alex ----------------------------
+// --- every stop reason has somewhere to send the human -----------------------
 
 {
   const seen = new Set()
@@ -823,7 +823,7 @@ for (const [name, verify, why] of GATE_HOLES) {
 }
 
 // The blocker path recorded the commit before the gate ran, so a dirty,
-// non-descendant commit in the main checkout was reported as a fix and Alex was
+// non-descendant commit in the main checkout was reported as a fix and the human was
 // pointed at it.
 {
   const r = responder({

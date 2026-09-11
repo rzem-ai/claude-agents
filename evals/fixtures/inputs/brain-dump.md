@@ -1,4 +1,4 @@
-Alex, into a note at 23:40, unedited.
+The human, into a note at 23:40, unedited.
 
 ok so the thing that keeps annoying me is the board. every time an agent comes
 back with something worth tracking I end up retyping it into notion myself, and

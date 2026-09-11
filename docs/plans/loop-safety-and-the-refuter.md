@@ -24,7 +24,7 @@ Copied verbatim from `docs/agent-contract.md`, and they apply to every task:
 - `model` is an alias, never an ID.
 - The contract's own checklist item 10 now reads: no em dashes, no en dashes, no emojis, Australian spelling, and no hard-wrapped prose. Run it against anything this plan creates.
 - Every behaviour change needs a deterministic test, and `evals/lib/check-all.sh` must be green before each commit.
-- Commit messages: no em dashes, sentence-case subject under about 70 characters, and the two trailers this repository uses.
+- Commit messages: no em dashes, sentence-case subject under about 70 characters, and the two trailers the claude-agents repo uses.
 
 **The plugin version is load-bearing.** `claude-agents/.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` both carry it, and clients cache until it changes. Task 11 bumps it once, at the end.
 
@@ -145,7 +145,7 @@ Run: `bash evals/lib/roster-contract.sh -v`
 
 Expected: PASS, "Every agent body, the matcher, the eval runner and the eval directories agree."
 
-If any assertion fails here, the assertion is wrong, not the repository. Fix the assertion.
+If any assertion fails here, the assertion is wrong, not the claude-agents repo. Fix the assertion.
 
 - [ ] **Step 3: Prove it is not vacuous**
 
@@ -202,7 +202,7 @@ Claude-Session: https://claude.ai/code/session_01DCHeEto78BefsrFae2XXYH"
 
 ### Task 2: The refuter's permissions
 
-Permissions before body, deliberately. The body is a description of what the agent may do; this is what it may actually do. Doing it in this order means the body is never the only thing standing between a refuter and the repository.
+Permissions before body, deliberately. The body is a description of what the agent may do; this is what it may actually do. Doing it in this order means the body is never the only thing standing between a refuter and the claude-agents repo.
 
 **Files:**
 - Modify: `claude-agents/hooks/enforce-agent-scope.sh` (add `enforce_refuter`, add to the dispatch)

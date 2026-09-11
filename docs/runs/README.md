@@ -28,7 +28,7 @@ One article per run, written because the run was substantial or hard, because so
 - A status report, a session diary or a list of completed steps.
 - A state-directory archive, moved or copied in. Those are verbatim hook output under `~/.local/state/claude-agents/archives/`. Promote what one taught into a rule, a skill or a memory, per the `compound` skill; never file the file itself.
 - A spec, a plan, an ADR, a README or a runbook. Those describe the system and belong where they already live. An article describes a run. If a reader needs it to use the thing, it is documentation, not an article.
-- Anything written in Alex's voice or published as him. These are internal technical records by agents.
+- Anything written in the human's voice or published as them. These are internal technical records by agents.
 - Anything about routine work. An article nobody needed is the main way this directory turns into a landfill.
 
 ## The index
@@ -41,6 +41,6 @@ head -n 5 docs/runs/*.md
 
 ## Pruning
 
-Articles are read at the quarterly pass the lead runs over `.claude/rules/` when Alex asks for it; the `compound` skill describes it. An article whose subject no longer exists in the code is deleted; anything in it worth keeping was promoted into a rule, a skill or a memory long before, and git holds the text either way.
+Articles are read at the quarterly pass the lead runs over `.claude/rules/` when the human asks for it; the `compound` skill describes it. An article whose subject no longer exists in the code is deleted; anything in it worth keeping was promoted into a rule, a skill or a memory long before, and git holds the text either way.
 
 If this directory ever passes about fifty files between passes, the problem is upstream: articles are being asked for on routine work, and the fix is in the lead's delegation policy rather than here.

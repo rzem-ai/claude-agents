@@ -136,13 +136,13 @@ Nothing that belongs on a card is near that, and a request over either cap comes
 
 ### Where the overflow goes
 
-A cut comment used to end with a line saying the rest was "in the run transcript". Nothing writes a run transcript. `SubagentStop` holds the whole handoff in a shell variable and drops whatever does not fit, so the one line telling Alex there was more to read pointed at nothing - and it fired on exactly the runs with the most to say.
+A cut comment used to end with a line saying the rest was "in the run transcript". Nothing writes a run transcript. `SubagentStop` holds the whole handoff in a shell variable and drops whatever does not fit, so the one line telling the human there was more to read pointed at nothing - and it fired on exactly the runs with the most to say.
 
 So a comment that has to be cut is archived whole first, and the note names the file it was archived in:
 
 ```
 [Cut to fit a Notion comment. The other 11750 characters, and this text in full,
-are in /Users/alex/.local/state/claude-agents/archives/sess-91/20260908T140020Z-coder.md]
+are in ~/.local/state/claude-agents/archives/sess-91/20260908T140020Z-coder.md]
 ```
 
 ```
@@ -204,7 +204,7 @@ What it tolerates on purpose:
 - **A blank line before the next heading.** That one is ordinary markdown and is what the skill's own example does. A blank line with another item after it is not, and is rejected.
 - **A failed or cancelled run.** The check only runs when `status` is `success`. Exit 2 on a cancellation would refuse to let a cancelled subagent stop, which is the opposite of what a cancellation means. A failed run goes to Blocked and is not asked to reformat itself.
 
-Blockers are extracted from the Decisions needed section only, not from the whole message, and the validator rejects a typed line found under any other heading, so a stray one under Done is caught by the validator instead of quietly parking a false alarm in the human queue. Rescuing it silently would be worse than refusing it: a misplaced blocker means the agent has the format wrong, and Alex only learns that if the run is sent back.
+Blockers are extracted from the Decisions needed section only, not from the whole message, and the validator rejects a typed line found under any other heading, so a stray one under Done is caught by the validator instead of quietly parking a false alarm in the human queue. Rescuing it silently would be worse than refusing it: a misplaced blocker means the agent has the format wrong, and the human only learns that if the run is sent back.
 
 ### One rule set, two implementations
 
@@ -244,11 +244,11 @@ Lenient is the default because a gate that refuses every task on a fresh install
 
 Two deliberate softenings so the hook is not merely annoying: quoted spans are stripped before the redirection scan, so `grep -rn '=>' src/` is allowed, and `2>/dev/null` is removed before that scan, because discarding output is not a state change.
 
-**`fleet-steward`** - "Never touch anything outside the `claude-agents` working copy" and "never run a git command that rewrites shared history". Write tools are denied outside the repo root, and `git merge`, `rebase`, `reset`, `filter-branch`, any force-push, `push --delete`, `push --mirror` and any push naming `main` or `master` are denied. Pushing a feature branch and opening a pull request are allowed, because that is the whole job.
+**`fleet-steward`** - "Never touch anything outside the `claude-agents` working copy" and "never run a git command that rewrites shared history". Write tools are denied outside the claude-agents repo root, and `git merge`, `rebase`, `reset`, `filter-branch`, any force-push, `push --delete`, `push --mirror` and any push naming `main` or `master` are denied. Pushing a feature branch and opening a pull request are allowed, because that is the whole job.
 
-The repo root is `CLAUDE_AGENTS_REPO` if set. Otherwise it is derived from the plugin's own location: if the plugin sits at `<root>/claude-agents` and `<root>/.claude-plugin/marketplace.json` exists, `<root>` is it. If neither works, the check degrades to "the path contains a `claude-agents` directory" and the deny message says to set `CLAUDE_AGENTS_REPO`.
+The claude-agents repo root is `CLAUDE_AGENTS_REPO` if set. Otherwise it is derived from the plugin's own location: if the plugin sits at `<root>/claude-agents` and `<root>/.claude-plugin/marketplace.json` exists, `<root>` is it. If neither works, the check degrades to "the path contains a `claude-agents` directory" and the deny message says to set `CLAUDE_AGENTS_REPO`.
 
-**`reviewer`** - "Never edit, write or create a file", "Never run a git command that writes ... Read-only git only" and "Never run tests, builds or installs". Write tools are denied outright, which is the one that matters: section 4 of the plan singles the reviewer out because a review agent that edits makes the diff Alex approves a different diff from the one he read. `git` is an allowlist - `log`, `show`, `blame`, `diff`, `ls-files`, `status`, `shortlog`, `describe`, `rev-parse`, `rev-list`, `cat-file`, `grep`, `whatchanged` - because "read-only git only" is wider than the seven verbs the invariant names and a denylist would miss the eighth. Test runners, build tools and package managers are a denylist, so the reviewer still reads the tree with `rg`, `cat` and `find`.
+**`reviewer`** - "Never edit, write or create a file", "Never run a git command that writes ... Read-only git only" and "Never run tests, builds or installs". Write tools are denied outright, which is the one that matters: section 4 of the plan singles the reviewer out because a review agent that edits makes the diff the human approves a different diff from the one they read. `git` is an allowlist - `log`, `show`, `blame`, `diff`, `ls-files`, `status`, `shortlog`, `describe`, `rev-parse`, `rev-list`, `cat-file`, `grep`, `whatchanged` - because "read-only git only" is wider than the seven verbs the invariant names and a denylist would miss the eighth. Test runners, build tools and package managers are a denylist, so the reviewer still reads the tree with `rg`, `cat` and `find`.
 
 **`ui-designer`** - "Never run a git command that writes, and never install anything into the product repo". The same read-only `git` allowlist. Installs are matched on the verb rather than the command, because "use Bash only to build, serve or screenshot a prototype" is the job: `npx serve` and `npm run build` are allowed, `npm install`, `pnpm add`, `pip install`, `cargo add`, `go get` and `brew install` are not.
 

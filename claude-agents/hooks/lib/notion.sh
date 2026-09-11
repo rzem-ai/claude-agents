@@ -140,7 +140,7 @@ state_session_page_id() {
 # Where the overflow of a cut comment goes. A comment too long for a card is cut,
 # and the note on the end of it names a file written here. Before this existed
 # the note pointed at a "run transcript" that nothing anywhere writes, so the one
-# message telling Alex there was more to read pointed at nothing, on exactly the
+# message telling the human there was more to read pointed at nothing, on exactly the
 # runs with the most to say.
 #
 # The archive goes in the state directory and never in the hook's cwd. The coder

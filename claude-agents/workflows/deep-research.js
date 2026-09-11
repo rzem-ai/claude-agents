@@ -22,7 +22,7 @@ export const meta = {
 //
 // On memory. Only researcher and the lead may write the shared rzem-memory
 // corpus, and a fan-out run is the worst place to exercise that - each reader
-// sees a fifth of the picture and none of them has seen Alex's reaction. So no
+// sees a fifth of the picture and none of them has seen the human's reaction. So no
 // agent in this workflow captures anything. Durable findings come back as
 // "Propose memory:" lines in the report, deduplicated by the synthesis, and the
 // lead files them after reading it. That is the same shape as "Propose item:"
@@ -56,7 +56,7 @@ const framing = await agent(
       maxAngles +
       ' angles, each searching a different way rather than repeating one search in different words. Between them cover vendor and primary documentation, standards or specifications, changelogs and issue trackers, practitioner writeups, and anything the question makes obviously specific.',
     inCodebase
-      ? 'Also list the questions that can only be answered by reading Alex\'s codebase - where a thing is, how it is currently done, what version is pinned.'
+      ? 'Also list the questions that can only be answered by reading the human\'s codebase - where a thing is, how it is currently done, what version is pinned.'
       : 'This question is not about the codebase, so return no codebase questions.',
   ].join('\n\n'),
   {

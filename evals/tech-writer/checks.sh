@@ -42,7 +42,7 @@ else
     printf 'PASS TW-emoji no emoji found\n'
 fi
 
-# American spellings of the words Alex names.
+# American spellings of the words the house style names.
 # shellcheck disable=SC2086
 if LC_ALL=C grep -Eoiw 'organiz(e|ed|es|ing|ation)|behavior|behaviors|color|colors|recogniz(e|ed|es|ing)|analyz(e|ed|es|ing)' $targets >/dev/null 2>&1; then
     printf 'FAIL TW-spelling American spelling found:\n'

@@ -60,7 +60,7 @@ color: red
 skills: glossary, handoff, using-memory, looping, run-article
 ```
 
-The colour is a collision and there is no way around it: the palette has eight values and this makes ten agents, with `cyan` already doubled between `scout` and `fleet-steward`. `red`, shared with `reviewer`, is Alex's decision and the right one - the two roles sit next to each other in the pipeline and both report on work without touching it, so a reader seeing red learns something true either way.
+The colour is a collision and there is no way around it: the palette has eight values and this makes ten agents, with `cyan` already doubled between `scout` and `fleet-steward`. `red`, shared with `reviewer`, is the human's decision and the right one - the two roles sit next to each other in the pipeline and both report on work without touching it, so a reader seeing red learns something true either way.
 
 `model: opus` and `effort: high` because this is judgement work and the night's evidence came from opus-class agents. `memory` and `isolation` are omitted: it writes nothing in the project, so there is nothing to isolate.
 
@@ -167,7 +167,7 @@ The ladder is instruction, then detection, then prevention. The fleet is thick w
 | Mutation evidence present | the workflow | It reads the handoff already |
 | Mutation evidence correct | the refuter | Nothing mechanical can judge it |
 
-Deliberately not enforced at hook level: the content of a handoff. Requiring new bullets would be a format obligation, and this repository has already refused a fifth heading on the grounds that a field agents must remember is a field that decays. The workflow checking a string it already holds costs nothing and decays into a workflow failure rather than a silent one.
+Deliberately not enforced at hook level: the content of a handoff. Requiring new bullets would be a format obligation, and the claude-agents repo has already refused a fifth heading on the grounds that a field agents must remember is a field that decays. The workflow checking a string it already holds costs nothing and decays into a workflow failure rather than a silent one.
 
 ## 10. The nine-to-ten sweep
 
@@ -177,7 +177,7 @@ Twenty files reference the roster, and eighteen lines say "nine" in so many word
 
 New: `claude-agents/agents/refuter.md`, `claude-agents/skills/looping/SKILL.md`, `evals/refuter/` with `rubric.md`, `baseline.json`, `checks.sh` and `prompts/`.
 
-This is the `fleet-steward`'s kind of sweep and it is not going to it: Alex's decision is that this round does it by hand. That is the right call for two reasons. The steward's editing scope excludes several of these files, so handing it the job would mean widening that scope to do it - reopening a question deliberately left open last week. And a roster change is exactly the kind of edit where the twenty files are not twenty find-and-replaces: eighteen lines say "nine" and can be replaced, and the rest have to be read.
+This is the `fleet-steward`'s kind of sweep and it is not going to it: the human's decision is that this round does it by hand. That is the right call for two reasons. The steward's editing scope excludes several of these files, so handing it the job would mean widening that scope to do it - reopening a question deliberately left open last week. And a roster change is exactly the kind of edit where the twenty files are not twenty find-and-replaces: eighteen lines say "nine" and can be replaced, and the rest have to be read.
 
 ## 11. What this rests on that has not been observed
 
@@ -185,7 +185,7 @@ Stated plainly, because the previous round's lesson was that an unmeasured assum
 
 - **Worktree isolation for a workflow-spawned agent has never been seen to work.** It bears on the refuter only lightly - the refuter writes outside the project by design and needs no worktree - but it bears heavily on `coder`, and a loop whose fixes land in the main checkout is stopped rather than adopted. That is the right failure and it means loop work may simply not run until isolation is settled.
 - **Nothing here has been run against a live Claude.** Every mechanism below the workflow is testable deterministically and will be. What is not testable that way: whether an agent given the refuter's body actually refutes rather than reviews. That is what `evals/refuter/` is for, and its rubric should probe exactly that - a prompt containing a defect the agent is expected to find, and a prompt containing none, where the failure is claiming to have found one.
-- **The refuter's cost is unknown.** It runs the suite repeatedly, once per mutant. On this repository that is seconds; on a large one it may not be. The plan should include a bound on mutants per round, and the workflow should report what it dropped rather than silently sampling.
+- **The refuter's cost is unknown.** It runs the suite repeatedly, once per mutant. On the claude-agents repo that is seconds; on a large one it may not be. The plan should include a bound on mutants per round, and the workflow should report what it dropped rather than silently sampling.
 
 ## 12. Out of scope
 

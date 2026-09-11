@@ -1,12 +1,12 @@
 export const meta = {
   name: 'spec-to-plan',
-  description: 'Prepare and draft a spec for Alex to edit, then turn the edited spec into a phased plan and stop for approval',
+  description: 'Prepare and draft a spec for the human to edit, then turn the edited spec into a phased plan and stop for approval',
   whenToUse:
-    'Starting work on an issue that has no plan yet. Run it once to prepare and draft the spec, run the interview yourself, then run it again on the spec Alex has edited and approved.',
+    'Starting work on an issue that has no plan yet. Run it once to prepare and draft the spec, run the interview yourself, then run it again on the spec the human has edited and approved.',
   phases: [
     { title: 'Gate check', detail: 'read the spec and the plan, if they exist, and report the approval state' },
     { title: 'Recall and locate', detail: 'prior decisions, the code the issue touches, and prior art, in parallel' },
-    { title: 'Interview brief', detail: 'the ordered questions spec-writer has to put to Alex' },
+    { title: 'Interview brief', detail: 'the ordered questions spec-writer has to put to the human' },
     { title: 'Draft spec', detail: 'write docs/specs/<issue>.md with everything unheard as an open question' },
     { title: 'Plan angles', detail: 'three independent phase breakdowns of the approved spec' },
     { title: 'Judge the angles', detail: 'score them against the acceptance criteria and against getting stuck' },
@@ -17,11 +17,11 @@ export const meta = {
 // ---------------------------------------------------------------------------
 // spec-to-plan
 //
-// Two human gates sit inside this sequence and a workflow cannot ask Alex a
+// Two human gates sit inside this sequence and a workflow cannot ask the human a
 // question mid-run, so the script runs as two stages and stops at each gate.
 //
 //   Stage "spec": recall, locate, build the interview brief, draft the spec.
-//     Alex is interviewed in session, not here. He then edits the file and
+//     The human is interviewed in session, not here. They then edit the file and
 //     changes its status line to approved. That edit is the gate: the eval
 //     behind plan section 13 put developer-written specs at +4% task success
 //     and LLM-written ones at -3% for 20% more cost, so the draft exists to be
@@ -29,7 +29,7 @@ export const meta = {
 //
 //   Stage "plan": three Plan agents break the approved spec into phases from
 //     different angles, judges score them, one agent writes the merged plan.
-//     The workflow then stops. No coder runs until Alex approves the plan.
+//     The workflow then stops. No coder runs until the human approves the plan.
 //
 //   /claude-agents:spec-to-plan { "issue": "session-refresh" }
 //   /claude-agents:spec-to-plan { "issue": "session-refresh", "stage": "plan" }
@@ -111,7 +111,7 @@ if (stage === 'plan' && !gate.specApproved) {
     spec: specPath,
     reason: 'The plan stage needs an approved spec. ' + gate.evidence,
     nextStep:
-      'Interview Alex, edit ' + specPath + ' with him, set its status line to approved, then run this workflow again.',
+      'Interview the human, edit ' + specPath + ' with them, set its status line to approved, then run this workflow again.',
   }
 }
 
@@ -158,7 +158,7 @@ if (stage === 'spec') {
   const brief = await agent(
     [
       'Build the interview brief for the spec on "' + issue + '". You are not writing the spec yet.',
-      'Alex is the only source for the problem, the non-goals and the acceptance criteria, so your job is the questions that get what is already in his head onto the page.',
+      'The human is the only source for the problem, the non-goals and the acceptance criteria, so your job is the questions that get what is already in their head onto the page.',
       'What has already been decided:\n' + decided,
       'Where the code is:\n' + located,
       'Prior art and constraints:\n' + priorArt,
@@ -197,12 +197,12 @@ if (stage === 'spec') {
   phase('Draft spec')
   const draft = await agent(
     [
-      'Write ' + specPath + ' as a draft for Alex to edit. Write nowhere else, and never under docs/plans/.',
-      'This is a strawman written before the interview, not after one. That is deliberate: Alex reacts to a wrong draft faster than he fills a blank page. It means the draft must read as a strawman - status draft, every supplied line marked, every question you would have asked left standing in the file. Do not write a handoff that implies the interview happened.',
+      'Write ' + specPath + ' as a draft for the human to edit. Write nowhere else, and never under docs/plans/.',
+      'This is a strawman written before the interview, not after one. That is deliberate: the human reacts to a wrong draft faster than they fill a blank page. It means the draft must read as a strawman - status draft, every supplied line marked, every question you would have asked left standing in the file. Do not write a handoff that implies the interview happened.',
       'Sections: problem, non-goals, acceptance criteria, open questions.',
-      'Put a status line reading draft in the first fifteen lines. Alex changes it to approved once he has edited the file, and nothing downstream runs until he does.',
-      'Every question below that Alex has not answered is an open question in the file, not a decision you made for him.',
-      'Mark every line you supplied rather than heard, so the first thing he edits is the part you guessed at.',
+      'Put a status line reading draft in the first fifteen lines. The human changes it to approved once they have edited the file, and nothing downstream runs until they do.',
+      'Every question below that the human has not answered is an open question in the file, not a decision you made for them.',
+      'Mark every line you supplied rather than heard, so the first thing they edit is the part you guessed at.',
       'An acceptance criterion that cannot be tested is not a criterion.',
       'Questions still open:\n' + JSON.stringify(questions, null, 2),
       'Already decided:\n' + decided,
@@ -219,9 +219,9 @@ if (stage === 'spec') {
     questions,
     draft,
     nextStep:
-      'Put the questions to Alex one at a time in session, edit ' +
+      'Put the questions to the human one at a time in session, edit ' +
       specPath +
-      ' with him, and have him set its status line to approved. Then run this workflow again to produce ' +
+      ' with them, and have them set its status line to approved. Then run this workflow again to produce ' +
       planPath +
       '. The human edit is the gate, not a formality.',
   }
@@ -234,7 +234,7 @@ log('Stage two for ' + issue + '. ' + specPath + ' is approved, so drafting ' + 
 const ANGLES = [
   {
     name: 'thinnest slice',
-    lens: 'Order the phases so the earliest one puts something end to end that Alex can use, and every later phase widens it. Optimise for the shortest path to a real signal.',
+    lens: 'Order the phases so the earliest one puts something end to end that the human can use, and every later phase widens it. Optimise for the shortest path to a real signal.',
   },
   {
     name: 'risk first',
@@ -306,7 +306,7 @@ if (angleDrafts.length < ANGLES.length) {
 
 const JUDGE_LENSES = [
   'Judge against the spec: does each breakdown deliver every acceptance criterion, and does any of them quietly add scope the spec does not carry or settle a question the spec left open?',
-  'Judge against getting stuck: which breakdown finds out earliest that something is wrong, and which one leaves Alex holding a half-finished migration if it stops after phase two?',
+  'Judge against getting stuck: which breakdown finds out earliest that something is wrong, and which one leaves the human holding a half-finished migration if it stops after phase two?',
 ]
 
 phase('Judge the angles')
@@ -360,7 +360,7 @@ const plan = await agent(
     'Take the winning breakdown, graft on the phases the judges singled out, and write the merged plan as numbered phases. Phases are sequential and do not overlap.',
     'Each phase states its intent, the paths it touches, and the test or check that proves it is done.',
     'Carry the spec open questions forward into an open questions section rather than answering them.',
-    'End the file with an approval line reading that no coder runs against this plan until Alex approves it.',
+    'End the file with an approval line reading that no coder runs against this plan until the human approves it.',
     'Australian English, standard hyphens rather than dashes, no emojis.',
   ].join('\n\n'),
   { agentType: WRITER, label: 'write ' + planPath },
@@ -375,7 +375,7 @@ return {
   judges: verdicts,
   written: plan,
   nextStep:
-    'Alex reads and approves ' +
+    'The human reads and approves ' +
     planPath +
-    '. Nothing else happens until he does - a coder spawned against an unapproved plan is a bug, not a shortcut.',
+    '. Nothing else happens until they do - a coder spawned against an unapproved plan is a bug, not a shortcut.',
 }

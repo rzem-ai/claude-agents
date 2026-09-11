@@ -200,7 +200,7 @@ allow_bash reviewer "sed -n '1,80p' src/app.ts"
 allow_bash reviewer 'ls -la src'
 
 printf '\nfleet-steward: a shell, confined to its own working copy\n'
-deny_bash  fleet-steward 'echo x > /Users/alex/Dev/Work/other/a.txt'
+deny_bash  fleet-steward 'echo x > /Users/human/Dev/Work/other/a.txt'
 deny_bash  fleet-steward 'echo x >> ~/other-repo/file.txt'
 deny_bash  fleet-steward 'git push --force origin main'
 deny_bash  fleet-steward 'git merge main'

@@ -23,7 +23,7 @@ export const meta = {
 //      pr-review-toolkit plugin for lint, types, tests and obvious smells.
 //      Cheap, so the expensive stage never spends judgement on a lint error.
 //   2. The Opus reviewer verdict. The reviewer never edits - that is its whole
-//      value, because a reviewer that fixes things means the diff Alex approves
+//      value, because a reviewer that fixes things means the diff the human approves
 //      is not the diff he read.
 //
 // With `fix: true` the loop closes: blocking findings go to coder, and the next
@@ -60,7 +60,7 @@ export const meta = {
 //
 // So coder is spawned WITHOUT a schema. Its handoff comes back as a plain
 // string, the hook still validates it, still comments the card, and still
-// routes a blocker to Alex. Everything this script needs to *decide* on comes
+// routes a blocker to the human. Everything this script needs to *decide* on comes
 // instead from `gitLane` calls, which carry a schema and deliberately carry no
 // `agentType`: the SubagentStop matcher lists only the ten fleet names, so
 // those lanes are skipped by the gate and a schema costs them nothing.
@@ -837,7 +837,7 @@ while (true) {
         .filter(Boolean)
         .join('\n\n'),
       // No schema, for the same reason coder gets none: a schema would delete
-      // this handoff too, and with it the refuter's only route to Alex.
+      // this handoff too, and with it the refuter's only route to the human.
       { agentType: REFUTER, phase: tag + ' refutation', label: tag + ' refutation' },
     )
 
@@ -874,7 +874,7 @@ while (true) {
   }
 
   // A fix made in the final round could never be reviewed, and an unreviewed
-  // commit reported as fixed is the silent wrong answer this repo refuses.
+  // commit reported as fixed is the silent wrong answer the claude-agents repo refuses.
   if (round >= maxRounds) {
     stopped = 'round cap'
     fixRequest = { range: reviewRange, plan: intentPath, findings: blocking, requiresApprovedPlan: true }
@@ -927,8 +927,8 @@ while (true) {
   const said = readHandoff(handoffText)
 
   // Verify BEFORE deciding what to do about a blocker. If coder committed and
-  // then raised a blocker, Alex is being told he is needed; he must also be
-  // told where the work is.
+  // then raised a blocker, the human is being told they are needed; they must
+  // also be told where the work is.
   const verify = await gitLane(
     'verify fix',
     [
@@ -964,7 +964,7 @@ while (true) {
     round,
     requested: blocking,
     // git's answer only. Falling back to coder's claim here meant that when the
-    // lane omitted the path, the location reported to Alex was the very thing
+    // lane omitted the path, the location reported to the human was the very thing
     // this design refuses to trust - and claimMismatch stayed empty, because
     // there was nothing left to disagree with.
     worktreePath: (verify && verify.worktreePath) || '',
@@ -996,7 +996,7 @@ while (true) {
   if (record.claimMismatch.length) log(tag + ': coder\'s handoff disagrees with git - ' + record.claimMismatch.join('; ') + '. Git decides.')
 
   if (said.blockers.length) {
-    // Recorded so Alex is told where to look, but never as an accepted fix: the
+    // Recorded so the human is told where to look, but never as an accepted fix: the
     // gate has not run, and on this path it would often refuse. Marking it
     // accepted put a dirty non-descendant commit in the main checkout into the
     // history as `fixed: true`.
@@ -1081,7 +1081,7 @@ const stillBlocking = (lastVerdict.findings || []).filter(isBlocking)
 const lastFix = fixes[fixes.length - 1] || null
 
 // Every stop reason gets its own next step. A run that falls through to a
-// generic line is a run that tells Alex nothing he did not already know.
+// generic line is a run that tells the human nothing they did not already know.
 const NEXT_STEP = {
   clean:
     'No blocking findings. Read the unverified checks and the non-blocking follow-ups above before deciding whether to merge: they are the reviewer\'s own words, not merge blockers, and it is the lead\'s job to decide which become items. Anything coder proposed is under proposals.' +

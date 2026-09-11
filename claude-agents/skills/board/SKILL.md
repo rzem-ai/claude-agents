@@ -1,7 +1,7 @@
 ---
 name: board
 description: How the Notion board works - the two databases, the meaning of the five columns (to do, doing, blocked, blocked by human, done), which columns are written by hooks and which a human-facing assistant writes itself, the `Board-Item:` line that tells a hook which row a spawn is working on, how the handoff's Decisions needed lines reach the human queue, and what earns a board item at all.
-when_to_use: Read before filing, reading, moving, commenting on or closing anything in the Projects or Tasks databases, before spawning a subagent against an item, before reporting board status to Alex, and whenever you are deciding whether a piece of work is board work or just a task inside the session.
+when_to_use: Read before filing, reading, moving, commenting on or closing anything in the Projects or Tasks databases, before spawning a subagent against an item, before reporting board status to the human, and whenever you are deciding whether a piece of work is board work or just a task inside the session.
 ---
 
 # The board
@@ -14,25 +14,25 @@ Notion holds two databases and the board is a view on one of them. Nothing sits 
 
 ## What earns an item
 
-An issue earns a row. That is the unit of work Alex cares about, and it either has a spec or is trivial enough not to need one. A sub-issue earns a row too and stays related to its parent.
+An issue earns a row. That is the unit of work the human cares about, and it either has a spec or is trivial enough not to need one. A sub-issue earns a row too and stays related to its parent.
 
 A Task in the glossary sense never appears on the board. Tasks are the execution layer inside a session, cheap and many, created with `TaskCreate` and dead when the session ends. One issue may spawn twenty of them and the board does not move. Sessions, phases, rounds, handoffs and reviews are not items either. If you are filing something to remember it for the next ten minutes, it is a task, not an item.
 
 The lead files work that surfaces mid-run. An agent that spots adjacent work while doing a task does not file it itself: the work leaves the run as a `Propose item:` line under Decisions needed, and the lead files it when it merges the handoffs.
 
-`fleet-steward` is the named exception, and the only one. Its sweep is scheduled and unattended rather than mid-run, and there is no lead in the loop to file for it, so proposing would mean a weekly run produced nothing at all until Alex next started a session. It files what the sweep found itself, as Tasks items under the Agent fleet project. That is a licence to create rows and comment on them and nothing else: it still never edits a field, moves a page or writes a column on a row that already exists.
+`fleet-steward` is the named exception, and the only one. Its sweep is scheduled and unattended rather than mid-run, and there is no lead in the loop to file for it, so proposing would mean a weekly run produced nothing at all until the human next started a session. It files what the sweep found itself, as Tasks items under the Agent fleet project. That is a licence to create rows and comment on them and nothing else: it still never edits a field, moves a page or writes a column on a row that already exists.
 
 ## The five columns
 
 | Column | Means | Written by, in the fleet |
 |---|---|---|
-| To do | Filed, not started | Alex, the lead filing a proposal, or `fleet-steward` filing its own scheduled sweep |
+| To do | Filed, not started | The human, the lead filing a proposal, or `fleet-steward` filing its own scheduled sweep |
 | Doing | An agent has picked it up | `SubagentStart` hook |
-| Blocked | Waiting on something that is not Alex - a build, an API, another item, or a run that failed or was cancelled | `SubagentStop` on status failure or cancelled, and `TaskCompleted` when tests fail |
-| Blocked by human | Waiting on an answer from Alex. The human queue | `SubagentStop`, on a `Blocker:` line in the handoff |
+| Blocked | Waiting on something that is not the human - a build, an API, another item, or a run that failed or was cancelled | `SubagentStop` on status failure or cancelled, and `TaskCompleted` when tests fail |
+| Blocked by human | Waiting on an answer from the human. The human queue | `SubagentStop`, on a `Blocker:` line in the handoff |
 | Done | The run finished and its tests passed | `TaskCompleted` hook |
 
-Blocked and blocked by human are separate columns because they need different responses. Blocked is something to wait out or work around. Blocked by human costs Alex an interruption, and it is the only column he monitors.
+Blocked and blocked by human are separate columns because they need different responses. Blocked is something to wait out or work around. Blocked by human costs the human an interruption, and it is the only column they monitor.
 
 ## Who writes the columns
 
@@ -40,9 +40,9 @@ Two environments share this board and they write it differently. Know which one 
 
 **In the fleet, columns are written by hooks and never by an agent.** Three hooks cover every transition in the table above, each PATCHing the Notion API directly. So do not move an item, do not ask for one to be moved, and do not report that you moved one. The only thing you contribute is a correctly formatted handoff, because that is what the hook reads. An agent body or a run that tries to update a status is wrong even when the status it wants is correct. Filing a new row is a different act from writing a column: a new item arrives in to do because that is where new items start. Moving one that already exists is the thing nobody but a hook does.
 
-A comment ending in a `[Cut to fit a Notion comment ...]` line names a file under `~/.local/state/claude-agents/archives/<session-id>/` on Alex's machine: that is the whole comment, written by the hook at the moment it cut it, and it is the only copy of the part the card is missing.
+A comment ending in a `[Cut to fit a Notion comment ...]` line names a file under `~/.local/state/claude-agents/archives/<session-id>/` on the human's machine: that is the whole comment, written by the hook at the moment it cut it, and it is the only copy of the part the card is missing.
 
-**In Cowork there are no hooks, so the assistant layer writes the board by instruction.** Angus moves items himself, and the discipline the hooks provide has to come from three rules instead. First, move an item to doing when you actually start it and to done when it is finished and verified, in the turn it happens, never batched up at the end of a day. Second, the only thing that goes into blocked by human is something genuinely waiting on Alex, with the reason as a comment on the row. Third, never file an item for a step you are about to take in the same turn - that is a task.
+**In Cowork there are no hooks, so the assistant layer writes the board by instruction.** Angus moves items himself, and the discipline the hooks provide has to come from three rules instead. First, move an item to doing when you actually start it and to done when it is finished and verified, in the turn it happens, never batched up at the end of a day. Second, the only thing that goes into blocked by human is something genuinely waiting on the human, with the reason as a comment on the row. Third, never file an item for a step you are about to take in the same turn - that is a task.
 
 ## Telling the hooks which item
 
@@ -89,11 +89,11 @@ Every handoff ends with a Decisions needed heading carrying typed lines, and onl
 
 `Blocker:` moves the item into blocked by human and the blocker text lands as a comment on the row, so the queue answers what is blocked, on what, and for how long, without anyone opening a transcript. `Propose item:` becomes a new row in to do, filed by the lead - or by `fleet-steward` for its own scheduled sweep, per What earns an item above. `Propose memory:` never touches the board at all - it is corpus work for the researcher or the lead.
 
-A false blocker is not free. The queue is read out to Alex at 8am and 4pm Sydney time, and anything sitting in it for more than four hours between 8am and 6pm escalates immediately. Park a routine suggestion there and you have interrupted him for nothing; miss a real one and he never learns he was needed.
+A false blocker is not free. The queue is read out to the human at 8am and 4pm Sydney time, and anything sitting in it for more than four hours between 8am and 6pm escalates immediately. Park a routine suggestion there and you have interrupted them for nothing; miss a real one and they never learn they were needed.
 
 ## Done, and the outcome field
 
-There is no success column. Done means the run finished and its tests passed, and nothing more. Whether the work was any good is the Outcome field on the row - shipped, abandoned or superseded - set when the answer is known, which is usually later and often by Alex.
+There is no success column. Done means the run finished and its tests passed, and nothing more. Whether the work was any good is the Outcome field on the row - shipped, abandoned or superseded - set when the answer is known, which is usually later and often by the human.
 
 So an item that turns out to have been the wrong idea is done with an outcome of abandoned, not dragged back into to do. Replacement work is a new item, and the old row is superseded. A second terminal column is exactly where items go to be stranded, which is why there is not one.
 

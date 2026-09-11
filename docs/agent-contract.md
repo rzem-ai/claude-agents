@@ -45,7 +45,7 @@ One more that is not a column but bites everywhere: **"MCP (read)" needs explici
 
 ### 1.4 Which preloaded skills resolve today
 
-`skills:` resolves a name from the plugin, the project and user scope alike, and a name that resolves nowhere is a silent no-op (check 6 of `migration-checklist`). As of 9 September 2026 the plugin ships `glossary`, `handoff`, `board`, `migration-checklist`, `compound` and `run-article`. Of the other names the bodies preload, only `brainstorming` resolves, from the superpowers plugin. `using-memory`, `alex-voice`, `grilling`, `humanize`, `cyber-identity-docs` and `design-studio` exist in other repos and have not been moved in yet (plan section 8). `docwright`, `tdd`, `review-checklist` and the stack suite (`electron`, `react`, `drizzle`, `fastify`, `tailwind`) do not exist yet (plan section 15). The names stay in the bodies as forward references; update this paragraph when one lands.
+`skills:` resolves a name from the plugin, the project and user scope alike, and a name that resolves nowhere is a silent no-op (check 6 of `migration-checklist`). As of 11 September 2026 the plugin ships `glossary`, `handoff`, `board`, `migration-checklist`, `compound`, `run-article`, `looping` and `humanize`. Of the other names the bodies preload, only `brainstorming` resolves, from the superpowers plugin. `using-memory`, `cyber-identity-docs` and `design-studio` exist in other repos and have not been moved in yet (plan section 8); the grilling interview was folded into `spec-writer`'s body instead of arriving as a skill. `docwright`, `tdd`, `review-checklist` and the stack suite (`electron`, `react`, `drizzle`, `fastify`, `tailwind`) do not exist yet (plan section 15). The names stay in the bodies as forward references; update this paragraph when one lands.
 
 ## 2. Body structure
 
@@ -118,12 +118,12 @@ The fleet uses three servers today, all reached as claude.ai connectors. A conne
 
 | Server | Granted as | Carried by | Where the name came from |
 |---|---|---|---|
-| rzem-memory, the "Memory" connector at memory-mcp.rzem.ai | `mcp__claude_ai_Memory__<tool>` | all ten agents | `claude mcp list` on Alex's laptop, 9 September 2026 |
-| Notion | `mcp__claude_ai_Notion`, and `mcp__claude_ai_Notion__<tool>` in `disallowedTools` | `spec-writer`, `fleet-steward`, the lead | `claude mcp list` on Alex's laptop, 9 September 2026 |
-| Hugging Face | `mcp__claude_ai_Hugging_Face` | `researcher` | `claude mcp list` on Alex's laptop, 9 September 2026 |
+| rzem-memory, the "Memory" connector at memory-mcp.rzem.ai | `mcp__claude_ai_Memory__<tool>` | all ten agents | `claude mcp list` on the human's laptop, 9 September 2026 |
+| Notion | `mcp__claude_ai_Notion`, and `mcp__claude_ai_Notion__<tool>` in `disallowedTools` | `spec-writer`, `fleet-steward`, the lead | `claude mcp list` on the human's laptop, 9 September 2026 |
+| Hugging Face | `mcp__claude_ai_Hugging_Face` | `researcher` | `claude mcp list` on the human's laptop, 9 September 2026 |
 
 Context7 is not installed, so `coder` does not carry it. When it is, it arrives either as a connector (`mcp__claude_ai_Context7`) or, from the official plugin, as `mcp__plugin_context7_<server>`. Add the entry to the body only once `claude mcp list` shows it, and record the spelling here first.
 
-The names were confirmed on one machine. A connector follows Alex's claude.ai login rather than a machine, so the lab boxes and Claude Code on the web should see the same identifiers, but that is an expectation until `claude mcp list` has been run there too. The earlier spellings `mcp__rzem-memory__`, `mcp__Notion` and `mcp__Hugging_Face` were transcribed from display names and granted nothing: a wrong server name is a silent no-op, which is why this table exists. One consequence worth knowing: a connector is one login shared by every agent, so the ten per-agent memory credentials in plan section 6 do not separate agent namespaces today.
+The names were confirmed on one machine. A connector follows the human's claude.ai login rather than a machine, so the lab boxes and Claude Code on the web should see the same identifiers, but that is an expectation until `claude mcp list` has been run there too. The earlier spellings `mcp__rzem-memory__`, `mcp__Notion` and `mcp__Hugging_Face` were transcribed from display names and granted nothing: a wrong server name is a silent no-op, which is why this table exists. One consequence worth knowing: a connector is one login shared by every agent, so the ten per-agent memory credentials in plan section 6 do not separate agent namespaces today.
 
 Two scoping notes that go with the names. rzem-memory reaches all ten agents deliberately (plan section 6); every other server stays scoped, because an MCP server's tool list is paid for on every turn of every agent that carries it. And a plugin agent cannot set `mcpServers` (plan section 9), so any server that is not a connector has to be registered at user scope, or wired in a local copy under `home/agents/`, before a body can name it.

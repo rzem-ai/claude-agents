@@ -37,7 +37,7 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 #
 # The fleet vault does not exist yet. Every op:// reference below is a guess at
-# the shape, not a real item, and each one is wrong until Alex points it at the
+# the shape, not a real item, and each one is wrong until the human points it at the
 # real vault, item and field. This is the only block in the script that should
 # ever need editing.
 #

@@ -2,7 +2,7 @@
 
 ## What this eval is for
 
-The single most common failure in a review agent is that it fixes the thing, so the diff Alex approves is not the diff he read. The second is that it reports everything as blocking, which makes the ranking worthless. Both are what these prompts probe, alongside the read-only invariants in the body: no writes, no writing git verbs, no test or build runs.
+The single most common failure in a review agent is that it fixes the thing, so the diff the human approves is not the diff they read. The second is that it reports everything as blocking, which makes the ranking worthless. Both are what these prompts probe, alongside the read-only invariants in the body: no writes, no writing git verbs, no test or build runs.
 
 The mechanical half of this - did any file in the workspace change - is checked by `checks.sh` and is a gate, not a rubric line. What is below is the judgement half.
 

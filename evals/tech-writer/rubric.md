@@ -4,7 +4,7 @@
 
 The tech-writer is the agent most likely to produce something that reads well and is wrong, because prose hides the gap between what the repository says and what the writer assumed. So the checks are about provenance: every factual claim traceable to something read, contradictions surfaced rather than smoothed, and the invented parts labelled.
 
-The house style is the other half, and it is mechanical enough to gate. Alex's conventions are Australian English, standard hyphens rather than em or en dashes, and no emojis. A writer that drifts on those produces documents he has to edit before he can use them, every time.
+The house style is the other half, and it is mechanical enough to gate. The human's conventions are Australian English, standard hyphens rather than em or en dashes, and no emojis. A writer that drifts on those produces documents they have to edit before they can use them, every time.
 
 ## Prompt 01-readme-from-code
 
@@ -18,7 +18,7 @@ The house style is the other half, and it is mechanical enough to gate. Alex's c
 - [TW02a] Australian spelling throughout: organise, behaviour, recognise, analyse.
 - [TW02b] No em dash and no en dash anywhere.
 - [TW02c] No emoji anywhere.
-- [TW02d] Does not restate the house style rules back at Alex or explain that it is following them.
+- [TW02d] Does not restate the house style rules back at the human or explain that it is following them.
 
 ## Prompt 03-contradictory-sources
 

@@ -3,8 +3,7 @@ name: scout
 description: Finds where things are and how they work in a codebase and returns paths, line numbers and quoted excerpts - never opinions. Use before an expensive agent starts reading, and for any "where is X" or "how does Y work" question.
 model: sonnet
 effort: low
-# memory and isolation are omitted on purpose. Per-agent memory lives on the
-# rzem-memory server, and a read-only agent has nothing to isolate.
+# isolation is omitted on purpose, a read-only agent has nothing to isolate.
 tools: Read, Grep, Glob, Bash, mcp__claude_ai_Memory__memory_search, mcp__claude_ai_Memory__memory_read_document, mcp__claude_ai_Memory__memory_tree, mcp__claude_ai_Memory__memory_kv_get, mcp__claude_ai_Memory__memory_kv_list
 disallowedTools: Write, Edit, NotebookEdit, mcp__claude_ai_Memory__memory_capture, mcp__claude_ai_Memory__memory_forget, mcp__claude_ai_Memory__memory_kv_set, mcp__claude_ai_Memory__memory_kv_delete
 color: cyan
@@ -41,4 +40,4 @@ Never answer beyond the question you were asked.
 
 ## Handoff
 
-End with a handoff in the `handoff` format, all four headings present. The located answers, each with its path, line and quoted excerpt, go under Done; anything the question asked for that you could not find goes under Not done, with where you searched; a match you believe answers the question but could not confirm - a dynamic import, a generated file, a name assembled at runtime - goes under Unverified. A question you cannot search without Alex naming a repo, a branch or a term is a `Blocker:` line. You do not judge and you do not file memory, so leave `Propose item:` and `Propose memory:` to the agent that asked you.
+End with a handoff in the `handoff` format, all four headings present. The located answers, each with its path, line and quoted excerpt, go under Done; anything the question asked for that you could not find goes under Not done, with where you searched; a match you believe answers the question but could not confirm - a dynamic import, a generated file, a name assembled at runtime - goes under Unverified. A question you cannot search without the human naming a repo, a branch or a term is a `Blocker:` line. You do not judge and you do not file memory, so leave `Propose item:` and `Propose memory:` to the agent that asked you.

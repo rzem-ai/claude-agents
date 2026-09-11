@@ -1,7 +1,7 @@
 ---
 name: compound
 description: Capture what a finished unit of work taught you into the one place it will be read again - a project convention into .claude/rules/, a repeatable procedure into a skill, a durable decision into the shared memory corpus as a proposed line in the handoff - and throw away everything that fails the three tests. The discipline is mostly in what you decline to keep.
-when_to_use: Run once at the end of a unit of work that is finished and verified - a merged plan phase, a closed review round, a debugging session that ended in a fix, an approved spec. Also use when Alex says capture the learnings, write this back, or compound, and, for the lead, when Alex asks for the quarterly pass over a project's .claude/rules/ and docs/runs/. Never run it mid-task or on work that has not landed.
+when_to_use: Run once at the end of a unit of work that is finished and verified - a merged plan phase, a closed review round, a debugging session that ended in a fix, an approved spec. Also use when the human says capture the learnings, write this back, or compound, and, for the lead, when the human asks for the quarterly pass over a project's .claude/rules/ and docs/runs/. Never run it mid-task or on work that has not landed.
 ---
 
 # Compound
@@ -10,7 +10,7 @@ At the end of a unit of work, some of what you learned is worth more than the wo
 
 ## When to run
 
-Run once, on a unit of work that is finished and verified. A merged plan phase, a review round that closed, a debugging session that ended in a fix, a spec Alex approved.
+Run once, on a unit of work that is finished and verified. A merged plan phase, a review round that closed, a debugging session that ended in a fix, a spec the human approved.
 
 Do not run it mid-work, do not run it per turn, and do not run it just because a session is ending. Work that failed or was cancelled produces no learnings, only guesses, and an unverified run is the worst possible source for a rule that will be believed by everything that comes after it.
 
@@ -68,7 +68,7 @@ What happens next differs. An archive is promoted or forgotten. An article is in
 
 ## The quarterly pass
 
-Alex asks for it; nothing schedules it. When he does, the lead runs this skill in reverse over one project repo: every file under `.claude/rules/` and every article under `docs/runs/` is read against the three tests as they stand today, and one that now fails a test is deleted rather than softened. A rule whose subject left the code, an article about a run whose code no longer exists, a memory-shaped rule that a later decision superseded - all go, because git holds the text and a directory nobody trusts costs context on every turn. Anything in a doomed file still worth keeping is promoted first, the same way a fresh learning would be. The deletions go under Done in the lead's handoff with a one-line reason each, so the pass leaves a record of what was judged and why.
+The human asks for it; nothing schedules it. When they do, the lead runs this skill in reverse over one project repo: every file under `.claude/rules/` and every article under `docs/runs/` is read against the three tests as they stand today, and one that now fails a test is deleted rather than softened. A rule whose subject left the code, an article about a run whose code no longer exists, a memory-shaped rule that a later decision superseded - all go, because git holds the text and a directory nobody trusts costs context on every turn. Anything in a doomed file still worth keeping is promoted first, the same way a fresh learning would be. The deletions go under Done in the lead's handoff with a one-line reason each, so the pass leaves a record of what was judged and why.
 
 ## How you work
 

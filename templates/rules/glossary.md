@@ -22,7 +22,7 @@ Canonical copy. `templates/rules/glossary.md` is generated from this file - edit
 | Sub-issue | A child of an issue, still tracked on the board | Self-relation on the Tasks database |
 | Task | The unit of agent execution inside a session. Cheap, many, never on the board | Claude Code task list item (`TaskCreate`) |
 | Spec | What and why, human-approved before planning. Written by `spec-writer` | `docs/specs/<issue>.md` |
-| Plan | How, in phases, produced from a spec. Written by the lead, approved by Alex | `docs/plans/<issue>.md` |
+| Plan | How, in phases, produced from a spec. Written by the lead, approved by the human | `docs/plans/<issue>.md` |
 | Phase | A sequential stage of a plan or workflow; phases don't overlap | Workflow `phase()` |
 | Round | One pass of an iterative loop (review round, ralph iteration). Rounds are numbered | `--max-iterations` |
 | Session | One Claude Code conversation, from the lead's first turn to its last | Claude Code session |
@@ -33,7 +33,7 @@ Canonical copy. `templates/rules/glossary.md` is generated from this file - edit
 | Run article | The readable account of one run - what was tried, abandoned and why - written only when the spawn prompt asks for one | `docs/runs/<date>-<agent>-<issue>.md`, `run-article` skill |
 | Gate | A point where a human must approve before the next phase | `TaskCompleted` hook or plan approval |
 | Board | The Tasks database as five columns: to do, doing, blocked, blocked by human, done | Notion board view |
-| Human queue | The "blocked by human" column. The one thing Alex monitors | Notion board column |
+| Human queue | The "blocked by human" column. The one thing the human monitors | Notion board column |
 | Eval | A smoke test for one agent: three to five prompts, a rubric, a baseline score. Run in CI on every definition change | `claude -p` in `claude-agents` CI |
 | Sprite | A home lab AI personal assistant with a persistent identity (Angus, Mabel). Out of scope here; the fleet has no Sprites | Agent SDK agent |
 
@@ -45,4 +45,4 @@ Of the typed Decisions needed lines, only `Blocker:` reaches the human queue - i
 
 Board columns are written by hooks, never by an agent deciding to update something.
 
-Dropped on purpose: "subtask" (say sub-issue or task, whichever you actually mean), "epic" (a project or a milestone covers it), "sprint" (Alex is one person; a dated milestone covers time boxes), "story".
+Dropped on purpose: "subtask" (say sub-issue or task, whichever you actually mean), "epic" (a project or a milestone covers it), "sprint" (the fleet serves one person; a dated milestone covers time boxes), "story".

@@ -2,7 +2,7 @@
 #
 # handoff-extractor-parity.sh - hold review-round's handoff reader to the hook's.
 #
-# There are now three readers of the handoff format in this repository:
+# There are now three readers of the handoff format in the claude-agents repo:
 #
 #   claude-agents/hooks/board-subagent-stop.sh   extract_section   (the board)
 #   evals/lib/handoff-check.sh                   the CI validator

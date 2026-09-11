@@ -1,7 +1,7 @@
 ---
 name: run-article
 description: How to write a run article - the readable account of one run that the handoff cannot carry, covering what was tried and abandoned, what the constraint turned out to be, what surprised you and what to do differently. Articles live in the repo at docs/runs/, git-versioned beside the code they describe, and the path goes in a Done bullet so it reaches the board card. Preloaded into coder, reviewer, researcher and ui-designer, and used only when the spawn prompt asks for one; writable agents save under docs/runs/ and read-only agents return the article above their handoff.
-when_to_use: Use when a spawn prompt asks for a run article, a write-up, a narrative account, an essay or a post-mortem of the work you are about to do or have just done, in those words or near them, and when Alex asks for one after the fact. The ask comes from the lead at spawn time, so do not write one on your own judgement, and never write one instead of the handoff.
+when_to_use: Use when a spawn prompt asks for a run article, a write-up, a narrative account, an essay or a post-mortem of the work you are about to do or have just done, in those words or near them, and when the human asks for one after the fact. The ask comes from the lead at spawn time, so do not write one on your own judgement, and never write one instead of the handoff.
 ---
 
 # Run article
@@ -39,7 +39,7 @@ The test for every paragraph: does it tell that reader something the diff and th
 
 **What to do differently** - what you would do again, what you would not, and what the next person should check first.
 
-Name real paths, real commands, real numbers. An article that could have been written without doing the work is not one. Nothing here is written in Alex's voice; these are internal technical records by agents and `alex-voice` has no part in them.
+Name real paths, real commands, real numbers. An article that could have been written without doing the work is not one. Nothing here is written in the human's voice; these are internal technical records by agents.
 
 ## Where it goes
 
@@ -67,7 +67,7 @@ Put the path in a `## Done` bullet, on its own:
 
 ## Not an archive
 
-An archive under `~/.local/state/claude-agents/archives/` is a verbatim copy of a card comment that was too long, written by a hook at the moment it cut one, on Alex's machine only, unpruned and unbacked. It is a record, and it proves what was said.
+An archive under `~/.local/state/claude-agents/archives/` is a verbatim copy of a card comment that was too long, written by a hook at the moment it cut one, on the human's machine only, unpruned and unbacked. It is a record, and it proves what was said.
 
 An article is a piece of writing, by you, in the repo, versioned with the code, read in review like the code and deleted like the code. It explains what happened. Never paste a handoff into an article, never move an archive into `docs/runs/`, and do not treat one as a substitute for the other.
 

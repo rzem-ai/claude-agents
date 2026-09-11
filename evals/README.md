@@ -106,7 +106,7 @@ That writes the score, the date and the commit into `evals/reviewer/baseline.jso
 
 ## In CI
 
-Section 11: the steward opens a pull request, the evals run on it, and the scores go on the request as a comment. The steward never merges, so the eval run is evidence for Alex's decision rather than a gate that lets a change through by itself.
+Section 11: the steward opens a pull request, the evals run on it, and the scores go on the request as a comment. The steward never merges, so the eval run is evidence for the human's decision rather than a gate that lets a change through by itself.
 
 ```
 scripts/gen-glossary-rule.sh --check

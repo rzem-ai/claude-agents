@@ -378,7 +378,7 @@ bound_scan() {
 # 1.8s and 4.0s, the second having risen from 3.8s when strip_leading_syntax
 # was added below. Everything above 16 segments measures the same as 16.
 #
-# It is generous against real work by a wide margin. This repo's whole scope-hook
+# It is generous against real work by a wide margin. The claude-agents repo's whole scope-hook
 # corpus tops out at four segments, and the longest realistic command anyone has
 # written against this fleet - copy the tree, change it, run the tests - is three.
 SEGMENT_MAX=16
@@ -883,7 +883,7 @@ enforce_fleet_steward() {
     verb="$(sub_verb "${seg}")"
     case "$verb" in
       merge|rebase|reset|filter-branch|filter-repo)
-        deny "fleet-steward invariant: \"Never merge\" and \"never run a git command that rewrites shared history: no force-push, no reset, no rebase onto a shared branch.\" \"git $verb\" is one of those. File it and propose it; Alex decides on the pull request." ;;
+        deny "fleet-steward invariant: \"Never merge\" and \"never run a git command that rewrites shared history: no force-push, no reset, no rebase onto a shared branch.\" \"git $verb\" is one of those. File it and propose it; the human decides on the pull request." ;;
       push)
         case " $seg " in
           *" --force"*|*" -f "*|*" --force-with-lease"*|*" --delete "*|*" --mirror"*)
@@ -921,7 +921,7 @@ REVIEWER_ALLOWED_CMDS=" ls cat head tail sed wc file rg grep find git cd pwd ech
 
 enforce_reviewer() {
   if is_write_tool "$tool_name"; then
-    deny "reviewer invariant: \"Never edit, write or create a file. Not a fix, not a test, not a note.\" The report is the whole output: a reviewer that edits makes the diff Alex approves a different diff from the one he read. Raise it as a finding and let coder make the change."
+    deny "reviewer invariant: \"Never edit, write or create a file. Not a fix, not a test, not a note.\" The report is the whole output: a reviewer that edits makes the diff the human approves a different diff from the one they read. Raise it as a finding and let coder make the change."
   fi
   [ "$tool_name" = "Bash" ] || return 0
   [ -n "$command_str" ] || return 0

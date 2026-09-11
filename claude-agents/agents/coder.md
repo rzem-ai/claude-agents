@@ -3,7 +3,6 @@ name: coder
 description: Implements one phase of an approved plan - tests first, small commits - and reports what changed and what is unverified. Use when a plan is approved and a phase is ready to build.
 model: opus
 effort: high
-# memory is omitted on purpose. Per-agent memory lives on the rzem-memory server.
 # isolation is set because this is the only agent that writes code.
 tools: Read, Grep, Glob, Edit, Write, NotebookEdit, Bash, WebSearch, WebFetch, mcp__claude_ai_Memory__memory_search, mcp__claude_ai_Memory__memory_read_document, mcp__claude_ai_Memory__memory_tree, mcp__claude_ai_Memory__memory_kv_get, mcp__claude_ai_Memory__memory_kv_list
 disallowedTools: mcp__claude_ai_Memory__memory_capture, mcp__claude_ai_Memory__memory_forget, mcp__claude_ai_Memory__memory_kv_set, mcp__claude_ai_Memory__memory_kv_delete
@@ -54,4 +53,4 @@ Never extend your own budget. Running out of rounds is a result to report, not a
 
 ## Handoff
 
-End with a handoff in the `handoff` format, all four headings present. What you changed goes under Done with paths and commit subjects, plus the commands you actually ran and their result and, for each test you added, the change that makes it fail; phase work you did not finish goes under Not done; anything you could not prove - an untested path, a build you could not run, an assumption you carried - goes under Unverified, and be generous there, because `reviewer` reads it as its starting list. A phase you cannot finish until Alex answers is a `Blocker:` line. Work you noticed but did not do is a `Propose item:` line, and a decision worth keeping is a `Propose memory:` line, since you cannot file one yourself. If the spawn prompt asked for a run article, work the `run-article` skill, write it under `docs/runs/` in the same commit as the work it describes, and name the path in a Done bullet.
+End with a handoff in the `handoff` format, all four headings present. What you changed goes under Done with paths and commit subjects, plus the commands you actually ran and their result and, for each test you added, the change that makes it fail; phase work you did not finish goes under Not done; anything you could not prove - an untested path, a build you could not run, an assumption you carried - goes under Unverified, and be generous there, because `reviewer` reads it as its starting list. A phase you cannot finish until the human answers is a `Blocker:` line. Work you noticed but did not do is a `Propose item:` line, and a decision worth keeping is a `Propose memory:` line, since you cannot file one yourself. If the spawn prompt asked for a run article, work the `run-article` skill, write it under `docs/runs/` in the same commit as the work it describes, and name the path in a Done bullet.

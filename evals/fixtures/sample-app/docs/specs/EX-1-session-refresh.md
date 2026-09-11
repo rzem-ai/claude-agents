@@ -1,6 +1,6 @@
 # EX-1 Session refresh
 
-Status: approved by Alex.
+Status: approved by the human.
 
 ## Problem
 

@@ -1,6 +1,6 @@
 # EX-1 Session refresh - plan
 
-Status: approved by Alex on 2026-09-01.
+Status: approved by the human on 2026-09-01.
 
 ## Phase 1 - rotation on refresh
 

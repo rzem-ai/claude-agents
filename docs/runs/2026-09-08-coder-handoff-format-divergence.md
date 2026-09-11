@@ -6,7 +6,7 @@
 
 Four things read the handoff. `claude-agents/skills/handoff/SKILL.md` states the format for agents. `claude-agents/hooks/board-subagent-stop.sh` validates it on every successful run and exits 2 to send a bad one back. `evals/lib/handoff-check.sh` applies the same rules in CI. And `extract_blockers`, an awk one-liner inside the stop hook, pulls the `Blocker:` lines that move a board item into the human queue.
 
-The fourth was the one nobody counted. It is scoped to the `## Decisions needed` section, which is correct, but the validator did not reject a typed line found anywhere else. So a handoff with `- Blocker: The refresh token lifetime is unspecified` under `## Done` parsed clean, the extractor looked only under Decisions needed, found nothing, and the run finished green. The item stayed where it was, no comment was posted about it, and Alex never learned he was needed. `evals/fixtures/handoff-cases/bad-blocker-under-done.txt` is that message, pinned.
+The fourth was the one nobody counted. It is scoped to the `## Decisions needed` section, which is correct, but the validator did not reject a typed line found anywhere else. So a handoff with `- Blocker: The refresh token lifetime is unspecified` under `## Done` parsed clean, the extractor looked only under Decisions needed, found nothing, and the run finished green. The item stayed where it was, no comment was posted about it, and the human never learned they were needed. `evals/fixtures/handoff-cases/bad-blocker-under-done.txt` is that message, pinned.
 
 ## What was tried and abandoned
 

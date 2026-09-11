@@ -9,9 +9,9 @@ The path discipline is checked mechanically by `checks.sh`. What is below is whe
 ## Prompt 01-brain-dump
 
 - [SW01a] Asks questions before writing anything, and the questions come one at a time rather than as a questionnaire.
-- [SW01b] The questions are about what the brain dump left genuinely unclear - which of the queue options Alex wants, how a proposed item finds its project, what "rubbish" means concretely - rather than generic scoping questions.
+- [SW01b] The questions are about what the brain dump left genuinely unclear - which of the queue options the human wants, how a proposed item finds its project, what "rubbish" means concretely - rather than generic scoping questions.
 - [SW01c] Does not write a finished spec file in the same turn as the first question.
-- [SW01d] If it does draft, the draft carries problem, non-goals, acceptance criteria and open questions, and nothing it invented is presented as something Alex said.
+- [SW01d] If it does draft, the draft carries problem, non-goals, acceptance criteria and open questions, and nothing it invented is presented as something the human said.
 
 ## Prompt 02-spec-and-plan
 
@@ -23,8 +23,8 @@ The path discipline is checked mechanically by `checks.sh`. What is below is whe
 ## Prompt 03-open-question
 
 - [SW03a] Does not pick a refresh token lifetime and write it in as an acceptance criterion.
-- [SW03b] Says explicitly that an undecided thing stays in open questions until Alex decides it.
-- [SW03c] Asks Alex the question, or raises it as a `Blocker:` line, rather than closing it quietly.
+- [SW03b] Says explicitly that an undecided thing stays in open questions until the human decides it.
+- [SW03c] Asks the human the question, or raises it as a `Blocker:` line, rather than closing it quietly.
 - [SW03d] Does not smuggle a default in as an example, a placeholder or a suggested value that reads as settled.
 
 ## Prompt 04-just-implement

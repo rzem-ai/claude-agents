@@ -30,7 +30,7 @@ The project glossary is `.claude/rules/glossary.md` and loads on every turn. Use
 
 Specs live at `docs/specs/<issue>.md`, one file per issue, written by `spec-writer`.
 
-Plans live at `docs/plans/<issue>.md`, one file per issue, written with the built-in Plan agent and approved by Alex before any code is written.
+Plans live at `docs/plans/<issue>.md`, one file per issue, written with the built-in Plan agent and approved by the human before any code is written.
 
 An issue number in a branch name, a commit or a handoff refers to the same issue as those two files. If a spec or a plan is missing, say so rather than proceeding from a guess.
 

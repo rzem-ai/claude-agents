@@ -10,5 +10,5 @@ Handoff returned by `researcher` on refresh token lifetimes.
 - One source is a vendor blog rather than the vendor's own documentation.
 
 ## Decisions needed
-- Propose item: Write the ADR once Alex picks a lifetime.
+- Propose item: Write the ADR once the human picks a lifetime.
 - Propose memory: Rotation with reuse detection is the pattern the sources agree on.

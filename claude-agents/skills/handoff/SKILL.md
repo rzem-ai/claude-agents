@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Handoff format
 
-End every final message with a handoff. It is a machine contract, not a style guide: a `SubagentStop` hook parses `last_assistant_message` and, on a successful run, refuses to let you stop until it parses. Deviate and you are sent back to write it again. Get it subtly wrong and either a blocker is missed, so Alex never learns he is needed, or a routine suggestion parks a false alarm in his queue. The eval gate in CI applies exactly the same rules, so a handoff that fails one fails the other.
+End every final message with a handoff. It is a machine contract, not a style guide: a `SubagentStop` hook parses `last_assistant_message` and, on a successful run, refuses to let you stop until it parses. Deviate and you are sent back to write it again. Get it subtly wrong and either a blocker is missed, so the human never learns they are needed, or a routine suggestion parks a false alarm in their queue. The eval gate in CI applies exactly the same rules, so a handoff that fails one fails the other.
 
 ## Structure
 
@@ -40,7 +40,7 @@ Rules a `grep`/`sed` parser depends on:
 
 Every line under Decisions needed carries one of exactly three prefixes. Case-sensitive, spelled exactly as written, colon then a single space:
 
-- `- Blocker: ` - the work is stopped until Alex answers. This and only this moves the board item into "blocked by human". Use it only when you genuinely cannot proceed; it costs him an interruption.
+- `- Blocker: ` - the work is stopped until the human answers. This and only this moves the board item into "blocked by human". Use it only when you genuinely cannot proceed; it costs them an interruption.
 - `- Propose item: ` - suggested new board work. The lead files it. It never touches the human queue.
 - `- Propose memory: ` - worth filing into the shared rzem-memory corpus. Only `researcher` and the lead can write there, so one of them actions it.
 
@@ -48,13 +48,13 @@ Anchor: `^- (Blocker|Propose item|Propose memory): `.
 
 There is no fourth prefix and an untyped line is invalid.
 
-A typed line belongs under `## Decisions needed` and nowhere else. Start a line with one of those three prefixes under `## Done`, `## Not done` or `## Unverified` and the whole handoff is malformed: the hook rejects it and asks you to send it again. It is not read from there and it is not quietly moved for you, because a blocker in the wrong section means the agent has the format wrong, and rescuing it silently would hide that from Alex.
+A typed line belongs under `## Decisions needed` and nowhere else. Start a line with one of those three prefixes under `## Done`, `## Not done` or `## Unverified` and the whole handoff is malformed: the hook rejects it and asks you to send it again. It is not read from there and it is not quietly moved for you, because a blocker in the wrong section means the agent has the format wrong, and rescuing it silently would hide that from the human.
 
 Both parsers anchor on the start of a line, so naming a prefix mid-sentence in prose costs nothing. What matters is where a line that *starts* with one appears.
 
 ## Do not signal status in the text
 
-The harness sends `SubagentStop` no status field - not `success`, not `failure`, not `cancelled`; the shipped CLI's own schema has no such field, and the hooks were reading one that never arrived (see `hooks/README.md` item 15). So this handoff is the only account of the run that anything downstream gets. That does not mean inventing a status line, a "FAILED" banner or a truncated message: the four sections already say it. What went wrong goes under Not done, what you could not prove goes under Unverified, and anything that needs Alex before the work can continue is a `Blocker:` line - which is the one route to the human queue that actually works.
+The harness sends `SubagentStop` no status field - not `success`, not `failure`, not `cancelled`; the shipped CLI's own schema has no such field, and the hooks were reading one that never arrived (see `hooks/README.md` item 15). So this handoff is the only account of the run that anything downstream gets. That does not mean inventing a status line, a "FAILED" banner or a truncated message: the four sections already say it. What went wrong goes under Not done, what you could not prove goes under Unverified, and anything that needs the human before the work can continue is a `Blocker:` line - which is the one route to the human queue that actually works.
 
 ## Example
 
