@@ -8,6 +8,15 @@ The version in `.claude-plugin/plugin.json` is load-bearing. Clients keep the ca
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-09-12
+
+The live probes 0.15.0 asked for, run the same evening, and the answers rewrite finding 1 in the fleet's favour with one new hole named.
+
+### Changed
+
+- **Isolation is settled: the harness honours `coder`'s own `isolation: worktree` frontmatter.** Two live `claudecode-agents:coder` spawns - one with an explicit `isolation: "worktree"` argument, one deliberately without - both got locked linked worktrees, and their commits stayed on per-agent branches. `coder`'s opening line goes back to stating the worktree as fact, with the verification step kept, and the lead's guidance is corrected: the risk was never a forgotten parameter. The same runs exercised the SubagentStop gate live for the first time - malformed handoff, exit 2, clean re-emit, three times - and caught the scope hook refusing a `--git-dir` redirect on a read-only command, broader than the writing-verb rule the docs describe.
+- **The one observed way past all of it is a named spawn.** A fleet agent spawned with a `name` and no isolation runs as a teammate whose events carry the name as `agent_type`: the scope hook's no-type branch allows everything, the SubagentStop matcher never matches, no worktree is cut, and two such spawns were watched committing empty commits straight to main. This is the likeliest shape of the trample the opencode-agents port observed. The lead's body now carries the rule - spawn fleet agents plainly, type and prompt, nothing else - and `docs/TODO.md` records the open design question: keying the hooks on something a teammate cannot rename. Both "never observed" TODO entries are updated; only review-round's own worktree lane remains unobserved.
+
 ## [0.15.0] - 2026-09-12
 
 The release that answers the opencode-agents port's findings document (`opencode-agents/docs/findings/claude-agents-2026-09-12.md`), the first external audit the fleet has had - produced by using the fleet on real work, which found what the eval suite's authors had not thought to test. Finding 4 (trailing whitespace) was already closed by 0.11.1; the rest land here.
