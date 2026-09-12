@@ -8,6 +8,22 @@ The version in `.claude-plugin/plugin.json` is load-bearing. Clients keep the ca
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-09-12
+
+The release that answers the opencode-agents port's findings document (`opencode-agents/docs/findings/claude-agents-2026-09-12.md`), the first external audit the fleet has had - produced by using the fleet on real work, which found what the eval suite's authors had not thought to test. Finding 4 (trailing whitespace) was already closed by 0.11.1; the rest land here.
+
+### Changed
+
+- **Bodies stop naming skills that do not exist** (finding 3). Eleven forward-reference names (`using-memory`, `docwright`, `design-studio`, `cyber-identity-docs`, `review-checklist`, `tdd` and the stack suite) are stripped from every agent's frontmatter and every prose step that leaned on one now carries the procedure inline - `reviewer` step 2 names its checklist dimensions, `coder` says test-first in its own words. A name that resolves to nothing tells the agent a procedure is loaded when it is not, which the findings document rightly ranked worse than no name at all. The roadmap stays in plan sections 8 and 15 and the contract's 1.4; when a skill actually ships, it returns to the frontmatter. `roster-contract` now enforces the inverse rule - every preloaded name must resolve in the plugin (or be the known superpowers `brainstorming`) - mutation-tested, and it drops its old requirement that every body preload the never-shipped `using-memory`.
+- **The lead is told what actually isolates a coder** (finding 1). Spawning `coder` means passing `isolation: "worktree"` on the Agent call itself; the frontmatter states intent, the spawn parameter is what has been observed to isolate, and the port watched two coders trample one checkout with no error anywhere. `coder`'s own opening line stops asserting the worktree as fact and instead verifies it - `git rev-parse --git-common-dir`, and stop rather than commit if the answer is the main checkout. The harness-level question (should definition-level `isolation:` be self-executing?) stays open in docs/TODO.md.
+- **Delegation policy gains a second axis** (finding 5): concurrent spawns against one shared endpoint - a local model server, a rate-limited API, one database pool - are capped or serialised, and the endpoint's own logs are read before the client's error is believed, because contention surfaces as a misleading error at the far end (the port's "context exceeded" on a three-token prompt was a full KV cache).
+- **An absent handoff is a failed run** (finding 6), as a lead invariant: a saturated endpoint, an exhausted token budget and an unreachable model all return empty and clean, so an empty result is respawned or investigated, never read as "nothing to report". The SubagentStop transcript gate already catches the case on the hook side; this closes it on the reading side.
+- **`fleet-steward`'s sweep gains the MCP-name diff** (finding 2): every `mcp__<server>__<tool>` identifier granted in the bodies is checked against `claude mcp list`, and a name that resolves to nothing is filed as an issue, because a wrong tool name grants nothing, raises no error, and is the fleet's most expensive silent failure.
+
+### Added
+
+- **CI exists now** (finding 7). `.github/workflows/checks.yml` runs `evals/lib/check-all.sh` - every deterministic check, no model, no network, no board - on every push and pull request. The glossary's Eval row and `fleet-steward`'s procedure now say what is true: deterministic checks in CI, smoke evals manual via `evals/run.sh`, because `claude -p` in a public runner means a key and a budget the repo should not carry.
+
 ## [0.14.0] - 2026-09-12
 
 The rename: `claude-agents` becomes `claudecode-agents`, matching its sibling `opencode-agents`. One name, four namespaces, all moved together.

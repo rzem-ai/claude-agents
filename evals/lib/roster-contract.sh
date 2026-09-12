@@ -68,10 +68,24 @@ for body in "$AGENT_DIR"/*.md; do
     ! grep -q '—\|–' "$body"
     check "$agent-dashes" "no em dashes and no en dashes" $?
 
-    for skill in glossary handoff using-memory; do
+    # glossary and handoff are the two skills every body must preload. The
+    # third used to be using-memory, until 12 September 2026: it never shipped,
+    # and the opencode-agents port's findings showed a frontmatter name that
+    # resolves to nothing tells the agent a procedure is loaded when it is not.
+    # Forward references were stripped; a body preloads only what resolves.
+    for skill in glossary handoff; do
         grep -q "^  - $skill\$" "$body"
         check "$agent-skill-$skill" "preloads $skill" $?
     done
+
+    # And the inverse of the old rule: no body names a skill that does not
+    # exist in the plugin or the known superpowers dependency (brainstorming).
+    while IFS= read -r sk; do
+        sk="${sk#  - }"
+        if [ "$sk" != "brainstorming" ] && [ ! -d "$REPO_ROOT/claudecode-agents/skills/$sk" ]; then
+            check "$agent-skill-resolves-$sk" "preloaded skill $sk resolves" 1 "no skills/$sk in the plugin"
+        fi
+    done < <(awk '/^skills:/{f=1;next} f&&/^  - /{print} f&&!/^  - /{f=0}' "$body")
 
     # [(|] on the left, because the first name in the alternation is preceded
     # by the opening bracket rather than a pipe - which `lead` is.

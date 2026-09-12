@@ -26,7 +26,7 @@ Canonical copy. `claudecode-agents/templates/rules/glossary.md` is generated fro
 | Gate | A point where a human must approve before the next phase | `TaskCompleted` hook or plan approval |
 | Board | The team's issues as five columns: to do, doing, blocked, blocked by human, done | Linear board view, grouped by workflow state |
 | Human queue | The "blocked by human" column. The one thing the human monitors | Linear workflow state |
-| Eval | A smoke test for one agent: three to five prompts, a rubric, a baseline score. Run in CI on every definition change | `claude -p` in `claudecode-agents` CI |
+| Eval | A smoke test for one agent: three to five prompts, a rubric, a baseline score. Deterministic checks run in CI; the model runs are manual | `evals/run.sh`, and `evals/lib/check-all.sh` in `claudecode-agents` CI |
 | Sprite | A home-lab AI personal assistant with a persistent identity. Out of scope here; the fleet has no Sprites | Agent SDK agent |
 
 Consequences of those definitions that are routinely got wrong:

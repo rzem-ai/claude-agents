@@ -1,0 +1,18 @@
+name: checks
+
+# The deterministic half of the eval story: every contract, parity, roster and
+# workflow-logic check, no model, no network, no board. The smoke evals
+# (evals/run.sh) stay manual - they call claude -p, which needs a key and a
+# budget that a public CI run should not carry.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  deterministic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Every deterministic check
+        run: bash evals/lib/check-all.sh

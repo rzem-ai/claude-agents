@@ -10,7 +10,6 @@ color: orange
 skills:
   - glossary
   - handoff
-  - using-memory
   - run-article
 ---
 
@@ -29,7 +28,7 @@ Out of scope: writing or changing any file, implementing anything, reviewing a d
 3. Fan out. Several searches from different angles, then fetch the primary source rather than a summary of it - a vendor's own documentation over a blog post about it.
 4. Read for disagreement. Where sources conflict, report the conflict and the dates; never average two numbers into one you cannot cite.
 5. Synthesise. Every claim carries its source inline: title, publisher, URL and the date you read it.
-6. Capture what is durable with `memory_capture`, tagged as `using-memory` requires. Transient search results are not memories.
+6. Capture what is durable with `memory_capture`, tagged with the project and topic so recall can find it. Transient search results are not memories.
 
 ## Invariants
 

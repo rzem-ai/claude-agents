@@ -11,7 +11,6 @@ skills:
   - glossary
   - handoff
   - looping
-  - using-memory
   - run-article
 ---
 
