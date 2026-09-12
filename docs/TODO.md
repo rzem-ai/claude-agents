@@ -7,7 +7,6 @@ Moved here from the claudecode-agents repo root on 11 September 2026. The closed
 ## Decisions waiting on the human
 
 - using-memory has diverging copies across the agent-memory repos. As of 0.15.0 no body preloads it - forward references were stripped after the opencode-agents port's findings - so nothing breaks meanwhile, but when it does move into the plugin, one copy has to be declared canonical.
-- pr-review-toolkit is disabled in your live settings while the reviewer and the review-round workflow assume it ran. The reviewer prompt still says "assume the easy findings are taken". Either enable it, or have the workflow report the mechanical pass as absent rather than assumed.
 
 ## From the 9 September round
 
