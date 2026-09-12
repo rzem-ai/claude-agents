@@ -20,8 +20,8 @@ VERBOSE=0
 
 LIB_DIR=$(cd "$(dirname "$0")" && pwd)
 REPO_ROOT=$(cd "$LIB_DIR/../.." && pwd)
-AGENT_DIR="$REPO_ROOT/claude-agents/agents"
-HOOKS_JSON="$REPO_ROOT/claude-agents/hooks/hooks.json"
+AGENT_DIR="$REPO_ROOT/claudecode-agents/agents"
+HOOKS_JSON="$REPO_ROOT/claudecode-agents/hooks/hooks.json"
 RUN_SH="$REPO_ROOT/evals/run.sh"
 
 PASSED=0

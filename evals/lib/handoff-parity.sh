@@ -6,7 +6,7 @@
 # set, or CI fails a handoff production accepts and production sends back a
 # handoff CI passed:
 #
-#   production  claude-agents/hooks/board-subagent-stop.sh, on the
+#   production  claudecode-agents/hooks/board-subagent-stop.sh, on the
 #               `last_assistant_message` of a successful SubagentStop. Exit 2
 #               means "malformed, re-emit".
 #   CI          evals/lib/handoff-check.sh, on the final assistant message of
@@ -19,7 +19,7 @@
 # Usage:  evals/lib/handoff-parity.sh [-v]
 #           -v  also print each implementation's reasons for every case
 #
-# Nothing here touches Linear: the hook runs with CLAUDE_AGENTS_BOARD=off and a
+# Nothing here touches Linear: the hook runs with CLAUDECODE_AGENTS_BOARD=off and a
 # throwaway config and state directory.
 
 set -uo pipefail
@@ -34,7 +34,7 @@ REPO_ROOT=$(cd "$EVAL_ROOT/.." && pwd)
 CASES_DIR="$EVAL_ROOT/fixtures/handoff-cases"
 EXPECTED="$CASES_DIR/expected.tsv"
 CHECK="$LIB_DIR/handoff-check.sh"
-HOOK="$REPO_ROOT/claude-agents/hooks/board-subagent-stop.sh"
+HOOK="$REPO_ROOT/claudecode-agents/hooks/board-subagent-stop.sh"
 
 for f in "$EXPECTED" "$CHECK" "$HOOK"; do
     [ -f "$f" ] || { printf 'handoff-parity: missing %s\n' "$f" >&2; exit 2; }
@@ -48,9 +48,9 @@ mkdir -p "$TMP/config" "$TMP/state"
 printf 'not-a-real-token\n' > "$TMP/config/linear.token"
 chmod 600 "$TMP/config/linear.token"
 
-export CLAUDE_AGENTS_CONFIG_DIR="$TMP/config"
-export CLAUDE_AGENTS_STATE_DIR="$TMP/state"
-export CLAUDE_AGENTS_BOARD=off
+export CLAUDECODE_AGENTS_CONFIG_DIR="$TMP/config"
+export CLAUDECODE_AGENTS_STATE_DIR="$TMP/state"
+export CLAUDECODE_AGENTS_BOARD=off
 export BOARD_DRY_RUN=1
 
 hook_verdict() {

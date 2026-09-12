@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #
-# gen-glossary-rule.sh - generate claude-agents/templates/rules/glossary.md from the glossary skill.
+# gen-glossary-rule.sh - generate claudecode-agents/templates/rules/glossary.md from the glossary skill.
 #
 # Plan section 8: the glossary has to exist in three places at once - preloaded
 # into every agent, loaded unconditionally at project scope, and published to
-# Notion. Only one of the three is edited. This script makes the second one.
+# the project rule. Only one of the two is edited. This script makes the second.
 #
-#   source  claude-agents/skills/glossary/SKILL.md   (canonical, hand edited)
-#   target  claude-agents/templates/rules/glossary.md  (generated, never edited)
+#   source  claudecode-agents/skills/glossary/SKILL.md   (canonical, hand edited)
+#   target  claudecode-agents/templates/rules/glossary.md  (generated, never edited)
 #
 # The generated rule carries no `paths:` key on purpose. A project rule without
 # `paths:` loads unconditionally, which is what the glossary needs.
@@ -25,8 +25,8 @@ set -euo pipefail
 SCRIPT_NAME=$(basename "$0")
 REPO_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 
-SOURCE_REL="claude-agents/skills/glossary/SKILL.md"
-TARGET_REL="claude-agents/templates/rules/glossary.md"
+SOURCE_REL="claudecode-agents/skills/glossary/SKILL.md"
+TARGET_REL="claudecode-agents/templates/rules/glossary.md"
 
 SOURCE="$REPO_ROOT/$SOURCE_REL"
 TARGET="$REPO_ROOT/$TARGET_REL"

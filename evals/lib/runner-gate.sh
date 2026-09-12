@@ -87,7 +87,7 @@ else
     printf '  FAIL  %s\n' 'provenance records a hash per definition'
 fi
 
-if grep -q -- '--plugin-dir' "$EVAL_ROOT/run.sh" && grep -q 'claude-agents:\$agent' "$EVAL_ROOT/run.sh"; then
+if grep -q -- '--plugin-dir' "$EVAL_ROOT/run.sh" && grep -q 'claudecode-agents:\$agent' "$EVAL_ROOT/run.sh"; then
     PASSED=$((PASSED + 1))
     [ "$VERBOSE" -eq 1 ] && printf '  ok    %s\n' 'the checkout is loaded and the agent is plugin-scoped'
 else

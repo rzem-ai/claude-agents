@@ -4,11 +4,11 @@
 #
 # Three hooks parse the four-heading handoff, so a body that drifts off the
 # format breaks the board rather than just reading badly. This is the machine
-# reading of `claude-agents/skills/handoff/SKILL.md`, applied to the final
+# reading of `claudecode-agents/skills/handoff/SKILL.md`, applied to the final
 # message of an eval run.
 #
 # It applies the same rules as the production validator in
-# `claude-agents/hooks/board-subagent-stop.sh`, which is what decides whether a
+# `claudecode-agents/hooks/board-subagent-stop.sh`, which is what decides whether a
 # real subagent is sent back to re-emit. The two are held identical by
 # `evals/lib/handoff-parity.sh`, which runs both over
 # `evals/fixtures/handoff-cases/` and fails if their verdicts ever differ.

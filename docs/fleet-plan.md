@@ -1,20 +1,20 @@
 # Claude Code Subagent Fleet - Plan v0.3.1
 
-Author: Angus, for Alex. Date: 8 September 2026, corrected 9 September 2026. Status: draft for argument. This is the plan that section 10's tree names, kept current by the steward's PRs. It lived at the claude-agents repo root as `README.md` until 11 September 2026, when the root README became a front door for readers and the plan moved here; "plan section N" anywhere in the claude-agents repo means this file.
+Author: Angus, for Alex. Date: 8 September 2026, corrected 9 September 2026. Status: draft for argument. This is the plan that section 10's tree names, kept current by the steward's PRs. It lived at the claudecode-agents repo root as `README.md` until 11 September 2026, when the root README became a front door for readers and the plan moved here; "plan section N" anywhere in the claudecode-agents repo means this file.
 
 ## Changelog since v0.3
 
 12 September 2026: the board backend is Linear, reversing the v0.2 choice below - the glossary's vocabulary was Linear's ontology all along, the simulated tracker (two databases, a faked sub-issue relation) stopped paying for itself, and hooks speak GraphQL with one personal API key instead of a shared-integration token. Sections 7, 8, 12 and 15 read accordingly; the v0.2 note stands as history.
 
-Corrections only, made when the plan moved from an untracked `tmp/` file into the claude-agents repo. MCP servers reach the fleet as claude.ai connectors, so their tool identifiers carry a `claude_ai_` prefix; `docs/agent-contract.md` section 6 holds the confirmed spellings. Context7 is not installed and `coder` does not carry it until it is. The roster now shows `board` preloaded into the lead, `spec-writer` and `fleet-steward`, and `coder`'s tools as the explicit allowlist its body carries. The section 10 tree gains `docs/` - the agent contract and the run articles - and the project settings example uses the object form of `enabledPlugins` plus the `agent` key. Fourteen of the skills the roster preloads are not yet in the plugin; the contract's section 1.4 lists which. The Notion copy of the glossary is dropped (section 8), the quarterly pass over a project's rules and run articles is the lead's job on the human's ask rather than the steward's, and the steward's editing list now names everything its four jobs touch.
+Corrections only, made when the plan moved from an untracked `tmp/` file into the claudecode-agents repo. MCP servers reach the fleet as claude.ai connectors, so their tool identifiers carry a `claude_ai_` prefix; `docs/agent-contract.md` section 6 holds the confirmed spellings. Context7 is not installed and `coder` does not carry it until it is. The roster now shows `board` preloaded into the lead, `spec-writer` and `fleet-steward`, and `coder`'s tools as the explicit allowlist its body carries. The section 10 tree gains `docs/` - the agent contract and the run articles - and the project settings example uses the object form of `enabledPlugins` plus the `agent` key. Fourteen of the skills the roster preloads are not yet in the plugin; the contract's section 1.4 lists which. The Notion copy of the glossary is dropped (section 8), the quarterly pass over a project's rules and run articles is the lead's job on the human's ask rather than the steward's, and the steward's editing list now names everything its four jobs touch.
 
 ## Changelog since v0.2
 
-Linear is dropped entirely and Notion takes its place, as backlog and as a visible board. Two databases: Projects and Tasks, with Tasks carrying a five-column board view (to do, doing, blocked, blocked by human, done). "Blocked by human" is the queue you monitor, fed by the Decisions needed heading every handoff already produces, surfaced by a twice-daily digest with escalation after four hours. Status writes are a hook, not an instruction - `SubagentStart`, `SubagentStop` and `TaskCompleted`, verified against the hooks reference. Decisions needed lines are typed so the queue hook only fires on real blockers. One workspace, everything in it, full detail. Chezmoi is gone: user-scope files ship from a `home/` directory in the claude-agents repo via an install script, secrets come from 1Password, and per-agent memory moves off disk onto the rzem-memory server with one credential per agent - so there is nothing left to sync.
+Linear is dropped entirely and Notion takes its place, as backlog and as a visible board. Two databases: Projects and Tasks, with Tasks carrying a five-column board view (to do, doing, blocked, blocked by human, done). "Blocked by human" is the queue you monitor, fed by the Decisions needed heading every handoff already produces, surfaced by a twice-daily digest with escalation after four hours. Status writes are a hook, not an instruction - `SubagentStart`, `SubagentStop` and `TaskCompleted`, verified against the hooks reference. Decisions needed lines are typed so the queue hook only fires on real blockers. One workspace, everything in it, full detail. Chezmoi is gone: user-scope files ship from a `home/` directory in the claudecode-agents repo via an install script, secrets come from 1Password, and per-agent memory moves off disk onto the rzem-memory server with one credential per agent - so there is nothing left to sync.
 
 ## Changelog since v0.1
 
-Fourteen internal inconsistencies resolved after review. The substantive changes: the `lead` is now a first-class roster entry that owns planning and all escalation policy; `explorer` is renamed `scout` and moved from `haiku` to `sonnet`; `research-handoff` becomes `handoff` and is preloaded into every agent; the glossary has one canonical copy with the others generated from it; security gets its own numbered section; the build order uses Milestones, matching the glossary's own definition. `career-strategist` is dropped entirely, taking the fleet to nine agents, all of which ship in the plugin. Naming is consistent on `claude-agents` and `claude-agents@rzem` throughout. rzem-memory goes to all nine agents, read everywhere and write for `researcher` and the lead only, with `using-memory` preloaded fleet-wide. Two arithmetic errors in section 5 corrected, competitor pricing removed as home lab scope, and Mythos 5 given its own benchmark column instead of borrowing Fable 5's.
+Fourteen internal inconsistencies resolved after review. The substantive changes: the `lead` is now a first-class roster entry that owns planning and all escalation policy; `explorer` is renamed `scout` and moved from `haiku` to `sonnet`; `research-handoff` becomes `handoff` and is preloaded into every agent; the glossary has one canonical copy with the others generated from it; security gets its own numbered section; the build order uses Milestones, matching the glossary's own definition. `career-strategist` is dropped entirely, taking the fleet to nine agents, all of which ship in the plugin. Naming is consistent on `claudecode-agents` and `claudecode-agents@rzem` throughout. rzem-memory goes to all nine agents, read everywhere and write for `researcher` and the lead only, with `using-memory` preloaded fleet-wide. Two arithmetic errors in section 5 corrected, competitor pricing removed as home lab scope, and Mythos 5 given its own benchmark column instead of borrowing Fable 5's.
 
 ## 1. What this covers
 
@@ -58,7 +58,7 @@ There's no industry standard, only four vocabularies that collide: Anthropic's (
 | Gate | A point where a human must approve before the next phase | `TaskCompleted` hook or plan approval |
 | Board | The team's issues as five columns: to do, doing, blocked, blocked by human, done | Linear board view, grouped by workflow state |
 | Human queue | The "blocked by human" column. The one thing the human monitors | Linear workflow state |
-| Eval | A smoke test for one agent: three to five prompts, a rubric, a baseline score. Run in CI on every definition change | `claude -p` in `claude-agents` CI |
+| Eval | A smoke test for one agent: three to five prompts, a rubric, a baseline score. Run in CI on every definition change | `claude -p` in `claudecode-agents` CI |
 | Sprite | A home lab AI personal assistant with a persistent identity (Angus, Mabel). Out of scope here; the fleet has no Sprites | Agent SDK agent |
 
 Dropped on purpose: "subtask" (say sub-issue or task, whichever you actually mean), "epic" (a project or a milestone covers it), "sprint" (you're one person; a dated milestone covers time boxes), "story".
@@ -80,7 +80,7 @@ The table carries static frontmatter values only. Anything conditional - deeper 
 | `ui-designer` | Produce screens, flows and HTML prototypes from a spec; argue for one direction, show two alternatives | `opus` | high | Read, Write, Bash, WebSearch, Figma MCP if you use it, rzem-memory MCP (read) | none | none | glossary, handoff, design-studio, using-memory |
 | `tech-writer` | READMEs, ADRs, runbooks, blog drafts, internal docs | `sonnet` | medium | Read, Grep, Glob, Write, WebFetch, rzem-memory MCP (read) | none | none | glossary, handoff, docwright, humanize, cyber-identity-docs, using-memory |
 | `researcher` | Fan-out reading and synthesis with citations; the bulk token consumer | `sonnet` | medium | WebSearch, WebFetch, Read, rzem-memory MCP (read and write, tagged), Hugging Face MCP | none | none | glossary, handoff, using-memory |
-| `fleet-steward` | Weekly: diff the models list, read release notes and the Claude Code changelog, run the migration checklist over every agent, open a board item with proposed diffs | `sonnet` | medium | Bash, WebFetch, Read, Edit (`claude-agents` only), Linear MCP (read, file, comment), rzem-memory MCP (read) | none | none | glossary, handoff, board, migration-checklist, using-memory |
+| `fleet-steward` | Weekly: diff the models list, read release notes and the Claude Code changelog, run the migration checklist over every agent, open a board item with proposed diffs | `sonnet` | medium | Bash, WebFetch, Read, Edit (`claudecode-agents` only), Linear MCP (read, file, comment), rzem-memory MCP (read) | none | none | glossary, handoff, board, migration-checklist, using-memory |
 
 Notes that matter:
 
@@ -183,7 +183,7 @@ CLAUDE.md is for things that must be true on every turn and fit in a sentence: s
 
 Skills are procedures: multi-step, invoked when needed, with their own `allowed-tools`, `model`, `effort`, `context: fork` and `paths:` if they should only trigger in some places. The `skills:` field on an agent preloads the full body at startup, so the agent doesn't have to discover it. That's the mechanism for "copy the skill into the agent": don't. One skill file, preloaded into as many agents as need it, changed in one place. The one exception is a three-line invariant (never force-push, never edit `.env`) which is cheaper as a sentence in the agent body than as a preloaded skill.
 
-The glossary is the test case for that rule, because it needs to be in two places at once: preloaded into every agent, and loaded unconditionally at project scope for the lead session. So `skills/glossary` is canonical and a build step in the claude-agents repo generates `claude-agents/templates/rules/glossary.md` from it. Two copies exist; only one is edited. A Notion copy was planned in v0.3 and dropped: Cowork's Angus gets the board vocabulary from the `board` skill and its system prompt, and a third copy that an agent had to republish was one more thing to drift.
+The glossary is the test case for that rule, because it needs to be in two places at once: preloaded into every agent, and loaded unconditionally at project scope for the lead session. So `skills/glossary` is canonical and a build step in the claudecode-agents repo generates `claudecode-agents/templates/rules/glossary.md` from it. Two copies exist; only one is edited. A Notion copy was planned in v0.3 and dropped: Cowork's Angus gets the board vocabulary from the `board` skill and its system prompt, and a third copy that an agent had to republish was one more thing to drift.
 
 Migration of what you have: `brainstorming`, `docwright`, `angus-voice`, `humanize`, `cyber-identity-docs`, `design-studio`, the Electron/React stack suite and `using-memory` all move into the plugin as-is. The grilling interview went the other way, folded into `spec-writer`'s body rather than shipped as a skill. Five new ones: `glossary` (section 3), `handoff` (the four-heading format with typed Decisions needed lines, preloaded into every agent and enforced by the `SubagentStop` hook), `migration-checklist` (section 11), `compound` (section 9) and `board` (the column semantics, the Decisions needed to human-queue mapping, and the item conventions - section 7). Two more the roster assumes and this plan hasn't specified: `tdd` for the coder and `review-checklist` for the reviewer - see section 15. `skill-creator` stays local because it's a workbench, not a dependency.
 
@@ -197,19 +197,19 @@ Skip: claude-mem, task-master, BMAD, davila7/claude-code-templates (stale since 
 
 ## 10. Distribution and sync
 
-The repo is `claude-agents` (`https://github.com/rzem-ai/claude-agents.git`, private GitHub). It's a plugin marketplace with one plugin, versioned with semver, and it's the only thing every environment needs to know about.
+The repo is `claudecode-agents` (`https://github.com/rzem-ai/claudecode-agents.git`, private GitHub). It's a plugin marketplace with one plugin, versioned with semver, and it's the only thing every environment needs to know about.
 
 ```
-claude-agents/
-  .claude-plugin/marketplace.json     # name: rzem, plugins: [claude-agents]
-  claude-agents/
+claudecode-agents/
+  .claude-plugin/marketplace.json     # name: rzem, plugins: [claudecode-agents]
+  claudecode-agents/
     .claude-plugin/plugin.json        # version bumped on every change; the cache ignores unbumped versions
     agents/                           # lead, scout, spec-writer, coder, reviewer, refuter, ui-designer, tech-writer, researcher, fleet-steward
     skills/                           # glossary, handoff, board, migration-checklist, compound, plus the migrated set
     hooks/hooks.json                  # SubagentStart -> Doing; SubagentStop handoff check -> Blocked / Blocked by human; TaskCompleted gate -> Done / Blocked
     workflows/                        # spec-to-plan, review-round, deep-research variants
-    commands/init.md                  # /claude-agents:init - per-project setup in one pass
-    commands/kickoff.md               # /claude-agents:kickoff - preflight the install, check or set up the board, then start the spec pipeline
+    commands/init.md                  # /claudecode-agents:init - per-project setup in one pass
+    commands/kickoff.md               # /claudecode-agents:kickoff - preflight the install, check or set up the board, then start the spec pipeline
     templates/
       project-settings.json           # extraKnownMarketplaces + enabledPlugins + agent, merged into each repo's .claude/settings.json
       CLAUDE.md                       # skeleton with the glossary pointer
@@ -221,16 +221,16 @@ claude-agents/
   docs/agent-contract.md              # what every agent body conforms to; the migration checklist checks against it
   docs/runs/                          # run articles, one per substantial run, per the run-article skill
   home/                               # user-scope files: settings.json, CLAUDE.md, rules/, local agent copies
-  scripts/gen-glossary-rule.sh        # skills/glossary -> claude-agents/templates/rules/glossary.md
+  scripts/gen-glossary-rule.sh        # skills/glossary -> claudecode-agents/templates/rules/glossary.md
   scripts/install-home.sh             # copies home/ into ~/.claude, renders secrets from 1Password
-  README.md                           # the front door: what the claude-agents repo is and how to use it
+  README.md                           # the front door: what the claudecode-agents repo is and how to use it
 ```
 
 How each environment gets it:
 
 Every machine runs `scripts/install-home.sh`, which copies `home/` into `~/.claude` - `settings.json`, `CLAUDE.md`, `rules/`, and the local agent copies (section 4) - and renders secrets with `op read` from 1Password: the Linear API key and the ten per-agent memory credentials. A `case` on hostname handles the one or two things that differ per box. `~/.claude/projects/`, sessions, history, debug and `plugins/cache` are never touched. The plugin itself is installed at user scope from the marketplace, so `claude plugin marketplace update rzem` plus the install script is the whole sync story, and there is no dotfiles manager.
 
-Every project repo carries `.claude/settings.json` with `extraKnownMarketplaces` pointing at `claude-agents`, `enabledPlugins` set to `{"claude-agents@rzem": true}` and `agent` set to `claude-agents:lead`, so the session runs as the lead. On folder trust, the plugin auto-installs. That's what makes Claude Code on the web work: the cloud session trusts the repo, reads settings, pulls the plugin. Private repos need credentials for auto-update; pin a `ref` or `sha` in the marketplace entry for the stable channel and keep a `latest` marketplace on a branch for testing.
+Every project repo carries `.claude/settings.json` with `extraKnownMarketplaces` pointing at `claudecode-agents`, `enabledPlugins` set to `{"claudecode-agents@rzem": true}` and `agent` set to `claudecode-agents:lead`, so the session runs as the lead. On folder trust, the plugin auto-installs. That's what makes Claude Code on the web work: the cloud session trusts the repo, reads settings, pulls the plugin. Private repos need credentials for auto-update; pin a `ref` or `sha` in the marketplace entry for the stable channel and keep a `latest` marketplace on a branch for testing.
 
 The home lab's Agent SDK agents point `settingSources` at the same plugin's skills directory. Angus and Mabel keep their own personas and memory; they just stop having second copies of the shared writing skills.
 
@@ -242,9 +242,9 @@ This is the bit you asked about and the bit almost nobody builds. The `fleet-ste
 
 It diffs `GET https://api.anthropic.com/v1/models` against last week's list and reads the platform release-notes RSS (`platform.claude.com/docs/en/release-notes/feed.xml`), the Claude Code `CHANGELOG.md` and the deprecations page. Any new model, new alias target, retirement date or new frontmatter field becomes a Tasks item under an "Agent fleet" project with the source quoted.
 
-When a model ships, it runs the `migration-checklist` skill over every agent body. The checklist is lifted from Anthropic's own Opus 5 migration guide and will grow: strip "double-check your work" scaffolding (over-verification and over-delegation on 5-family models), add explicit length constraints, rerun the effort sweep, remove any `temperature`/`top_p` in SDK code, expect 1 to 1.35x tokeniser inflation, check that skills with `model:` overrides still name valid aliases. Output is a PR against `claude-agents`, not a merge.
+When a model ships, it runs the `migration-checklist` skill over every agent body. The checklist is lifted from Anthropic's own Opus 5 migration guide and will grow: strip "double-check your work" scaffolding (over-verification and over-delegation on 5-family models), add explicit length constraints, rerun the effort sweep, remove any `temperature`/`top_p` in SDK code, expect 1 to 1.35x tokeniser inflation, check that skills with `model:` overrides still name valid aliases. Output is a PR against `claudecode-agents`, not a merge.
 
-It runs the evals on that PR: one smoke eval per agent (three to five prompts, a rubric, a baseline score) via `claude -p` in the claude-agents repo's CI, and `skill-creator`'s eval runner for skills whose triggers changed. The team that caught the April 2026 Claude Code regression in 72 hours had evals; the ones that took six weeks didn't.
+It runs the evals on that PR: one smoke eval per agent (three to five prompts, a rubric, a baseline score) via `claude -p` in the claudecode-agents repo's CI, and `skill-creator`'s eval runner for skills whose triggers changed. The team that caught the April 2026 Claude Code regression in 72 hours had evals; the ones that took six weeks didn't.
 
 It runs `cc-plugin-audit` (SHA-256 manifest of installed plugins, diff on silent updates) and reports any third-party plugin whose content changed without a version bump. Renovate has no Claude plugin manager yet (discussion opened April 2026, no issue filed), so this is the substitute.
 
@@ -261,7 +261,7 @@ Mitigations that belong in the plan:
 - `/sandbox` for bash, with the `sandbox.credentials` deny list actually populated - an empty list protects nothing.
 - `@anthropic-ai/sandbox-runtime` before any unattended `--dangerously-skip-permissions` run.
 - Read `.mcp.json` in any third-party plugin before enabling it (section 9); the steward's `cc-plugin-audit` run catches silent changes after that.
-- Secrets on the host: the Linear API key the hooks use, and ten per-agent rzem-memory credentials. All live in a dedicated 1Password vault holding fleet secrets only. `scripts/install-home.sh` renders them with `op read` into `~/.config/claude-agents/` at mode 600, and that directory goes in the `permissions.deny` list alongside `.env`. Hooks run outside the agent's permission model, which is the point: the hook reads the token file, the agent can't. Never have a hook call `op read` at runtime - it adds latency to every subagent start and stop, and if `op` is locked the board silently stops updating.
+- Secrets on the host: the Linear API key the hooks use, and ten per-agent rzem-memory credentials. All live in a dedicated 1Password vault holding fleet secrets only. `scripts/install-home.sh` renders them with `op read` into `~/.config/claudecode-agents/` at mode 600, and that directory goes in the `permissions.deny` list alongside `.env`. Hooks run outside the agent's permission model, which is the point: the hook reads the token file, the agent can't. Never have a hook call `op read` at runtime - it adds latency to every subagent start and stop, and if `op` is locked the board silently stops updating.
 - The lab boxes have no one to touch a fingerprint reader, so `op` there authenticates with a 1Password Service Account. That token is the one secret provisioned by hand per lab machine; scope it to the fleet vault so it can't read your personal items.
 
 Note that hooks and MCP servers run on the host under `/sandbox` alone, so sandboxing bash is not sandboxing the session.
@@ -284,7 +284,7 @@ Cross-session messaging and `claude agents` (agent view) now cover multi-machine
 
 ## 14. Build order
 
-Milestone 1 (a weekend): the claude-agents repo, the marketplace, the `glossary` and `handoff` skills, the nine shared agents with bodies of under 60 lines each, the glossary generation script, the templates, and one project wired up. Set up the Linear team's workflow states and the board view, install `pr-review-toolkit`, create the fleet vault in 1Password with nine agent credentials, and run the install script.
+Milestone 1 (a weekend): the claudecode-agents repo, the marketplace, the `glossary` and `handoff` skills, the nine shared agents with bodies of under 60 lines each, the glossary generation script, the templates, and one project wired up. Set up the Linear team's workflow states and the board view, install `pr-review-toolkit`, create the fleet vault in 1Password with nine agent credentials, and run the install script.
 
 Milestone 2 (following week): the `board` skill, the board-write hooks, the human-queue digest as a scheduled task with four-hour escalation, `migration-checklist` skill, smoke evals in CI, `TaskCompleted` gate, `ccusage`, `permissions.deny` and sandbox settings.
 
@@ -300,7 +300,7 @@ Whether `tech-writer` should be `inherit` rather than `sonnet`, so it follows th
 
 Whether `tdd` and `review-checklist` are new skills you write, or three-line invariants in the `coder` and `reviewer` bodies. The roster preloads them and this plan never specified them.
 
-Whether to keep a `latest` marketplace channel at all, or just test on a branch checkout with `claude plugin install ./claude-agents`.
+Whether to keep a `latest` marketplace channel at all, or just test on a branch checkout with `claude plugin install ./claudecode-agents`.
 
 ## Sources
 

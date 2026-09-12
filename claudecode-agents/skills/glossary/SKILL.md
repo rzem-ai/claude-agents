@@ -1,0 +1,40 @@
+---
+name: glossary
+description: The fleet's shared vocabulary - the agreed meaning of Initiative, Project, Milestone, Issue, Sub-issue, Task, Spec, Plan, Phase, Round, Session, Lead, Subagent, Teammate, Handoff, Run article, Gate, Board, Human queue, Eval and Sprite, and what each maps to in Linear, Claude Code and the repo. Preloaded into every fleet agent; use these words with these meanings and no others.
+---
+
+Canonical copy. `claudecode-agents/templates/rules/glossary.md` is generated from this file - edit here, never there.
+
+| Term | Meaning | Maps to |
+|---|---|---|
+| Initiative | A goal spanning several projects (e.g. "agent platform v5") | Linear initiative |
+| Project | A bounded body of work in one repo or product area | Linear project |
+| Milestone | A checkpoint inside a project with a date or a deliverable | Linear project milestone |
+| Issue | The unit of tracked work a human cares about. Has a spec or is trivial | Linear issue (`RZE-123`) |
+| Sub-issue | A child of an issue, still tracked on the board | Linear sub-issue |
+| Task | The unit of agent execution inside a session. Cheap, many, never on the board | Claude Code task list item (`TaskCreate`) |
+| Spec | What and why, human-approved before planning. Written by `spec-writer` | `docs/specs/<issue>.md` |
+| Plan | How, in phases, produced from a spec. Written by the lead, approved by the human | `docs/plans/<issue>.md` |
+| Phase | A sequential stage of a plan or workflow; phases don't overlap | Workflow `phase()` |
+| Round | One pass of an iterative loop (review round, ralph iteration). Rounds are numbered | `--max-iterations` |
+| Session | One Claude Code conversation, from the lead's first turn to its last | Claude Code session |
+| Lead | The main session that plans and delegates. A named agent, not a subagent | `agent` in project settings |
+| Subagent | A role agent spawned by the lead with fresh context | `Agent` tool |
+| Teammate | A subagent running as a full session with a mailbox (Agent Teams) | Agent Teams teammate |
+| Handoff | The structured result a subagent returns. Always four headings: Done, Not done, Unverified, Decisions needed. Lines under the last are typed: `Blocker:`, `Propose item:`, `Propose memory:` | Agent tool result, `handoff` skill |
+| Run article | The readable account of one run - what was tried, abandoned and why - written only when the spawn prompt asks for one | `docs/runs/<date>-<agent>-<issue>.md`, `run-article` skill |
+| Gate | A point where a human must approve before the next phase | `TaskCompleted` hook or plan approval |
+| Board | The team's issues as five columns: to do, doing, blocked, blocked by human, done | Linear board view, grouped by workflow state |
+| Human queue | The "blocked by human" column. The one thing the human monitors | Linear workflow state |
+| Eval | A smoke test for one agent: three to five prompts, a rubric, a baseline score. Run in CI on every definition change | `claude -p` in `claudecode-agents` CI |
+| Sprite | A home-lab AI personal assistant with a persistent identity. Out of scope here; the fleet has no Sprites | Agent SDK agent |
+
+Consequences of those definitions that are routinely got wrong:
+
+An issue may spawn many tasks; a task never creates a board item on its own. Tasks live and die inside a session.
+
+Of the typed Decisions needed lines, only `Blocker:` reaches the human queue - it moves the item into "blocked by human" with the blocker text as a comment. `Propose item:` and `Propose memory:` never touch the column; the lead handles both.
+
+Board columns are written by hooks, never by an agent deciding to update something.
+
+Dropped on purpose: "subtask" (say sub-issue or task, whichever you actually mean), "epic" (a project or a milestone covers it), "sprint" (the fleet serves one person; a dated milestone covers time boxes), "story".

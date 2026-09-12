@@ -1,6 +1,6 @@
 # Run articles
 
-A run article is the readable account of one piece of work: what was tried and abandoned, what the constraint turned out to be, what surprised whoever did it, and what to do differently. It is written by the agent that did the work, when the lead asked for one in the spawn prompt, and it exists because the handoff cannot carry any of that. The format, the length and the writing rules are in `claude-agents/skills/run-article/SKILL.md`; this file is the convention for the directory.
+A run article is the readable account of one piece of work: what was tried and abandoned, what the constraint turned out to be, what surprised whoever did it, and what to do differently. It is written by the agent that did the work, when the lead asked for one in the spawn prompt, and it exists because the handoff cannot carry any of that. The format, the length and the writing rules are in `claudecode-agents/skills/run-article/SKILL.md`; this file is the convention for the directory.
 
 `2026-09-08-coder-handoff-format-divergence.md` is the worked example. Read it before writing your first one.
 
@@ -26,7 +26,7 @@ One article per run, written because the run was substantial or hard, because so
 
 - A pasted handoff. That is the receipt, and it is already on the card and in the transcript.
 - A status report, a session diary or a list of completed steps.
-- A state-directory archive, moved or copied in. Those are verbatim hook output under `~/.local/state/claude-agents/archives/`. Promote what one taught into a rule, a skill or a memory, per the `compound` skill; never file the file itself.
+- A state-directory archive, moved or copied in. Those are verbatim hook output under `~/.local/state/claudecode-agents/archives/`. Promote what one taught into a rule, a skill or a memory, per the `compound` skill; never file the file itself.
 - A spec, a plan, an ADR, a README or a runbook. Those describe the system and belong where they already live. An article describes a run. If a reader needs it to use the thing, it is documentation, not an article.
 - Anything written in the human's voice or published as them. These are internal technical records by agents.
 - Anything about routine work. An article nobody needed is the main way this directory turns into a landfill.

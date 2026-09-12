@@ -1,6 +1,6 @@
 # Agent contract
 
-Every agent body in `claude-agents/agents/` conforms to this file. `claude-agents/agents/reviewer.md` is the worked exemplar - read it alongside this.
+Every agent body in `claudecode-agents/agents/` conforms to this file. `claudecode-agents/agents/reviewer.md` is the worked exemplar - read it alongside this.
 
 `docs/` was added to the plan's section 10 tree after the fact, deliberately: section 11 has the `fleet-steward` running the `migration-checklist` skill over every agent body each time a model ships, and a checklist needs something to check against. This is that thing. When a frontmatter field is added or renamed upstream, the steward's PR updates this file first and the ten bodies second.
 
@@ -37,7 +37,7 @@ Four of the plan's section 4 columns do not survive contact with the real frontm
 
 **Isolation `none` is not a value either.** `isolation` accepts only `worktree`. Omit the field for the nine agents that are not `coder`.
 
-**Bash cannot be scoped to git.** The `tools` field has no command-level specifier - there is no `Bash(git:*)`. `Bash` is all of Bash or none of it. So "Bash (git only)" and "Bash (read-only)" in the roster become two things working together: `Bash` in `tools`, plus an explicit invariant line in the body naming the git verbs that are forbidden. Real enforcement is the `PreToolUse` hook `claude-agents/hooks/enforce-agent-scope.sh`, which switches on `agent_type` and can therefore bind one agent; host-level `permissions.deny` (plan section 12) is session-scoped, so it applies to every agent in the session or to none. Say this in the body rather than pretending the frontmatter did it.
+**Bash cannot be scoped to git.** The `tools` field has no command-level specifier - there is no `Bash(git:*)`. `Bash` is all of Bash or none of it. So "Bash (git only)" and "Bash (read-only)" in the roster become two things working together: `Bash` in `tools`, plus an explicit invariant line in the body naming the git verbs that are forbidden. Real enforcement is the `PreToolUse` hook `claudecode-agents/hooks/enforce-agent-scope.sh`, which switches on `agent_type` and can therefore bind one agent; host-level `permissions.deny` (plan section 12) is session-scoped, so it applies to every agent in the session or to none. Say this in the body rather than pretending the frontmatter did it.
 
 **Write cannot be scoped to a path.** Same shape of problem: "Write (docs/specs only)" is `Write` in `tools` plus a body invariant naming the directory. The same applies to `Edit` scoped to one repo.
 

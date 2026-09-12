@@ -2,11 +2,11 @@
 #
 # handoff-extractor-parity.sh - hold review-round's handoff reader to the hook's.
 #
-# There are now three readers of the handoff format in the claude-agents repo:
+# There are now three readers of the handoff format in the claudecode-agents repo:
 #
-#   claude-agents/hooks/board-subagent-stop.sh   extract_section   (the board)
+#   claudecode-agents/hooks/board-subagent-stop.sh   extract_section   (the board)
 #   evals/lib/handoff-check.sh                   the CI validator
-#   claude-agents/workflows/review-round.js      handoffSection    (the fix loop)
+#   claudecode-agents/workflows/review-round.js      handoffSection    (the fix loop)
 #
 # The first two are already pinned to each other by handoff-parity.sh. This
 # pins the third. It matters because review-round reads coder's "## Done"
@@ -31,8 +31,8 @@ VERBOSE=0
 
 LIB_DIR=$(cd "$(dirname "$0")" && pwd)
 REPO_ROOT=$(cd "$LIB_DIR/../.." && pwd)
-HOOK="$REPO_ROOT/claude-agents/hooks/board-subagent-stop.sh"
-WORKFLOW="$REPO_ROOT/claude-agents/workflows/review-round.js"
+HOOK="$REPO_ROOT/claudecode-agents/hooks/board-subagent-stop.sh"
+WORKFLOW="$REPO_ROOT/claudecode-agents/workflows/review-round.js"
 CASES="$REPO_ROOT/evals/fixtures/handoff-cases"
 
 command -v jq >/dev/null 2>&1 || { printf 'handoff-extractor-parity: jq is needed\n' >&2; exit 2; }

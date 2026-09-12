@@ -8,7 +8,7 @@
 #      local agent copies. Copies, never symlinks: Cowork skips a symlinked
 #      ~/.claude/CLAUDE.md (section 8).
 #   2. Render the fleet secrets out of 1Password with `op read` into
-#      ~/.config/claude-agents/ at mode 600 - the Linear API key the hooks use and
+#      ~/.config/claudecode-agents/ at mode 600 - the Linear API key the hooks use and
 #      the ten per-agent rzem-memory credentials (section 6).
 #
 # What it never touches: ~/.claude/projects/, sessions, history, todos, debug,
@@ -18,7 +18,7 @@
 #
 # The plugin itself is not installed here. That is
 #   claude plugin marketplace update rzem
-# plus a trusted repo carrying claude-agents/templates/project-settings.json.
+# plus a trusted repo carrying claudecode-agents/templates/project-settings.json.
 #
 # Usage:
 #   scripts/install-home.sh                 install everything
@@ -50,7 +50,7 @@ set -euo pipefail
 OP_VAULT="Fleet"   # PLACEHOLDER: the dedicated fleet vault's name
 
 # The Linear API key the board hooks read. Hooks read this file; the
-# agents cannot, because ~/.config/claude-agents is in permissions.deny.
+# agents cannot, because ~/.config/claudecode-agents is in permissions.deny.
 OP_REF_LINEAR_TOKEN="op://Fleet/linear/credential"                     # PLACEHOLDER
 
 # Ten per-agent rzem-memory credentials. One identity per agent, because the
@@ -68,7 +68,7 @@ OP_REF_MEMORY_FLEET_STEWARD="op://Fleet/rzem-memory-fleet-steward/credential"   
 
 # destination filename | op:// reference. The destination names are the contract
 # with the hooks and the MCP config, so change them together or not at all.
-# `linear.token` is read by claude-agents/hooks/lib/linear.sh - that dot is not a
+# `linear.token` is read by claudecode-agents/hooks/lib/linear.sh - that dot is not a
 # typo, and renaming it here silently stops every board write.
 secret_specs() {
     printf '%s\n' \
@@ -94,9 +94,9 @@ REPO_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 
 HOME_SRC="$REPO_ROOT/home"
 CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
-SECRETS_DIR="$HOME/.config/claude-agents"
+SECRETS_DIR="$HOME/.config/claudecode-agents"
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
-BACKUP_DIR="${CLAUDE_AGENTS_BACKUP_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/claude-agents/backups/$STAMP}"
+BACKUP_DIR="${CLAUDECODE_AGENTS_BACKUP_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/claudecode-agents/backups/$STAMP}"
 
 DRY_RUN=0
 DO_HOME=1
@@ -518,7 +518,7 @@ else
     say "  backups     $BACKUP_DIR"
 fi
 
-[ -d "$HOME_SRC" ] || die "no home/ directory in $REPO_ROOT - is this the claude-agents repo?"
+[ -d "$HOME_SRC" ] || die "no home/ directory in $REPO_ROOT - is this the claudecode-agents repo?"
 
 if [ "$DO_SECRETS" -eq 1 ]; then
     say ""

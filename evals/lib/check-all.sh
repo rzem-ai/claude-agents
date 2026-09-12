@@ -41,9 +41,9 @@ printf '\n=== shell and node syntax ===\n'
 syntax_failed=0
 while IFS= read -r f; do
     bash -n "$f" 2>&1 || { printf '  syntax FAIL %s\n' "$f"; syntax_failed=1; }
-done < <(find "$REPO_ROOT/claude-agents/hooks" "$REPO_ROOT/scripts" "$REPO_ROOT/evals" \
+done < <(find "$REPO_ROOT/claudecode-agents/hooks" "$REPO_ROOT/scripts" "$REPO_ROOT/evals" \
             -name '*.sh' -type f 2>/dev/null)
-for f in "$REPO_ROOT"/claude-agents/workflows/*.js; do
+for f in "$REPO_ROOT"/claudecode-agents/workflows/*.js; do
     node -e "
       const fs=require('fs');
       const src=fs.readFileSync('$f','utf8').replace(/^export const meta/m,'const meta');

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The claude-agents Fleet Guide</title>
+<title>The claudecode-agents Fleet Guide</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Fira+Code:wght@400;500;600&display=swap">
 <style>
 /* Tokens copied verbatim from one-dark-design-system/tokens/, plus one addition noted below. */
@@ -59,7 +59,7 @@ p.body{font-size:var(--text-sm);line-height:var(--leading-relaxed);color:var(--o
 
   <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:var(--s5);border-bottom:1px solid var(--od-selection);flex-wrap:wrap;gap:var(--s3)">
     <div style="display:flex;align-items:center;gap:var(--s3)">
-      <span style="font-family:var(--font-mono);font-size:var(--text-sm);font-weight:500;color:var(--od-blue)">rzem/claude-agents</span>
+      <span style="font-family:var(--font-mono);font-size:var(--text-sm);font-weight:500;color:var(--od-blue)">rzem/claudecode-agents</span>
       <span class="badge badge-outline">v0.7.1</span>
     </div>
     <div style="font-family:var(--font-mono);font-size:var(--text-xs);color:var(--od-mono-2)">a Claude Code plugin</div>
@@ -134,7 +134,7 @@ var AGENTS = [
     simNote: 'No Bash allowlist, deliberately: mutation testing is copy, change, run, and a list wide enough to permit that expresses nothing. Git stays on the reviewer’s read-only verb list, so it mutates copies and never moves a ref in the real repository. The gap worth finding is the fifth preset.',
     git: ' log show blame diff ls-files status shortlog describe rev-parse rev-list cat-file grep whatchanged ',
     refuterGap: true,
-    presets: ['cp -R . /tmp/mutant', 'node --test', '{ git commit -m x; }', 'timeout 5 git commit -m x', 'echo mutated > claude-agents/agents/coder.md', 'sed -i "" s/>/>=/ /tmp/mutant/src/x.js'] },
+    presets: ['cp -R . /tmp/mutant', 'node --test', '{ git commit -m x; }', 'timeout 5 git commit -m x', 'echo mutated > claudecode-agents/agents/coder.md', 'sed -i "" s/>/>=/ /tmp/mutant/src/x.js'] },
   { id: 'ui-designer', name: 'ui-designer', kind: 'writes, scoped', model: 'opus', colorName: 'pink', tone: C.pink,
     line: 'User flows, screen designs and self-contained HTML prototypes that open in a browser, tied back to the spec’s acceptance criteria.',
     tools: 'Read, Write, Bash, WebSearch',
@@ -161,8 +161,8 @@ var AGENTS = [
   { id: 'fleet-steward', name: 'fleet-steward', kind: 'files, proposes', model: 'sonnet', colorName: 'cyan', tone: C.cyan,
     line: 'Keeps the fleet’s definitions current. Runs weekly and unattended: watches for model and tooling changes, runs the migration checklist over every body, runs the evals, audits installed plugins.',
     tools: 'Bash, WebFetch, Read, Edit, Notion, memory (read)',
-    enforcedBy: 'A denylist rather than an allowlist, because it needs a real shell. The hook denies merge, push and history rewrites, and any edit outside the claude-agents working copy.',
-    invariants: ['Never merge and never move. You file, you propose, and you stop.', 'Never touch anything outside the claude-agents working copy.', 'Never edit an eval or a body to make a red run go green.'],
+    enforcedBy: 'A denylist rather than an allowlist, because it needs a real shell. The hook denies merge, push and history rewrites, and any edit outside the claudecode-agents working copy.',
+    invariants: ['Never merge and never move. You file, you propose, and you stop.', 'Never touch anything outside the claudecode-agents working copy.', 'Never edit an eval or a body to make a red run go green.'],
     handsOff: 'An unattended agent that merges is one bad week from changing what runs on every box without anyone reading it.',
     simNote: 'Needs a real shell to run the evals and prepare a branch, so it gets one. What it must not do is move shared history or land a change. This is the role where reading the git verb as the second token mattered most: against an allowlist that mistake denies and gets noticed, but against a denylist it allows, so git -C /path push walked straight through until it was fixed.',
     steward: true,
@@ -337,7 +337,7 @@ function decide(agent, cmd) {
     }
   }
 
-  if (agent.refuterGap && />/.test(scan) && /claude-agents|src\//.test(cmd) && !/\/tmp\/|\/private\/|\/var\//.test(cmd)) {
+  if (agent.refuterGap && />/.test(scan) && /claudecode-agents|src\//.test(cmd) && !/\/tmp\/|\/private\/|\/var\//.test(cmd)) {
     return { verdict: 'allowed', rule: 'and it should not be', reason: 'Bash is not scoped for the refuter, so this is allowed. Its write rule is enforced on Write and Edit, not on a shell redirect, so a mutation written straight back into the tree under test gets through here.', note: 'A real gap, written down rather than hidden. The hook comment used to claim the write-scope checker held this half; it does not, because that checker only ever sees the file tools. Closing it needs the redirection-target resolution fleet-steward already has, applied to the one role whose entire working life is in Bash.' };
   }
   return { verdict: 'allowed', rule: 'within scope', reason: 'Every segment resolves to something this role may run, and nothing hides a write behind a quote, a substitution or an opener.', note: '' };

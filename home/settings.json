@@ -17,8 +17,8 @@
       "Read(//**/.vault-token)",
       "Read(~/.vault/**)",
       "Edit(~/.vault/**)",
-      "Read(~/.config/claude-agents/**)",
-      "Edit(~/.config/claude-agents/**)",
+      "Read(~/.config/claudecode-agents/**)",
+      "Edit(~/.config/claudecode-agents/**)",
       "Read(~/.config/op/**)",
       "Read(~/.claude/.credentials.json)",
       "Read(~/.netrc)",
@@ -50,7 +50,7 @@
         "~/.aws",
         "~/.gnupg",
         "~/.config/op",
-        "~/.config/claude-agents",
+        "~/.config/claudecode-agents",
         "~/.vault-token",
         "~/.vault",
         "~/.netrc",
@@ -62,7 +62,7 @@
         "~/.aws",
         "~/.gnupg",
         "~/.config/op",
-        "~/.config/claude-agents",
+        "~/.config/claudecode-agents",
         "~/.claude"
       ]
     },
@@ -70,7 +70,7 @@
       "files": [
         { "path": "~/.ssh", "mode": "deny" },
         { "path": "~/.aws/credentials", "mode": "deny" },
-        { "path": "~/.config/claude-agents", "mode": "deny" },
+        { "path": "~/.config/claudecode-agents", "mode": "deny" },
         { "path": "~/.config/op", "mode": "deny" },
         { "path": "~/.vault-token", "mode": "deny" },
         { "path": "~/.netrc", "mode": "deny" },

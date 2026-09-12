@@ -23,7 +23,7 @@ import { dirname, join } from 'node:path'
 
 const VERBOSE = process.argv.includes('-v')
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..')
-const WORKFLOWS = join(ROOT, 'claude-agents', 'workflows')
+const WORKFLOWS = join(ROOT, 'claudecode-agents', 'workflows')
 
 let passed = 0
 let failed = 0
@@ -48,7 +48,7 @@ async function runWorkflow(file, args, respond) {
   // oversight: the thing under test is the workflow script itself, and it uses
   // top-level `return`, so it only parses inside a function body the way the
   // real loader wraps it. The only string interpolated is a file read from this
-  // repository's own claude-agents/workflows directory. Never point this at a
+  // repository's own claudecode-agents/workflows directory. Never point this at a
   // path that comes from anywhere else.
   const src = readFileSync(join(WORKFLOWS, file), 'utf8').replace(/^export const meta/m, 'const meta')
   const body = new Function(

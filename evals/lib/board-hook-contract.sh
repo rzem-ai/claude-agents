@@ -20,7 +20,7 @@
 #
 # Usage:  evals/lib/board-hook-contract.sh [-v]
 #
-# Nothing here touches Linear: CLAUDE_AGENTS_BOARD=off, a throwaway config and
+# Nothing here touches Linear: CLAUDECODE_AGENTS_BOARD=off, a throwaway config and
 # state directory, and no token is ever loaded.
 
 set -uo pipefail
@@ -30,7 +30,7 @@ VERBOSE=0
 
 LIB_DIR=$(cd "$(dirname "$0")" && pwd)
 REPO_ROOT=$(cd "$LIB_DIR/../.." && pwd)
-HOOKS="$REPO_ROOT/claude-agents/hooks"
+HOOKS="$REPO_ROOT/claudecode-agents/hooks"
 
 command -v jq >/dev/null 2>&1 || {
     printf 'board-hook-contract: jq is needed to drive the hooks\n' >&2; exit 2; }
@@ -38,10 +38,10 @@ command -v jq >/dev/null 2>&1 || {
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/board-hook-contract.XXXXXX") || exit 2
 trap 'rm -rf "$TMP"' EXIT
 
-export CLAUDE_AGENTS_CONFIG_DIR="$TMP/config"
-export CLAUDE_AGENTS_STATE_DIR="$TMP/state"
-export CLAUDE_AGENTS_BOARD=off
-mkdir -p "$CLAUDE_AGENTS_CONFIG_DIR" "$CLAUDE_AGENTS_STATE_DIR"
+export CLAUDECODE_AGENTS_CONFIG_DIR="$TMP/config"
+export CLAUDECODE_AGENTS_STATE_DIR="$TMP/state"
+export CLAUDECODE_AGENTS_BOARD=off
+mkdir -p "$CLAUDECODE_AGENTS_CONFIG_DIR" "$CLAUDECODE_AGENTS_STATE_DIR"
 
 PAGE_A=11111111111111111111111111111111
 PAGE_B=22222222222222222222222222222222
@@ -117,9 +117,9 @@ printf '\nTaskCompleted: only an explicit issue task closes an issue\n'
 
 # R06. Bind two items in the session, then complete an unmarked task. Neither
 # item may move: the old code picked whichever was touched most recently.
-mkdir -p "$CLAUDE_AGENTS_STATE_DIR/sessions/s2"
-printf '%s\n' "$PAGE_A" > "$CLAUDE_AGENTS_STATE_DIR/sessions/s2/last-item"
-printf '%s\n' "$PAGE_B" > "$CLAUDE_AGENTS_STATE_DIR/sessions/s2/last-item"
+mkdir -p "$CLAUDECODE_AGENTS_STATE_DIR/sessions/s2"
+printf '%s\n' "$PAGE_A" > "$CLAUDECODE_AGENTS_STATE_DIR/sessions/s2/last-item"
+printf '%s\n' "$PAGE_B" > "$CLAUDECODE_AGENTS_STATE_DIR/sessions/s2/last-item"
 run_hook board-task-completed.sh \
     "$(jq -nc --arg c "$TMP" '{session_id:"s2",cwd:$c,task_id:"t2",task_subject:"Fix the parser"}')"
 ! log_has "$PAGE_A_H" && ! log_has "$PAGE_B_H"; check unmarked-moves-nothing "an unmarked execution task moves no card" $?
@@ -128,9 +128,9 @@ log_has "no column moves"; check unmarked-explains "and says why, rather than fa
 # The environment binding must not close an issue either. It says which item is
 # in flight, never that this task finished it.
 run_hook board-task-completed.sh \
-    "$(CLAUDE_AGENTS_BOARD_PAGE_ID=$PAGE_A jq -nc --arg c "$TMP" \
+    "$(CLAUDECODE_AGENTS_BOARD_PAGE_ID=$PAGE_A jq -nc --arg c "$TMP" \
         '{session_id:"s3",cwd:$c,task_id:"t3",task_subject:"Partial work"}')"
-! log_has "$PAGE_A_H"; check env-does-not-close "CLAUDE_AGENTS_BOARD_PAGE_ID alone does not close an issue" $?
+! log_has "$PAGE_A_H"; check env-does-not-close "CLAUDECODE_AGENTS_BOARD_PAGE_ID alone does not close an issue" $?
 
 printf '\nTaskCompleted: the gate tests the checkout that did the work\n'
 
@@ -175,12 +175,12 @@ printf '\nSubagentStart: binding without a spawn prompt\n'
 # R07. The documented event carries agent identity only. With a session
 # binding it must record the item; without one it must do nothing and say so.
 run_hook board-subagent-start.sh \
-    '{"session_id":"s8","agent_id":"a1","agent_type":"claude-agents:coder"}'
+    '{"session_id":"s8","agent_id":"a1","agent_type":"claudecode-agents:coder"}'
 log_has "unbound"; check start-unbound-noop "a documented-shape start event with no binding moves nothing" $?
 
 RC=0
-printf '%s' '{"session_id":"s9","agent_id":"a2","agent_type":"claude-agents:coder"}' \
-    | CLAUDE_AGENTS_BOARD_PAGE_ID="$PAGE_A" BOARD_LOG_FILE="$TMP/log.$$" \
+printf '%s' '{"session_id":"s9","agent_id":"a2","agent_type":"claudecode-agents:coder"}' \
+    | CLAUDECODE_AGENTS_BOARD_PAGE_ID="$PAGE_A" BOARD_LOG_FILE="$TMP/log.$$" \
       "$HOOKS/board-subagent-start.sh" >"$TMP/out" 2>"$TMP/err" || RC=$?
 LOG="$TMP/log.$$"
 log_has "picked up $PAGE_A_H"; check start-env-binds "an explicit session binding is recorded" $?
@@ -191,7 +191,7 @@ printf '\nSubagentStop: no status field exists\n'
 # This asserts the honest log line, not a behaviour change: the Blocked-on-
 # failure path stays unreachable until the runtime emits something to reach it.
 run_hook board-subagent-stop.sh \
-    "$(jq -nc '{session_id:"s10",agent_id:"a3",agent_type:"claude-agents:scout",
+    "$(jq -nc '{session_id:"s10",agent_id:"a3",agent_type:"claudecode-agents:scout",
                 stop_hook_active:false,agent_transcript_path:"/dev/null",
                 last_assistant_message:"## Done\n- x\n\n## Not done\n- none\n\n## Unverified\n- none\n\n## Decisions needed\n- none\n"}')"
 log_has "no status field on SubagentStop"; check stop-status-honest "the hook records that no status field is sent" $?
@@ -215,7 +215,7 @@ printf '\nSubagentStop: a structured-output run carries no handoff\n'
 # A run with no handoff field is not a malformed handoff. It is a run that was
 # never asked for one.
 run_hook board-subagent-stop.sh \
-    "$(jq -nc '{session_id:"s11",agent_id:"a4",agent_type:"claude-agents:scout",
+    "$(jq -nc '{session_id:"s11",agent_id:"a4",agent_type:"claudecode-agents:scout",
                 stop_hook_active:false,agent_transcript_path:"/dev/null"}')"
 [ "$RC" -eq 0 ]; check stop-structured-run-passes "a schema-spawned run with no handoff field is not a malformed handoff" $?
 
@@ -226,7 +226,7 @@ run_hook board-subagent-stop.sh \
 # reader from deciding that empty is close enough to absent, but it should not
 # be counted as proof that an empty handoff is refused.
 run_hook board-subagent-stop.sh \
-    "$(jq -nc '{session_id:"s12",agent_id:"a5",agent_type:"claude-agents:scout",
+    "$(jq -nc '{session_id:"s12",agent_id:"a5",agent_type:"claudecode-agents:scout",
                 stop_hook_active:false,agent_transcript_path:"/dev/null",
                 last_assistant_message:""}')"
 [ "$RC" -eq 2 ]; check stop-empty-message-blocks "an empty final message is still a malformed handoff" $?
@@ -234,7 +234,7 @@ run_hook board-subagent-stop.sh \
 # And prose in place of the four headings stays refused, so the fix cannot be a
 # blanket softening of the gate.
 run_hook board-subagent-stop.sh \
-    "$(jq -nc '{session_id:"s13",agent_id:"a6",agent_type:"claude-agents:scout",
+    "$(jq -nc '{session_id:"s13",agent_id:"a6",agent_type:"claudecode-agents:scout",
                 stop_hook_active:false,agent_transcript_path:"/dev/null",
                 last_assistant_message:"I fixed it. Looks good to me."}')"
 [ "$RC" -eq 2 ]; check stop-prose-blocks "prose in place of a handoff is still refused" $?
@@ -270,7 +270,7 @@ mk_transcript() {
 
 stop_absent() {
     # $1 transcript path (may not exist)
-    jq -nc --arg t "$1" '{session_id:"s20",agent_id:"a20",agent_type:"claude-agents:scout",
+    jq -nc --arg t "$1" '{session_id:"s20",agent_id:"a20",agent_type:"claudecode-agents:scout",
                           stop_hook_active:false,agent_transcript_path:$t}'
 }
 
@@ -294,7 +294,7 @@ run_hook board-subagent-stop.sh "$(stop_absent "$TMP/nonexistent.jsonl")"
 [ "$RC" -eq 0 ] && log_has "could not be read"; check stop-transcript-unreadable-passes "an unreadable transcript says so and lets the run stop" $?
 
 run_hook board-subagent-stop.sh \
-    "$(jq -nc '{session_id:"s21",agent_id:"a21",agent_type:"claude-agents:scout",stop_hook_active:false}')"
+    "$(jq -nc '{session_id:"s21",agent_id:"a21",agent_type:"claudecode-agents:scout",stop_hook_active:false}')"
 [ "$RC" -eq 0 ]; check stop-no-transcript-path-passes "and so does an event carrying no transcript path at all" $?
 
 mk_transcript "$TMP/t-none.jsonl" none

@@ -1,8 +1,8 @@
-# claude-agents
+# claudecode-agents
 
-A personal Claude Code subagent fleet: ten role-shaped agents delegated to from a Claude Code session, the skills they share, the hooks that keep a Linear board honest, and the evals that catch a regression before a model release does. The claude-agents repo is a Claude Code plugin marketplace with one plugin, and it is the single source of truth - every machine and cloud session that runs the fleet gets it from here.
+A personal Claude Code subagent fleet: ten role-shaped agents delegated to from a Claude Code session, the skills they share, the hooks that keep a Linear board honest, and the evals that catch a regression before a model release does. The claudecode-agents repo is a Claude Code plugin marketplace with one plugin, and it is the single source of truth - every machine and cloud session that runs the fleet gets it from here.
 
-The agents are roles, not personas: disposable by design, with fresh context on every spawn and their memory on a server rather than in their heads. The fleet also maintains itself - a `fleet-steward` agent watches model releases and files PRs against the claude-agents repo, and most substantial changes here were produced by the fleet's own workflows, then reviewed the same way any other change would be.
+The agents are roles, not personas: disposable by design, with fresh context on every spawn and their memory on a server rather than in their heads. The fleet also maintains itself - a `fleet-steward` agent watches model releases and files PRs against the claudecode-agents repo, and most substantial changes here were produced by the fleet's own workflows, then reviewed the same way any other change would be.
 
 ## The fleet
 
@@ -19,7 +19,7 @@ The agents are roles, not personas: disposable by design, with fresh context on 
 | `researcher` | Fan-out reading and synthesis with citations |
 | `fleet-steward` | Weekly model and tooling sweep. Files PRs, never merges |
 
-Each body in [`claude-agents/agents/`](claude-agents/agents/) carries its model, effort, tool allowlist, preloaded skills and invariants; the reasoning behind every choice is in the plan, section 4.
+Each body in [`claudecode-agents/agents/`](claudecode-agents/agents/) carries its model, effort, tool allowlist, preloaded skills and invariants; the reasoning behind every choice is in the plan, section 4.
 
 ## How it works
 
@@ -27,18 +27,18 @@ Each body in [`claude-agents/agents/`](claude-agents/agents/) carries its model,
 
 **Hooks write the board; agents never do.** `SubagentStart` moves a Linear issue to Doing, `SubagentStop` writes Blocked or Blocked by human (a `Blocker:` line in the handoff is what lands in the human queue), and `TaskCompleted` gates on tests before writing Done. A fourth hook, `enforce-agent-scope.sh`, denies at `PreToolUse` the tool calls each agent's own invariants forbid - the per-agent boundary that session-scoped permissions cannot express.
 
-**Workflows chain the roles.** `spec-to-plan`, `review-round` and `deep-research` in [`claude-agents/workflows/`](claude-agents/workflows/) run the multi-agent shapes deterministically instead of hoping the model sequences them.
+**Workflows chain the roles.** `spec-to-plan`, `review-round` and `deep-research` in [`claudecode-agents/workflows/`](claudecode-agents/workflows/) run the multi-agent shapes deterministically instead of hoping the model sequences them.
 
 **Everything is evalled.** Each agent has a smoke eval under [`evals/`](evals/) run with `claude -p`, and `evals/lib/check-all.sh` runs every deterministic check - hook contracts, roster consistency, workflow logic - with no model, no network and no board.
 
 ## Installing
 
-The claude-agents repo is a Claude Code plugin marketplace named `rzem` with one plugin in it, `claude-agents`, plus the user-scope files and install script for a machine that runs the fleet. There are three layers. The first is all you need to use the agents; the other two are for a machine you run the fleet from.
+The claudecode-agents repo is a Claude Code plugin marketplace named `rzem` with one plugin in it, `claudecode-agents`, plus the user-scope files and install script for a machine that runs the fleet. There are three layers. The first is all you need to use the agents; the other two are for a machine you run the fleet from.
 
 ### Prerequisites
 
 - **Claude Code** with plugin support. `claude plugin --help` should list `marketplace` and `install`; if it does not, update Claude Code first.
-- **git**. The claude-agents repo is public, so the clone, the marketplace add and background marketplace refreshes all work over plain HTTPS with no credentials. Only pushing changes back needs auth.
+- **git**. The claudecode-agents repo is public, so the clone, the marketplace add and background marketplace refreshes all work over plain HTTPS with no credentials. Only pushing changes back needs auth.
 - **jq**. Every board hook and the eval runner use it.
 - **python3**. The install script's settings merge and the scope hook's write-path check.
 - **node**. Only for `evals/lib/check-all.sh`, which syntax-checks the workflows and runs their logic tests.
@@ -49,40 +49,40 @@ The claude-agents repo is a Claude Code plugin marketplace named `rzem` with one
 
 This is the whole per-project story, and it is what makes Claude Code on the web work too. Two routes end in the same place.
 
-**The template route.** From a clone of the claude-agents repo, copy the settings template into the project you want the fleet in:
+**The template route.** From a clone of the claudecode-agents repo, copy the settings template into the project you want the fleet in:
 
 ```bash
-git clone https://github.com/rzem-ai/claude-agents.git
+git clone https://github.com/rzem-ai/claudecode-agents.git
 mkdir -p /path/to/your-project/.claude
-cp claude-agents/claude-agents/templates/project-settings.json /path/to/your-project/.claude/settings.json
+cp claudecode-agents/claudecode-agents/templates/project-settings.json /path/to/your-project/.claude/settings.json
 ```
 
-The template carries three keys: `extraKnownMarketplaces` (the `rzem` marketplace, sourced from the claude-agents GitHub repo), `enabledPlugins` (`claude-agents@rzem`), and `agent` (`claude-agents:lead`, so the main session runs as the lead). If the project already has a `.claude/settings.json`, merge those three keys into it rather than overwriting the file. Then start Claude Code in the project and trust the folder when asked. On trust, Claude Code adds the marketplace, installs and enables the plugin, and the session runs as the lead - no further prompt. Commit `.claude/settings.json` so every clone, every teammate and every Claude Code on the web session gets the same fleet.
+The template carries three keys: `extraKnownMarketplaces` (the `rzem` marketplace, sourced from the claudecode-agents GitHub repo), `enabledPlugins` (`claudecode-agents@rzem`), and `agent` (`claudecode-agents:lead`, so the main session runs as the lead). If the project already has a `.claude/settings.json`, merge those three keys into it rather than overwriting the file. Then start Claude Code in the project and trust the folder when asked. On trust, Claude Code adds the marketplace, installs and enables the plugin, and the session runs as the lead - no further prompt. Commit `.claude/settings.json` so every clone, every teammate and every Claude Code on the web session gets the same fleet.
 
 **The manual route.** If you would rather not touch project settings, or want the plugin at user scope on this machine:
 
 ```bash
-claude plugin marketplace add rzem-ai/claude-agents
-claude plugin install claude-agents@rzem
+claude plugin marketplace add rzem-ai/claudecode-agents
+claude plugin install claudecode-agents@rzem
 ```
 
-Append `@<branch-or-tag>` to the claude-agents repo reference (`rzem-ai/claude-agents@main`) to pin the marketplace to a ref. The plugin ships the agents, skills, hooks and workflows; it does not decide which agent the main session runs as, so add `"agent": "claude-agents:lead"` to the project's `.claude/settings.json` if you want the lead in charge. Inside a session, `/plugin` opens the same marketplace and install flow interactively.
+Append `@<branch-or-tag>` to the claudecode-agents repo reference (`rzem-ai/claudecode-agents@main`) to pin the marketplace to a ref. The plugin ships the agents, skills, hooks and workflows; it does not decide which agent the main session runs as, so add `"agent": "claudecode-agents:lead"` to the project's `.claude/settings.json` if you want the lead in charge. Inside a session, `/plugin` opens the same marketplace and install flow interactively.
 
-**Verify.** `claude plugin list` shows `claude-agents@rzem` as enabled. Inside a session, `/agents` lists the ten fleet agents under the plugin. If the plugin installed but the agents are missing, the marketplace cache is stale - see *Staying current* below.
+**Verify.** `claude plugin list` shows `claudecode-agents@rzem` as enabled. Inside a session, `/agents` lists the ten fleet agents under the plugin. If the plugin installed but the agents are missing, the marketplace cache is stale - see *Staying current* below.
 
-**The command route.** With the plugin installed (either route above), `/claude-agents:init` inside a session does the whole per-project setup in one pass: it merges the three settings keys, copies the CLAUDE.md skeleton and the glossary rule into the project, creates `docs/specs/` and `docs/plans/`, then reads the repo and interviews you to fill every `<FILL: ...>` marker. Re-running it is safe - it skips what already exists and only offers to fill markers still present.
+**The command route.** With the plugin installed (either route above), `/claudecode-agents:init` inside a session does the whole per-project setup in one pass: it merges the three settings keys, copies the CLAUDE.md skeleton and the glossary rule into the project, creates `docs/specs/` and `docs/plans/`, then reads the repo and interviews you to fill every `<FILL: ...>` marker. Re-running it is safe - it skips what already exists and only offers to fill markers still present.
 
-Nothing init writes is live until the next session - settings, `CLAUDE.md` and the plugin itself all load at startup - so init ends by telling you to restart, trust the folder, and run `/claude-agents:kickoff`. Kickoff preflights the install (agents present, lead in charge, no markers left, skeleton and work directories in place), then checks the Linear board when the connector is there - the team's workflow states against the five columns, a project for the repo, the outcome labels - offers to create what the MCP can create (workflow states it cannot - those come with the exact manual instruction), asking before it writes to the workspace, and ends by stating the conventions: team, project, column names, labels, and the issue-ref binding. It cannot test the hooks' own API key, and says so. On a green preflight it takes the idea you typed after it - or asks for one - and starts the spec pipeline on it. On a red preflight it lists the fixes and stops; declining the board is never red.
+Nothing init writes is live until the next session - settings, `CLAUDE.md` and the plugin itself all load at startup - so init ends by telling you to restart, trust the folder, and run `/claudecode-agents:kickoff`. Kickoff preflights the install (agents present, lead in charge, no markers left, skeleton and work directories in place), then checks the Linear board when the connector is there - the team's workflow states against the five columns, a project for the repo, the outcome labels - offers to create what the MCP can create (workflow states it cannot - those come with the exact manual instruction), asking before it writes to the workspace, and ends by stating the conventions: team, project, column names, labels, and the issue-ref binding. It cannot test the hooks' own API key, and says so. On a green preflight it takes the idea you typed after it - or asks for one - and starts the spec pipeline on it. On a red preflight it lists the fixes and stops; declining the board is never red.
 
-**Optional: the project skeleton by hand.** `claude-agents/templates/CLAUDE.md` is a project CLAUDE.md with `<FILL: ...>` markers for the things that differ per project, and `claude-agents/templates/rules/glossary.md` is the generated glossary rule it refers to. Copy both into the project (`CLAUDE.md` at the root, the rule under `.claude/rules/`) and fill the markers. Never edit the glossary rule by hand - it is generated from the `glossary` skill by `scripts/gen-glossary-rule.sh`.
+**Optional: the project skeleton by hand.** `claudecode-agents/templates/CLAUDE.md` is a project CLAUDE.md with `<FILL: ...>` markers for the things that differ per project, and `claudecode-agents/templates/rules/glossary.md` is the generated glossary rule it refers to. Copy both into the project (`CLAUDE.md` at the root, the rule under `.claude/rules/`) and fill the markers. Never edit the glossary rule by hand - it is generated from the `glossary` skill by `scripts/gen-glossary-rule.sh`.
 
 ### 2. Set up a machine
 
 The user-scope half: the hardened `~/.claude/settings.json`, the user CLAUDE.md, rules and any local agent copies that live in `home/`. Run it on any machine that spawns fleet agents.
 
 ```bash
-git clone https://github.com/rzem-ai/claude-agents.git ~/Dev/claude-agents
-cd ~/Dev/claude-agents
+git clone https://github.com/rzem-ai/claudecode-agents.git ~/Dev/claudecode-agents
+cd ~/Dev/claudecode-agents
 scripts/install-home.sh --dry-run      # show what would change, change nothing
 scripts/install-home.sh --home-only    # install the files, skip the secrets
 ```
@@ -91,7 +91,7 @@ What it does, and does not do:
 
 - `home/settings.json` is **merged** into `~/.claude/settings.json`, never copied over it. Your model, enabled plugins, status line and hand-added deny rules survive; the fleet's deny list, sandbox and network allowlist are added. `scripts/merge-settings.py` is the policy.
 - Everything else in `home/` is copied, not symlinked, because Cowork ignores a symlinked `~/.claude/CLAUDE.md`. An existing symlink is replaced with a real file.
-- Anything it is about to overwrite is backed up first under `~/.local/state/claude-agents/backups/<timestamp>/` (override with `CLAUDE_AGENTS_BACKUP_DIR`).
+- Anything it is about to overwrite is backed up first under `~/.local/state/claudecode-agents/backups/<timestamp>/` (override with `CLAUDECODE_AGENTS_BACKUP_DIR`).
 - It never touches `~/.claude/projects/`, sessions, history, todos, logs or `plugins/cache`. The guard is enforced in the script, not just documented.
 - Per-box differences go in `home/hosts/<short-hostname>/`, copied over the base tree after it. Known hosts are `slarti` and `eddie` (lab boxes, service-account 1Password auth) and `marvin` (the laptop); an unrecognised host installs as a workstation with a warning.
 - `CLAUDE_CONFIG_DIR` is respected if you keep Claude Code's config somewhere other than `~/.claude`.
@@ -100,7 +100,7 @@ It is safe to re-run. Unchanged files are left alone and the summary at the end 
 
 ### 3. Secrets and the board
 
-The board hooks read a Linear personal API key from `~/.config/claude-agents/linear.token` (directory mode 700, file mode 600). The agents cannot read that directory - it is in `permissions.deny` and the sandbox deny list - and only the hooks ever open it. Without the key the hooks log a `no token` line and leave the board alone; the agents themselves work fine, so a machine without Linear access is a working install.
+The board hooks read a Linear personal API key from `~/.config/claudecode-agents/linear.token` (directory mode 700, file mode 600). The agents cannot read that directory - it is in `permissions.deny` and the sandbox deny list - and only the hooks ever open it. Without the key the hooks log a `no token` line and leave the board alone; the agents themselves work fine, so a machine without Linear access is a working install.
 
 To render the token and the ten per-agent memory credentials from 1Password:
 
@@ -115,21 +115,21 @@ To place the key by hand instead, create the directory at mode 700 and put the k
 
 Knobs, all optional:
 
-- `~/.config/claude-agents/board.env` overrides the board's status property and column names (`BOARD_STATUS_PROPERTY`, `BOARD_COL_TODO`, `BOARD_COL_DOING`, `BOARD_COL_BLOCKED`, `BOARD_COL_BLOCKED_HUMAN`, `BOARD_COL_DONE`) if your board is not the default shape.
-- `CLAUDE_AGENTS_BOARD=off`, or an empty file at `~/.local/state/claude-agents/disabled`, switches board writes off without removing the token. `BOARD_DRY_RUN=1` logs what would be written instead of writing it.
-- The three board hooks log to `~/.local/state/claude-agents/log/hooks.log` (and to stderr, so it shows in the transcript). Read that first when the board does not move. The scope hook logs to stderr only.
+- `~/.config/claudecode-agents/board.env` overrides the board's status property and column names (`BOARD_STATUS_PROPERTY`, `BOARD_COL_TODO`, `BOARD_COL_DOING`, `BOARD_COL_BLOCKED`, `BOARD_COL_BLOCKED_HUMAN`, `BOARD_COL_DONE`) if your board is not the default shape.
+- `CLAUDECODE_AGENTS_BOARD=off`, or an empty file at `~/.local/state/claudecode-agents/disabled`, switches board writes off without removing the token. `BOARD_DRY_RUN=1` logs what would be written instead of writing it.
+- The three board hooks log to `~/.local/state/claudecode-agents/log/hooks.log` (and to stderr, so it shows in the transcript). Read that first when the board does not move. The scope hook logs to stderr only.
 
 ### Staying current
 
-The plugin is semver'd and the version in `claude-agents/.claude-plugin/plugin.json` (mirrored in `.claude-plugin/marketplace.json`) is load-bearing: clients keep the cached copy until the number changes, so a release without a version bump is invisible. To pick up a new release:
+The plugin is semver'd and the version in `claudecode-agents/.claude-plugin/plugin.json` (mirrored in `.claude-plugin/marketplace.json`) is load-bearing: clients keep the cached copy until the number changes, so a release without a version bump is invisible. To pick up a new release:
 
 ```bash
 claude plugin marketplace update rzem
 ```
 
-The project template sets `autoUpdate: false` deliberately, so a project moves to a new fleet version when you run that and not when a background refresh decides to. `claude-agents/CHANGELOG.md` says what changed in each release. For the machine half, `git pull` in the clone and re-run `scripts/install-home.sh`.
+The project template sets `autoUpdate: false` deliberately, so a project moves to a new fleet version when you run that and not when a background refresh decides to. `claudecode-agents/CHANGELOG.md` says what changed in each release. For the machine half, `git pull` in the clone and re-run `scripts/install-home.sh`.
 
-### Checking the install, and working on the claude-agents repo
+### Checking the install, and working on the claudecode-agents repo
 
 ```bash
 bash evals/lib/check-all.sh    # every deterministic check: hook contracts, roster, workflow logic. No model, no network, no board
@@ -141,17 +141,17 @@ Run `check-all.sh` before anything else after a change; `evals/README.md` covers
 
 ```bash
 claude plugin marketplace remove rzem
-claude plugin marketplace add ./path/to/claude-agents
-claude plugin install claude-agents@rzem
+claude plugin marketplace add ./path/to/claudecode-agents
+claude plugin install claudecode-agents@rzem
 ```
 
-Put the GitHub marketplace back with `claude plugin marketplace add rzem-ai/claude-agents` when you are done.
+Put the GitHub marketplace back with `claude plugin marketplace add rzem-ai/claudecode-agents` when you are done.
 
 ## Repo map
 
 ```
 .claude-plugin/marketplace.json   the marketplace (name: rzem), one plugin in it
-claude-agents/                    the plugin: agents/, skills/, hooks/, workflows/, commands/, templates/, CHANGELOG.md
+claudecode-agents/                    the plugin: agents/, skills/, hooks/, workflows/, commands/, templates/, CHANGELOG.md
 evals/                            one smoke eval per agent, plus lib/ with the deterministic suite
 docs/fleet-plan.md                the plan: what the fleet is and why, in fifteen sections
 docs/agent-contract.md            the shape every agent body conforms to
@@ -164,4 +164,4 @@ scripts/                          install-home.sh, gen-glossary-rule.sh, merge-s
 
 ## Where things are decided
 
-The plan, [`docs/fleet-plan.md`](docs/fleet-plan.md), is the canonical document - "plan section N" anywhere in the claude-agents repo means that file. [`docs/agent-contract.md`](docs/agent-contract.md) is what the migration checklist checks agent bodies against, and it records which preloaded skill names are still forward references. [`claude-agents/CHANGELOG.md`](claude-agents/CHANGELOG.md) records every release, corrections included. And [`docs/TODO.md`](docs/TODO.md) is the open-items list: what each round has looked at and deliberately chosen to leave, with the reason.
+The plan, [`docs/fleet-plan.md`](docs/fleet-plan.md), is the canonical document - "plan section N" anywhere in the claudecode-agents repo means that file. [`docs/agent-contract.md`](docs/agent-contract.md) is what the migration checklist checks agent bodies against, and it records which preloaded skill names are still forward references. [`claudecode-agents/CHANGELOG.md`](claudecode-agents/CHANGELOG.md) records every release, corrections included. And [`docs/TODO.md`](docs/TODO.md) is the open-items list: what each round has looked at and deliberately chosen to leave, with the reason.

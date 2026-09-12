@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "claudecode-agents",
+  "displayName": "Claude Code Agents",
+  "version": "0.14.0",
+  "description": "A role-shaped subagent fleet: ten agents, the skills they preload, the hooks that keep a Linear board honest, and the workflows that organise multi-phase work.",
+  "author": {
+    "name": "Alex",
+    "email": "alex@rzem.com",
+    "url": "https://github.com/rzem-ai"
+  },
+  "homepage": "https://github.com/rzem-ai/claudecode-agents",
+  "repository": "https://github.com/rzem-ai/claudecode-agents",
+  "keywords": [
+    "agents",
+    "subagents",
+    "skills",
+    "workflows",
+    "hooks",
+    "fleet",
+    "linear"
+  ]
+}

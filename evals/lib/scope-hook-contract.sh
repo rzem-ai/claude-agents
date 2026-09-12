@@ -25,7 +25,7 @@ VERBOSE=0
 
 LIB_DIR=$(cd "$(dirname "$0")" && pwd)
 REPO_ROOT=$(cd "$LIB_DIR/../.." && pwd)
-HOOK="$REPO_ROOT/claude-agents/hooks/enforce-agent-scope.sh"
+HOOK="$REPO_ROOT/claudecode-agents/hooks/enforce-agent-scope.sh"
 
 command -v jq >/dev/null 2>&1 || {
     printf 'scope-hook-contract: jq is needed to drive the hook\n' >&2; exit 2; }
@@ -62,7 +62,7 @@ FAILED=0
 decide() {
     # $1 event JSON, $2 project dir. Prints allow or deny.
     local out
-    out=$(printf '%s' "$1" | CLAUDE_PROJECT_DIR="$2" CLAUDE_AGENTS_REPO="$REPO_ROOT" \
+    out=$(printf '%s' "$1" | CLAUDE_PROJECT_DIR="$2" CLAUDECODE_AGENTS_REPO="$REPO_ROOT" \
         "$HOOK" 2>/dev/null)
     if [ -z "$out" ]; then printf 'allow\n'; else
         printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecision // "allow"'
@@ -93,7 +93,7 @@ expect() {
 # accident. Asserting the message names the real verb turns those from
 # coincidence into coverage, and would have caught the -C bug on its own.
 deny_reason() {
-    printf '%s' "$1" | CLAUDE_PROJECT_DIR="$2" CLAUDE_AGENTS_REPO="$REPO_ROOT" "$HOOK" 2>/dev/null \
+    printf '%s' "$1" | CLAUDE_PROJECT_DIR="$2" CLAUDECODE_AGENTS_REPO="$REPO_ROOT" "$HOOK" 2>/dev/null \
         | jq -r '.hookSpecificOutput.permissionDecisionReason // ""'
 }
 
@@ -130,7 +130,7 @@ deny_bash_saying_in() {
 # evidence it left, so it gets asserted like a decision does.
 hook_log() {
     # $1 event JSON, $2 project dir. Prints what the hook wrote to stderr.
-    printf '%s' "$1" | CLAUDE_PROJECT_DIR="$2" CLAUDE_AGENTS_REPO="$REPO_ROOT" \
+    printf '%s' "$1" | CLAUDE_PROJECT_DIR="$2" CLAUDECODE_AGENTS_REPO="$REPO_ROOT" \
         "$HOOK" 2>&1 >/dev/null
 }
 
@@ -510,7 +510,7 @@ allow_write refuter "$TMP/scratch/copy-of-review-round.js"
 allow_bash refuter 'bash evals/lib/check-all.sh'
 allow_bash refuter 'node evals/lib/workflow-logic.mjs'
 allow_bash refuter 'python3 -c "print(1)"'
-allow_bash refuter 'cp claude-agents/workflows/review-round.js /tmp/mutant.js'
+allow_bash refuter 'cp claudecode-agents/workflows/review-round.js /tmp/mutant.js'
 
 # Read-only git, the same verbs the reviewer has. It mutates a scratch copy; it
 # never moves a ref in the real repository.
@@ -744,7 +744,7 @@ printf '\nThe refuter fails closed when it cannot tell outside from inside\n'
 # denial, so its default without a working checker has to be the same denial,
 # or "cannot tell" quietly becomes "cannot be stopped" for the one role this
 # task exists to contain.
-CHECKER_PATH="$REPO_ROOT/claude-agents/hooks/lib/check-write-scope.py"
+CHECKER_PATH="$REPO_ROOT/claudecode-agents/hooks/lib/check-write-scope.py"
 
 # A PATH with every tool the hook needs except python3, so the hook's own
 # "command -v python3" genuinely fails rather than being told to.
@@ -759,7 +759,7 @@ unset _tool _toolpath
 decide_no_python() {
     # $1 event JSON, $2 project dir. Like decide(), but python3 is unreachable.
     local out
-    out=$(printf '%s' "$1" | PATH="$NO_PYTHON_BIN" CLAUDE_PROJECT_DIR="$2" CLAUDE_AGENTS_REPO="$REPO_ROOT" \
+    out=$(printf '%s' "$1" | PATH="$NO_PYTHON_BIN" CLAUDE_PROJECT_DIR="$2" CLAUDECODE_AGENTS_REPO="$REPO_ROOT" \
         "$HOOK" 2>/dev/null)
     if [ -z "$out" ]; then printf 'allow\n'; else
         printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecision // "allow"'
@@ -796,7 +796,7 @@ expect_variant decide_no_python allow \
 decide_no_project_dir() {
     # $1 event JSON, $2 ignored. Like decide(), but CLAUDE_PROJECT_DIR is unset.
     local out
-    out=$(printf '%s' "$1" | env -u CLAUDE_PROJECT_DIR CLAUDE_AGENTS_REPO="$REPO_ROOT" \
+    out=$(printf '%s' "$1" | env -u CLAUDE_PROJECT_DIR CLAUDECODE_AGENTS_REPO="$REPO_ROOT" \
         "$HOOK" 2>/dev/null)
     if [ -z "$out" ]; then printf 'allow\n'; else
         printf '%s' "$out" | jq -r '.hookSpecificOutput.permissionDecision // "allow"'

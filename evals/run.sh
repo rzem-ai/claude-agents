@@ -181,8 +181,8 @@ def git(*a):
         return None
 
 
-agents = root / 'claude-agents' / 'agents'
-skills = root / 'claude-agents' / 'skills'
+agents = root / 'claudecode-agents' / 'agents'
+skills = root / 'claudecode-agents' / 'skills'
 files = {}
 for p in sorted(list(agents.glob('*.md')) + list(skills.glob('*/SKILL.md'))):
     files[str(p.relative_to(root))] = hashlib.sha256(p.read_bytes()).hexdigest()
@@ -193,7 +193,7 @@ for p in sorted(list(agents.glob('*.md')) + list(skills.glob('*/SKILL.md'))):
             'commit': git('rev-parse', 'HEAD'),
             'branch': git('rev-parse', '--abbrev-ref', 'HEAD'),
             'dirty': bool(git('status', '--porcelain')),
-            'plugin_dir': str(root / 'claude-agents'),
+            'plugin_dir': str(root / 'claudecode-agents'),
             'files': files,
         },
         indent=2,
@@ -274,8 +274,8 @@ run_prompt() {
     # way the run proved nothing about the files in the pull request.
     # shellcheck disable=SC2086
     ( cd "$ws" && $TIMEOUT_CMD "$CLAUDE_BIN" \
-        --plugin-dir "$REPO_ROOT/claude-agents" \
-        -p "$text" $AGENT_FLAG "claude-agents:$agent" $CLAUDE_ARGS $FORMAT_ARGS ) \
+        --plugin-dir "$REPO_ROOT/claudecode-agents" \
+        -p "$text" $AGENT_FLAG "claudecode-agents:$agent" $CLAUDE_ARGS $FORMAT_ARGS ) \
         > "$pdir/raw-output.txt" 2> "$pdir/stderr.txt"
     rc=$?
     printf '%s\n' "$rc" > "$pdir/exit-code.txt"
