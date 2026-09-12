@@ -4,9 +4,9 @@ Still open, deliberately not touched. Each item is something a round looked at a
 
 Moved here from the claudecode-agents repo root on 11 September 2026. The closed-item record the old file accumulated - what each fix round struck through, and why - lives in the git history of `Still open, deliberately not touched.md`, last at commit b710813.
 
-## Decisions waiting on the human
+## Deferred with the decision made
 
-- using-memory has diverging copies across the agent-memory repos. As of 0.15.0 no body preloads it - forward references were stripped after the opencode-agents port's findings - so nothing breaks meanwhile, but when it does move into the plugin, one copy has to be declared canonical.
+- using-memory's canonical copy is `agent-memory-js/plugin/skills/using-memory`, decided 12 September 2026: it lives beside the hooks it documents, so the commit that changes the behaviour is the commit that updates the doc - the same co-location rule that makes `skills/glossary` canonical here. The stale copy in the agent-memory server repo is deleted (it described pre-20-August capture behaviour) and the python plugin's copy is marked as synced-from-js. What stays deferred is the fleet's own copy: the canonical text says "this plugin's hooks auto-recall", which is false for fleet agents - they reach memory through the connector with no hooks, and only the lead and `researcher` write - so moving it in means an adaptation plus re-adding it to ten bodies, the roster, contract 1.4 and the roster-contract allowlist. That is its own round, not a footnote on this one.
 
 ## From the 9 September round
 
