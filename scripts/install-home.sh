@@ -42,7 +42,7 @@ set -euo pipefail
 # ever need editing.
 #
 # Shape:  op://<vault>/<item>/<field>
-# Check one with:  op read 'op://Fleet/linear/credential'
+# Check one with:  op read 'op://Agents/Linear/credential'
 #
 # The vault holds fleet secrets only (section 12), so a service account scoped
 # to it cannot reach anything personal.
@@ -51,7 +51,7 @@ OP_VAULT="Fleet"   # PLACEHOLDER: the dedicated fleet vault's name
 
 # The Linear API key the board hooks read. Hooks read this file; the
 # agents cannot, because ~/.config/claudecode-agents is in permissions.deny.
-OP_REF_LINEAR_TOKEN="op://Fleet/linear/credential"                     # PLACEHOLDER
+OP_REF_LINEAR_TOKEN="op://Agents/Linear/credential"
 
 # Ten per-agent rzem-memory credentials. One identity per agent, because the
 # credential is what fixes the memory namespace (section 6).
