@@ -8,6 +8,14 @@ The version in `.claude-plugin/plugin.json` is load-bearing. Clients keep the ca
 
 ## [Unreleased]
 
+### Added
+
+- **Worktree removal has an owner now: `/claudecode-agents:prune-worktrees`.** The harness removes a coder's worktree only when it is *unchanged*, so a coder that did its job always leaves one behind - and nothing in the pipeline removed it afterwards: `coder`'s own invariant forbids it from deleting worktrees, the lead's merge step never mentioned the directory the commits came from, and `review-round` deliberately keeps fix worktrees for later rounds. The gap was found the expensive way - one project accumulated eleven worktrees, 8.5 GB with dependencies installed, before the human deleted them by hand. The new command removes a worktree only when git shows the work adopted: under `.claude/worktrees/`, clean, and HEAD an ancestor of the default branch. It unlocks before removing (the harness locks what it cuts), deletes the per-agent branch with `-d` and never `-D`, uses no `--force` anywhere, and reports what it kept and why - so run mid-review it keeps the unmerged fix worktree rather than eating it. It also sweeps the worktrees' orphaned scratch directories: every session gets `/private/tmp/claude-<uid>/<cwd with / and . as ->/`, a worktree session's dir carries `--claude-worktrees-` in its name, and macOS's nightly `tmp_cleaner` (3 days untouched on all three timestamps, files only, empty dirs only) keeps them roughly forever once anything scans them. The sweep deletes only entries prefixed with this repo's own encoded path whose name matches no worktree that still exists - a live worktree's scratch, and every other project's, is left alone.
+
+### Changed
+
+- **The lead's merge step now ends at the worktree.** Step 5 says it outright: adopting a coder's work includes removing the worktree it left, and points at the prune command. Convention decays, so the command carries the safety - the sentence only assigns the step.
+
 ## [0.15.1] - 2026-09-12
 
 The live probes 0.15.0 asked for, run the same evening, and the answers rewrite finding 1 in the fleet's favour with one new hole named.
